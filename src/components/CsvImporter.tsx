@@ -77,25 +77,51 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
 
           const findVal = (possibleKeys: string[]) => {
             const matchedKey = keys.find(k => 
-              possibleKeys.some(pk => k.toLowerCase().trim() === pk.toLowerCase())
+              possibleKeys.some(pk => {
+                const cleanK = k.toLowerCase().trim();
+                const cleanPk = pk.toLowerCase().trim();
+                return cleanK === cleanPk || cleanK.includes(cleanPk);
+              })
             );
-            return matchedKey ? r[matchedKey] : '';
+            return matchedKey ? String(r[matchedKey]).trim() : '';
           };
 
-          const fullName = findVal(['full name', 'fullname', 'contact name', 'person name']);
-          let fName = findVal(['first name', 'firstname', 'name', 'first']);
-          let lName = findVal(['last name', 'lastname', 'last']);
+          // Explicit First Name and Last Name column lookups
+          let fName = findVal(['first name', 'firstname', 'fname', 'first_name']);
+          let lName = findVal(['last name', 'lastname', 'lname', 'last_name', 'surname']);
+
+          // Full Name column lookups (covers 'name', 'full name', 'contact name', 'contacts', 'attendee', etc.)
+          const fullName = findVal(['full name', 'fullname', 'contact name', 'contact person', 'person name', 'attendee name', 'name of attendee', 'participant name', 'delegate name', 'lead name', 'contacts', 'contact', 'name', 'names', 'attendee', 'participant', 'delegate']);
 
           if (!fName && fullName) {
-            const parts = fullName.trim().split(/\s+/);
-            fName = parts[0] || 'Unknown';
+            const parts = fullName.split(/\s+/);
+            fName = parts[0] || '';
+            lName = parts.slice(1).join(' ');
+          } else if (fName && !lName && fName.includes(' ')) {
+            const parts = fName.split(/\s+/);
+            fName = parts[0] || '';
             lName = parts.slice(1).join(' ');
           }
 
+          const rawEmail = findVal(['email', 'email address', 'mail', 'e-mail', 'contact email']);
+
+          // Fallback to name from email if name is still missing
+          if (!fName && rawEmail && rawEmail.includes('@')) {
+            const username = rawEmail.split('@')[0];
+            const cleanUser = username.replace(/[^a-zA-Z0-9._-]/g, '');
+            const parts = cleanUser.split(/[._-]/).filter(Boolean);
+            if (parts.length > 0) {
+              fName = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+              if (parts.length > 1 && !lName) {
+                lName = parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+              }
+            }
+          }
+
           // Populate standard attributes for filters, searching, and Supabase
-          leadObj.firstName = fName || findVal(['name', 'full name', 'contact']) || 'Contact';
+          leadObj.firstName = fName || 'Attendee';
           leadObj.lastName = lName || '';
-          leadObj.email = findVal(['email', 'email address', 'mail', 'e-mail', 'contact email']) || `contact_${Math.floor(Math.random()*10000)}@imported.com`;
+          leadObj.email = rawEmail || `contact_${Math.floor(Math.random()*10000)}@imported.com`;
           leadObj.organization = findVal(['organization', 'company', 'employer', 'business', 'org', 'firm']);
           leadObj.jobTitle = findVal(['job title', 'jobtitle', 'title', 'role', 'designation', 'position', 'occupation']);
           leadObj.city = findVal(['city', 'location', 'town', 'country', 'state', 'address', 'region']);

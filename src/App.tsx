@@ -16,7 +16,8 @@ import {
   updateLead, 
   deleteLead, 
   bulkDeleteLeads, 
-  bulkImportLeads 
+  bulkImportLeads,
+  getActiveHeaders
 } from './data/leadStorage.ts';
 import { pullLeadsFromSupabase } from './lib/supabase.ts';
 import FiltersSidebar from './components/FiltersSidebar.tsx';
@@ -438,42 +439,79 @@ export default function App() {
 
   // CSV Bulk Export
   const handleExportCsv = () => {
+    const allStoredLeads = getStoredLeads();
+    const allFilteredLeads = filterClientLeads(allStoredLeads, filters);
+
     const leadsToExport = selectedIds.length > 0 
-      ? leads.filter(l => selectedIds.includes(l.id))
-      : leads;
+      ? allStoredLeads.filter(l => selectedIds.includes(l.id))
+      : allFilteredLeads;
 
     if (leadsToExport.length === 0) {
-      showStatus('No leads found to export.', 'error');
+      showStatus('No contacts found to export.', 'error');
       return;
     }
 
-    const headers = [
-      'First Name',
-      'Last Name',
-      'Email',
-      'Phone',
-      'Organization/Company',
-      'Job Title',
-      'Location/City',
-      'Source',
-      'Approval Status',
-      'Registration Time',
-      'Speaker Questions'
-    ];
+    const activeHeaders = getActiveHeaders();
+    let headers: string[];
+    let rows: string[][];
 
-    const rows = leadsToExport.map(l => [
-      l.firstName,
-      l.lastName || '',
-      l.email,
-      l.phone || '',
-      l.organization || '',
-      l.jobTitle || '',
-      l.city || '',
-      l.sourceName || '',
-      l.approvalStatus,
-      l.registrationTime || '',
-      l.questions || ''
-    ]);
+    if (activeHeaders && Array.isArray(activeHeaders) && activeHeaders.length > 0) {
+      headers = activeHeaders;
+      rows = leadsToExport.map(l => {
+        const leadObj = l as any;
+        return activeHeaders.map(h => {
+          if (leadObj[h] !== undefined && leadObj[h] !== null && String(leadObj[h]).trim() !== '') {
+            return String(leadObj[h]).trim();
+          }
+          const cleanH = h.toLowerCase().trim();
+          if (cleanH.includes('first name') || cleanH === 'fname') return l.firstName || '';
+          if (cleanH.includes('last name') || cleanH === 'lname') return l.lastName || '';
+          if (cleanH.includes('name') || cleanH.includes('contact') || cleanH.includes('attendee')) {
+            return `${l.firstName || ''} ${l.lastName || ''}`.trim() || 'Attendee';
+          }
+          if (cleanH.includes('email') || cleanH.includes('mail')) return l.email || '';
+          if (cleanH.includes('company') || cleanH.includes('organization') || cleanH.includes('org')) return l.organization || '';
+          if (cleanH.includes('title') || cleanH.includes('role') || cleanH.includes('designation')) return l.jobTitle || '';
+          if (cleanH.includes('city') || cleanH.includes('location')) return l.city || '';
+          if (cleanH.includes('phone') || cleanH.includes('mobile')) return l.phone || '';
+          if (cleanH.includes('status')) return l.approvalStatus || '';
+          if (cleanH.includes('source')) return l.sourceName || '';
+          if (cleanH.includes('time') || cleanH.includes('date')) return l.registrationTime || '';
+          if (cleanH.includes('question')) return l.questions || '';
+          return '';
+        });
+      });
+    } else {
+      headers = [
+        'Contact Name',
+        'First Name',
+        'Last Name',
+        'Email Address',
+        'Phone Number',
+        'Organization/Company',
+        'Job Title',
+        'Location/City',
+        'Source',
+        'Approval Status',
+        'Registration Time',
+        'Speaker Questions'
+      ];
+
+      rows = leadsToExport.map(l => [
+        `${l.firstName || ''} ${l.lastName || ''}`.trim() || 'Attendee',
+        l.firstName || '',
+        l.lastName || '',
+        l.email || '',
+        l.phone || '',
+        l.organization || '',
+        l.jobTitle || '',
+        l.city || '',
+        l.sourceName || '',
+        l.approvalStatus || '',
+        l.registrationTime || '',
+        l.questions || ''
+      ]);
+    }
 
     const csvContent = "data:text/csv;charset=utf-8," 
       + [headers.join(','), ...rows.map(e => e.map(val => `"${val.replace(/"/g, '""')}"`).join(','))].join('\n');
@@ -481,11 +519,11 @@ export default function App() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `apollo_leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `apollo_contacts_export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showStatus(`Exported ${leadsToExport.length} leads to CSV successfully.`, 'success');
+    showStatus(`Exported ${leadsToExport.length} contacts to CSV successfully.`, 'success');
   };
 
   // Search Submit Handler
@@ -1107,9 +1145,26 @@ export default function App() {
               </div>
 
               {/* Per page selector */}
-              <div className="flex items-center space-x-1 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg px-2.5 py-1 bg-white hover:bg-gray-50 cursor-pointer transition-colors">
-                <span>25 per page</span>
-                <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+              <div className="relative flex items-center text-xs font-semibold text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1 bg-white hover:bg-gray-50 transition-colors shadow-3xs">
+                <label htmlFor="rows-per-page-select" className="sr-only">Rows per page</label>
+                <select
+                  id="rows-per-page-select"
+                  value={limit}
+                  onChange={(e) => {
+                    setLimit(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="bg-transparent font-semibold text-gray-700 cursor-pointer focus:outline-none appearance-none pr-5 text-xs py-0.5"
+                >
+                  <option value={10}>10 per page</option>
+                  <option value={25}>25 per page</option>
+                  <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
+                  <option value={250}>250 per page</option>
+                  <option value={500}>500 per page</option>
+                  <option value={1000}>1000 per page</option>
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2" />
               </div>
 
             </div>

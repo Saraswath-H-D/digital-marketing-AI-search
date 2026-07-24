@@ -23,6 +23,45 @@ export const setActiveHeaders = (headers: string[]): void => {
   }
 };
 
+// Helper to repair/sanitize leads if name was previously defaulted to 'Contact'
+const sanitizeLead = (l: any): Lead => {
+  let fName = l.firstName || '';
+  let lName = l.lastName || '';
+
+  if (!fName || fName.toLowerCase() === 'contact' || fName.toLowerCase() === 'unknown') {
+    const keys = Object.keys(l);
+    const nameKey = keys.find(k => ['full name', 'fullname', 'contact name', 'contact', 'contacts', 'attendee name', 'name'].includes(k.toLowerCase().trim()));
+    if (nameKey && l[nameKey] && String(l[nameKey]).trim() && String(l[nameKey]).toLowerCase().trim() !== 'contact') {
+      const full = String(l[nameKey]).trim();
+      const parts = full.split(/\s+/);
+      fName = parts[0] || '';
+      lName = parts.slice(1).join(' ');
+    } else if (l.email && l.email.includes('@')) {
+      const username = l.email.split('@')[0];
+      const cleanUser = username.replace(/[^a-zA-Z0-9._-]/g, '');
+      const parts = cleanUser.split(/[._-]/).filter((p: string) => p && !/^\d+$/.test(p));
+      if (parts.length > 0) {
+        fName = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+        if (parts.length > 1 && !lName) {
+          lName = parts.slice(1).map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+        }
+      }
+    }
+  }
+
+  if (fName && !lName && fName.includes(' ')) {
+    const parts = fName.split(/\s+/);
+    fName = parts[0] || '';
+    lName = parts.slice(1).join(' ');
+  }
+
+  return {
+    ...l,
+    firstName: fName || 'Attendee',
+    lastName: lName || ''
+  };
+};
+
 // Get leads from localStorage, initializing with default initialLeads if empty or outdated
 export const getStoredLeads = (): Lead[] => {
   try {
@@ -30,15 +69,16 @@ export const getStoredLeads = (): Lead[] => {
     if (data !== null) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.map(sanitizeLead);
       }
     }
   } catch (err) {
     console.error('Error reading leads from localStorage:', err);
   }
   // Default initialize with initialLeads only on first load
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(initialLeads));
-  return initialLeads;
+  const sanitizedDefaults = initialLeads.map(sanitizeLead);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedDefaults));
+  return sanitizedDefaults;
 };
 
 
