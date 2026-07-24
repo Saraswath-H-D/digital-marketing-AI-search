@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { motion, AnimatePresence } from 'motion/react';
 import { Upload, X, Check, AlertCircle, FileSpreadsheet, Eye, ArrowRight, Table } from 'lucide-react';
+import { setActiveHeaders } from '../data/leadStorage.ts';
+
 
 interface CsvImporterProps {
   isOpen: boolean;
@@ -53,10 +55,26 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
           return;
         }
 
-        // Map column names to lead fields
+        const rawHeaders = (results.meta.fields || (data[0] ? Object.keys(data[0]) : [])).map(h => h.trim()).filter(Boolean);
+        if (rawHeaders.length > 0) {
+          setActiveHeaders(rawHeaders);
+        }
+
+
+        // Map column names flexibly to lead fields
         const mapped = data.map((r: any) => {
-          // Normalize keys
           const keys = Object.keys(r);
+          const leadObj: any = {
+            _csvHeaders: rawHeaders
+          };
+
+          // Store exact CSV header key-values directly on the lead object
+          keys.forEach(k => {
+            if (k.trim()) {
+              leadObj[k.trim()] = r[k];
+            }
+          });
+
           const findVal = (possibleKeys: string[]) => {
             const matchedKey = keys.find(k => 
               possibleKeys.some(pk => k.toLowerCase().trim() === pk.toLowerCase())
@@ -64,20 +82,33 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
             return matchedKey ? r[matchedKey] : '';
           };
 
-          return {
-            firstName: findVal(['first name', 'firstname', 'name', 'first']),
-            lastName: findVal(['last name', 'lastname', 'last']),
-            email: findVal(['email', 'email address', 'mail']),
-            organization: findVal(['organization', 'company', 'employer']),
-            jobTitle: findVal(['job title', 'jobtitle', 'title', 'role']),
-            city: findVal(['city', 'location', 'town']),
-            phone: findVal(['phone', 'phone number', 'mobile', 'telephone']),
-            approvalStatus: findVal(['approval status', 'status', 'approved']) || 'approved',
-            questions: findVal(['do have any questions to speaker!', 'questions', 'question', 'inquiry']),
-            sourceName: findVal(['source name', 'source', 'lead source']) || 'CSV Import',
-            registrationTime: findVal(['registration time', 'time', 'registered']) || new Date().toLocaleString(),
-          };
-        }).filter(item => item.firstName && item.email); // Must have at least name and email
+          const fullName = findVal(['full name', 'fullname', 'contact name', 'person name']);
+          let fName = findVal(['first name', 'firstname', 'name', 'first']);
+          let lName = findVal(['last name', 'lastname', 'last']);
+
+          if (!fName && fullName) {
+            const parts = fullName.trim().split(/\s+/);
+            fName = parts[0] || 'Unknown';
+            lName = parts.slice(1).join(' ');
+          }
+
+          // Populate standard attributes for filters, searching, and Supabase
+          leadObj.firstName = fName || findVal(['name', 'full name', 'contact']) || 'Contact';
+          leadObj.lastName = lName || '';
+          leadObj.email = findVal(['email', 'email address', 'mail', 'e-mail', 'contact email']) || `contact_${Math.floor(Math.random()*10000)}@imported.com`;
+          leadObj.organization = findVal(['organization', 'company', 'employer', 'business', 'org', 'firm']);
+          leadObj.jobTitle = findVal(['job title', 'jobtitle', 'title', 'role', 'designation', 'position', 'occupation']);
+          leadObj.city = findVal(['city', 'location', 'town', 'country', 'state', 'address', 'region']);
+          leadObj.phone = findVal(['phone', 'phone number', 'mobile', 'telephone', 'contact number', 'cell']);
+          leadObj.approvalStatus = findVal(['approval status', 'status', 'approved', 'state']) || 'approved';
+          leadObj.questions = findVal(['do have any questions to speaker!', 'questions', 'question', 'inquiry', 'notes', 'comments', 'remarks']);
+          leadObj.sourceName = findVal(['source name', 'source', 'lead source']) || selectedFile.name.replace('.csv', '');
+          leadObj.registrationTime = findVal(['registration time', 'time', 'registered', 'date', 'created at']) || new Date().toLocaleString();
+
+          return leadObj;
+        }).filter(item => item.firstName || item.email);
+
+ // Must have at least name and email
 
         if (mapped.length === 0) {
           setError('Could not extract any valid leads with name and email columns. Check header titles.');

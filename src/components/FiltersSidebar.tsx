@@ -53,6 +53,8 @@ export default function FiltersSidebar({
     sources: false,
     statuses: false,
   });
+  const [openCustomSections, setOpenCustomSections] = useState<Record<string, boolean>>({});
+
 
   // Lists UI states
   const [listsOpen, setListsOpen] = useState(true);
@@ -2011,6 +2013,69 @@ export default function FiltersSidebar({
               </div>
             )}
           </div>
+
+          {/* Dynamic CSV Custom Filters Accordions */}
+
+          {filterOptions.customFilters && Object.entries(filterOptions.customFilters).map(([columnName, options]) => {
+            const selectedCustomValues = (filters.customFilters && filters.customFilters[columnName]) || [];
+            const isOpen = !!openCustomSections[columnName];
+            return (
+              <div key={columnName} className="border-b border-gray-100">
+                <div 
+                  onClick={() => setOpenCustomSections(prev => ({ ...prev, [columnName]: !prev[columnName] }))}
+                  className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50/60 transition-colors"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <SlidersHorizontal className="w-4 h-4 text-indigo-500" />
+                    <span className="text-xs font-bold text-gray-800 capitalize">{columnName}</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    {selectedCustomValues.length > 0 && (
+                      <span className="px-1.5 py-0.5 text-2xs font-bold bg-indigo-100 text-indigo-700 rounded-full">
+                        {selectedCustomValues.length}
+                      </span>
+                    )}
+                    {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
+                  </div>
+                </div>
+
+                {isOpen && (
+                  <div className="p-3 bg-gray-50/20 space-y-1.5 max-h-48 overflow-y-auto scrollbar-thin">
+                    {options.map(val => {
+                      const isChecked = selectedCustomValues.includes(val);
+                      return (
+                        <label key={val} className="flex items-center space-x-2.5 py-1 px-1.5 rounded-md hover:bg-gray-100 cursor-pointer text-xs text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setFilters(prev => {
+                                const currentCustom = prev.customFilters || {};
+                                const currentColVals = currentCustom[columnName] || [];
+                                const newColVals = isChecked 
+                                  ? currentColVals.filter(v => v !== val)
+                                  : [...currentColVals, val];
+                                return {
+                                  ...prev,
+                                  customFilters: {
+                                    ...currentCustom,
+                                    [columnName]: newColVals
+                                  }
+                                };
+                              });
+                            }}
+                            className="w-3.5 h-3.5 rounded-sm text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                          />
+                          <span className={isChecked ? 'font-semibold text-indigo-600' : ''}>{val}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
 
         </div>
 

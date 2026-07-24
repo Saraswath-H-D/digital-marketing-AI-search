@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Lead } from '../types.ts';
+import { getActiveHeaders } from '../data/leadStorage.ts';
 import { 
+
   Check, 
   Mail, 
   Phone, 
@@ -113,6 +115,63 @@ export default function LeadsTable({
     }
   };
 
+  // Extract exact CSV headers if available
+  const csvHeaders = React.useMemo(() => {
+    const saved = getActiveHeaders();
+    if (saved && Array.isArray(saved) && saved.length > 0) {
+      return saved;
+    }
+    if (leads && leads.length > 0) {
+      const sample = leads.find(l => (l as any)._csvHeaders && Array.isArray((l as any)._csvHeaders) && (l as any)._csvHeaders.length > 0);
+      if (sample) {
+        return (sample as any)._csvHeaders as string[];
+      }
+    }
+    return null;
+  }, [leads]);
+
+
+  const extraKeys = React.useMemo(() => {
+    const standardKeys = new Set([
+      'id', 'firstName', 'lastName', 'email', 'phone', 'organization',
+      'jobTitle', 'city', 'approvalStatus', 'sourceName', 'registrationTime',
+      'questions', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked',
+      '_csvHeaders', 'first_name', 'last_name', 'registration_time', 'approval_status',
+      'job_title', 'source_name', 'created_at'
+    ]);
+    
+    const keysSet = new Set<string>();
+    leads.forEach(l => {
+      Object.keys(l).forEach(k => {
+        if (!standardKeys.has(k) && !k.startsWith('_')) {
+          keysSet.add(k);
+        }
+      });
+    });
+    return Array.from(keysSet);
+  }, [leads]);
+
+  const getCellValueByHeader = (lead: any, header: string) => {
+    if (lead[header] !== undefined && lead[header] !== null && lead[header] !== '') {
+      return String(lead[header]);
+    }
+    const lower = header.toLowerCase().trim();
+    const foundKey = Object.keys(lead).find(k => k.toLowerCase().trim() === lower);
+    if (foundKey && lead[foundKey] !== undefined && lead[foundKey] !== null && lead[foundKey] !== '') {
+      return String(lead[foundKey]);
+    }
+    if (lower.includes('name') || lower.includes('first')) return `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '-';
+    if (lower.includes('email') || lower.includes('mail')) return lead.email || '-';
+    if (lower.includes('company') || lower.includes('organization') || lower.includes('org')) return lead.organization || '-';
+    if (lower.includes('title') || lower.includes('role') || lower.includes('designation')) return lead.jobTitle || '-';
+    if (lower.includes('city') || lower.includes('location')) return lead.city || '-';
+    if (lower.includes('phone') || lower.includes('mobile')) return lead.phone || '-';
+    if (lower.includes('status')) return lead.approvalStatus || '-';
+    if (lower.includes('source')) return lead.sourceName || '-';
+
+    return '-';
+  };
+
   const isAllSelected = leads.length > 0 && selectedIds.length === leads.length;
 
   return (
@@ -130,32 +189,45 @@ export default function LeadsTable({
                 className="w-4 h-4 rounded-md text-indigo-600 border-gray-300 focus:ring-indigo-500 transition-colors cursor-pointer"
               />
             </th>
-            {/* Name & Avatar */}
-            <th className="py-3 px-4 min-w-[200px]">Contact Name</th>
-            {/* Job Title */}
-            <th className="py-3 px-4 min-w-[200px]">Designation</th>
-            {/* Company */}
-            <th className="py-3 px-4 min-w-[180px]">Organization</th>
-            {/* Email Contact info */}
-            <th className="py-3 px-4 min-w-[185px]">Email Address</th>
-            {/* Phone Contact info */}
-            <th className="py-3 px-4 min-w-[160px]">Phone Number</th>
-            {/* Location */}
-            <th className="py-3 px-4 min-w-[140px]">Location</th>
-            {/* Status */}
-            <th className="py-3 px-4 w-28">Status</th>
-            {/* Source */}
-            <th className="py-3 px-4 min-w-[120px]">Lead Source</th>
+
+            {csvHeaders ? (
+              // Dynamic headers directly from uploaded CSV
+              csvHeaders.map((header) => (
+                <th key={header} className="py-3 px-4 min-w-[160px] text-indigo-900 bg-indigo-50/80 border-b border-indigo-200 font-bold uppercase tracking-wider">
+                  {header}
+                </th>
+              ))
+            ) : (
+              // Standard Layout headers
+              <>
+                <th className="py-3 px-4 min-w-[200px]">Contact Name</th>
+                <th className="py-3 px-4 min-w-[200px]">Designation</th>
+                <th className="py-3 px-4 min-w-[180px]">Organization</th>
+                <th className="py-3 px-4 min-w-[185px]">Email Address</th>
+                <th className="py-3 px-4 min-w-[160px]">Phone Number</th>
+                <th className="py-3 px-4 min-w-[140px]">Location</th>
+                <th className="py-3 px-4 w-28">Status</th>
+                <th className="py-3 px-4 min-w-[120px]">Lead Source</th>
+                {extraKeys.map((customHeader) => (
+                  <th key={customHeader} className="py-3 px-4 min-w-[140px] text-indigo-700 bg-indigo-50/50">
+                    {customHeader.replace(/_/g, ' ')}
+                  </th>
+                ))}
+              </>
+            )}
+
             {/* Actions */}
             <th className="py-3 px-4 w-32 text-right">Actions</th>
           </tr>
         </thead>
 
+
         {/* Table Body */}
         <tbody className="divide-y divide-gray-150">
           {leads.length === 0 ? (
             <tr>
-              <td colSpan={10} className="py-20 text-center">
+              <td colSpan={10 + extraKeys.length} className="py-20 text-center">
+
                 <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                   <div className="w-16 h-16 rounded-2xl bg-blue-100/70 text-blue-600 flex items-center justify-center mx-auto mb-4 shadow-3xs">
                     <HelpCircle className="w-8 h-8" />
@@ -194,132 +266,155 @@ export default function LeadsTable({
                       />
                     </td>
 
-                    {/* Name column */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                          {initials || <Building className="w-3.5 h-3.5" />}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-gray-900 leading-snug flex items-center space-x-1.5">
-                            <span className="hover:text-indigo-600 cursor-pointer transition-colors">
-                              {lead.firstName} {lead.lastName}
-                            </span>
-                            {lead.questions && (
-                              <button
-                                onClick={() => toggleRowExpanded(lead.id)}
-                                title="Has questions to speaker"
-                                className="p-0.5 rounded-sm hover:bg-gray-100 text-amber-500 hover:text-amber-600 transition-colors"
-                              >
-                                <MessageSquare className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                    {csvHeaders ? (
+                      // Render dynamic cells directly matching uploaded CSV headers
+                      csvHeaders.map((header) => (
+                        <td key={header} className="py-3.5 px-4 text-gray-800 font-semibold truncate max-w-[240px]">
+                          {getCellValueByHeader(lead, header)}
+                        </td>
+                      ))
+                    ) : (
+                      // Standard Layout cells
+                      <>
+                        {/* Name column */}
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                              {initials || <Building className="w-3.5 h-3.5" />}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-gray-900 leading-snug flex items-center space-x-1.5">
+                                <span className="hover:text-indigo-600 cursor-pointer transition-colors">
+                                  {lead.firstName} {lead.lastName}
+                                </span>
+                                {lead.questions && (
+                                  <button
+                                    onClick={() => toggleRowExpanded(lead.id)}
+                                    title="Has questions to speaker"
+                                    className="p-0.5 rounded-sm hover:bg-gray-100 text-amber-500 hover:text-amber-600 transition-colors"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                              {lead.registrationTime && (
+                                <span className="text-3xs text-gray-400 font-medium block mt-0.5">
+                                  Reg: {lead.registrationTime}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          {lead.registrationTime && (
-                            <span className="text-3xs text-gray-400 font-medium block mt-0.5">
-                              Reg: {lead.registrationTime}
+                        </td>
+
+                        {/* Job Title column */}
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center space-x-1.5 max-w-[190px]">
+                            <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="truncate text-gray-700 font-medium" title={lead.jobTitle || 'N/A'}>
+                              {lead.jobTitle || <span className="text-gray-450 italic text-2xs">Not specified</span>}
                             </span>
+                          </div>
+                        </td>
+
+                        {/* Company column */}
+                        <td className="py-3.5 px-4">
+                          {lead.organization ? (
+                            <div className="flex items-center space-x-2">
+                              <div className={`w-6 h-6 rounded-md border flex items-center justify-center text-3xs font-bold shrink-0 shadow-3xs ${companyColor}`}>
+                                {lead.organization[0].toUpperCase()}
+                              </div>
+                              <span className="font-semibold text-gray-800 truncate max-w-[140px]" title={lead.organization}>
+                                {lead.organization}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic text-2xs">N/A</span>
                           )}
-                        </div>
-                      </div>
-                    </td>
+                        </td>
 
-                    {/* Job Title column */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center space-x-1.5 max-w-[190px]">
-                        <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <span className="truncate text-gray-700 font-medium" title={lead.jobTitle || 'N/A'}>
-                          {lead.jobTitle || <span className="text-gray-450 italic text-2xs">Not specified</span>}
-                        </span>
-                      </div>
-                    </td>
+                        {/* Email column */}
+                        <td className="py-3.5 px-4">
+                          {lead.emailUnlocked || !isAuthenticated ? (
+                            <div className="flex items-center space-x-1.5">
+                              <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              <a href={`mailto:${lead.email}`} className="text-indigo-600 hover:underline font-medium truncate max-w-[150px]">
+                                {lead.email}
+                              </a>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => onUnlockEmail(lead)}
+                              className="inline-flex items-center space-x-1.5 px-2.5 py-1 text-2xs font-semibold text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-100 rounded-lg transition-all"
+                            >
+                              <Lock className="w-3 h-3" />
+                              <span>Access email</span>
+                            </button>
+                          )}
+                        </td>
 
-                    {/* Company column */}
-                    <td className="py-3.5 px-4">
-                      {lead.organization ? (
-                        <div className="flex items-center space-x-2">
-                          <div className={`w-6 h-6 rounded-md border flex items-center justify-center text-3xs font-bold shrink-0 shadow-3xs ${companyColor}`}>
-                            {lead.organization[0].toUpperCase()}
-                          </div>
-                          <span className="font-semibold text-gray-800 truncate max-w-[140px]" title={lead.organization}>
-                            {lead.organization}
+                        {/* Phone column */}
+                        <td className="py-3.5 px-4">
+                          {lead.phone ? (
+                            lead.phoneUnlocked || !isAuthenticated ? (
+                              <div className="flex items-center space-x-1.5">
+                                <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                <span className="text-gray-700 font-semibold truncate">{lead.phone}</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => onUnlockPhone(lead)}
+                                className="inline-flex items-center space-x-1.5 px-2.5 py-1 text-2xs font-semibold text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-100 rounded-lg transition-all"
+                              >
+                                <Lock className="w-3 h-3" />
+                                <span>Access Mobile</span>
+                              </button>
+                            )
+                          ) : (
+                            <span className="text-gray-400 italic text-2xs">No phone</span>
+                          )}
+                        </td>
+
+                        {/* Location column */}
+                        <td className="py-3.5 px-4">
+                          {lead.city ? (
+                            <div className="flex items-center space-x-1 text-gray-650 font-medium">
+                              <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              <span className="truncate max-w-[110px]" title={lead.city}>
+                                {lead.city}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic text-2xs">N/A</span>
+                          )}
+                        </td>
+
+                        {/* Status column */}
+                        <td className="py-3.5 px-4">
+                          {getStatusBadge(lead.approvalStatus)}
+                        </td>
+
+                        {/* Source column */}
+                        <td className="py-3.5 px-4">
+                          <span className="inline-flex px-2 py-0.5 rounded-md text-2xs font-medium bg-gray-100 text-gray-600 border border-gray-150 truncate max-w-[110px]" title={lead.sourceName || 'Direct'}>
+                            {lead.sourceName || 'Direct'}
                           </span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 italic text-2xs">N/A</span>
-                      )}
-                    </td>
+                        </td>
 
-                    {/* Email column */}
-                    <td className="py-3.5 px-4">
-                      {lead.emailUnlocked || !isAuthenticated ? (
-                        <div className="flex items-center space-x-1.5">
-                          <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <a href={`mailto:${lead.email}`} className="text-indigo-600 hover:underline font-medium truncate max-w-[150px]">
-                            {lead.email}
-                          </a>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => onUnlockEmail(lead)}
-                          className="inline-flex items-center space-x-1.5 px-2.5 py-1 text-2xs font-semibold text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-100 rounded-lg transition-all"
-                        >
-                          <Lock className="w-3 h-3" />
-                          <span>Access email</span>
-                        </button>
-                      )}
-                    </td>
-
-                    {/* Phone column */}
-                    <td className="py-3.5 px-4">
-                      {lead.phone ? (
-                        lead.phoneUnlocked || !isAuthenticated ? (
-                          <div className="flex items-center space-x-1.5">
-                            <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="text-gray-700 font-semibold truncate">{lead.phone}</span>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => onUnlockPhone(lead)}
-                            className="inline-flex items-center space-x-1.5 px-2.5 py-1 text-2xs font-semibold text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-100 rounded-lg transition-all"
-                          >
-                            <Lock className="w-3 h-3" />
-                            <span>Access Mobile</span>
-                          </button>
-                        )
-                      ) : (
-                        <span className="text-gray-400 italic text-2xs">No phone</span>
-                      )}
-                    </td>
-
-                    {/* Location column */}
-                    <td className="py-3.5 px-4">
-                      {lead.city ? (
-                        <div className="flex items-center space-x-1 text-gray-650 font-medium">
-                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span className="truncate max-w-[110px]" title={lead.city}>
-                            {lead.city}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-gray-400 italic text-2xs">N/A</span>
-                      )}
-                    </td>
-
-                    {/* Status column */}
-                    <td className="py-3.5 px-4">
-                      {getStatusBadge(lead.approvalStatus)}
-                    </td>
-
-                    {/* Source column */}
-                    <td className="py-3.5 px-4">
-                      <span className="inline-flex px-2 py-0.5 rounded-md text-2xs font-medium bg-gray-100 text-gray-600 border border-gray-150 truncate max-w-[110px]" title={lead.sourceName || 'Direct'}>
-                        {lead.sourceName || 'Direct'}
-                      </span>
-                    </td>
+                        {/* Dynamic Custom Columns Cell Values */}
+                        {extraKeys.map((customHeader) => (
+                          <td key={customHeader} className="py-3.5 px-4 text-gray-700 font-medium">
+                            {(lead as any)[customHeader] !== undefined && (lead as any)[customHeader] !== null
+                              ? String((lead as any)[customHeader])
+                              : <span className="text-gray-400 italic text-2xs">-</span>}
+                          </td>
+                        ))}
+                      </>
+                    )}
 
                     {/* Actions column */}
                     <td className="py-3.5 px-4 text-right">
+
+
                       <div className="flex items-center justify-end space-x-1">
                         {/* Bookmark/Save Lead */}
                         {isAuthenticated && (

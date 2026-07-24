@@ -100,21 +100,64 @@ export const pushLeadsToSupabase = async (
 
   const tableName = activeConfig.tableName || 'registration_contacts';
 
-  // Map Apollo Lead object to SQL table row format
-  const rowsToInsert = leads.map(l => ({
-    first_name: l.firstName,
-    last_name: l.lastName,
-    email: l.email,
-    registration_time: l.registrationTime,
-    approval_status: l.approvalStatus,
-    city: l.city,
-    phone: l.phone,
-    organization: l.organization,
-    job_title: l.jobTitle,
-    questions: l.questions,
-    source_name: l.sourceName,
-    created_at: l.createdAt || new Date().toISOString()
-  }));
+  // 1. Identify custom columns present on lead objects
+  const internalKeys = new Set(['_csvHeaders', 'id', 'firstName', 'lastName', 'email', 'registrationTime', 'approvalStatus', 'city', 'phone', 'organization', 'jobTitle', 'questions', 'sourceName', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked']);
+  const customKeys = new Set<string>();
+
+  leads.forEach(l => {
+    Object.keys(l).forEach(k => {
+      if (!internalKeys.has(k) && !k.startsWith('_')) {
+        const sqlCol = k.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        if (sqlCol && !['first_name', 'last_name', 'email', 'registration_time', 'approval_status', 'city', 'phone', 'organization', 'job_title', 'questions', 'source_name', 'created_at'].includes(sqlCol)) {
+          customKeys.add(sqlCol);
+        }
+      }
+    });
+  });
+
+  // 2. Try auto-creating missing columns via RPC function in Supabase if present
+  for (const colName of Array.from(customKeys)) {
+    try {
+      await client.rpc('add_column_if_missing', {
+        table_name: tableName,
+        column_name: colName,
+        column_type: 'text'
+      });
+    } catch (e) {
+      // Ignore if RPC function not created in Supabase yet
+    }
+  }
+
+  // 3. Construct exact SQL table row objects
+  const rowsToInsert = leads.map(l => {
+    const row: Record<string, any> = {
+      first_name: l.firstName || '',
+      last_name: l.lastName || '',
+      email: l.email || `contact_${Math.floor(Math.random()*100000)}@imported.com`,
+      registration_time: l.registrationTime || new Date().toLocaleString(),
+      approval_status: l.approvalStatus || 'approved',
+      city: l.city || '',
+      phone: l.phone || '',
+      organization: l.organization || '',
+      job_title: l.jobTitle || '',
+      questions: l.questions || '',
+      source_name: l.sourceName || 'CSV Import',
+      created_at: l.createdAt || new Date().toISOString()
+    };
+
+    // Attach custom column values matching column names
+    Object.keys(l).forEach(k => {
+      if (!internalKeys.has(k) && !k.startsWith('_')) {
+        const sqlCol = k.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        const val = (l as any)[k];
+        if (sqlCol && val !== undefined && val !== null) {
+          row[sqlCol] = String(val);
+        }
+      }
+    });
+
+    return row;
+  });
 
   try {
     // Upsert into Supabase on email match
@@ -124,14 +167,40 @@ export const pushLeadsToSupabase = async (
       .select();
 
     if (error) {
+      console.warn('Supabase upsert with custom columns warning:', error.message);
+      // Fallback: If PostgreSQL column does not exist yet, sanitize row to standard columns
+      if (error.code === 'PGRST204' || error.message?.includes('schema cache')) {
+        const cleanRows = rowsToInsert.map(r => ({
+          first_name: r.first_name,
+          last_name: r.last_name,
+          email: r.email,
+          registration_time: r.registration_time,
+          approval_status: r.approval_status,
+          city: r.city,
+          phone: r.phone,
+          organization: r.organization,
+          job_title: r.job_title,
+          questions: r.questions,
+          source_name: r.source_name,
+          created_at: r.created_at
+        }));
+        const { data: retryData, error: retryErr } = await client
+          .from(tableName)
+          .upsert(cleanRows, { onConflict: 'email' })
+          .select();
+        if (retryErr) return { success: false, count: 0, error: retryErr.message };
+        return { success: true, count: retryData ? retryData.length : cleanRows.length };
+      }
       return { success: false, count: 0, error: error.message };
     }
 
     return { success: true, count: data ? data.length : rowsToInsert.length };
   } catch (err: any) {
+    console.error('Supabase push failed:', err);
     return { success: false, count: 0, error: err?.message || 'Push operation failed' };
   }
 };
+
 
 export const pullLeadsFromSupabase = async (
   config?: SupabaseConfig
@@ -160,23 +229,25 @@ export const pullLeadsFromSupabase = async (
     }
 
     const mappedLeads: Lead[] = data.map((row: any, index: number) => ({
+      ...row, // Preserve any custom database columns!
       id: row.id || index + 1000,
-      firstName: row.first_name || 'Unknown',
-      lastName: row.last_name || '',
+      firstName: row.first_name || row.firstName || 'Unknown',
+      lastName: row.last_name || row.lastName || '',
       email: row.email || '',
-      registrationTime: row.registration_time || new Date().toLocaleString(),
-      approvalStatus: row.approval_status || 'approved',
+      registrationTime: row.registration_time || row.registrationTime || new Date().toLocaleString(),
+      approvalStatus: row.approval_status || row.approvalStatus || 'approved',
       city: row.city || '',
       phone: row.phone || '',
       organization: row.organization || '',
-      jobTitle: row.job_title || '',
+      jobTitle: row.job_title || row.jobTitle || '',
       questions: row.questions || '',
-      sourceName: row.source_name || 'Supabase Sync',
-      createdAt: row.created_at || new Date().toISOString(),
+      sourceName: row.source_name || row.sourceName || 'Supabase Sync',
+      createdAt: row.created_at || row.createdAt || new Date().toISOString(),
       isSaved: false,
       emailUnlocked: false,
       phoneUnlocked: false
     }));
+
 
     return { success: true, leads: mappedLeads };
   } catch (err: any) {
@@ -184,7 +255,36 @@ export const pullLeadsFromSupabase = async (
   }
 };
 
+export const deleteLeadFromSupabase = async (
+  identifier: { email?: string; id?: number },
+  config?: SupabaseConfig
+): Promise<{ success: boolean; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  
+  if (!client) {
+    return { success: false, error: 'Supabase client missing' };
+  }
+
+  const tableName = activeConfig.tableName || 'registration_contacts';
+
+  try {
+    if (identifier.email) {
+      const { error } = await client.from(tableName).delete().eq('email', identifier.email);
+      if (error) return { success: false, error: error.message };
+    } else if (identifier.id) {
+      const { error } = await client.from(tableName).delete().eq('id', identifier.id);
+      if (error) return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Delete operation failed' };
+  }
+};
+
+
 export const generateSupabaseSQL = (tableName: string = 'registration_contacts'): string => {
+
   return `-- Copy and run this SQL script in your Supabase Project SQL Editor:
 -- Go to: https://supabase.com/dashboard/project/_/sql
 

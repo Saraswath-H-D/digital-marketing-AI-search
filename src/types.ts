@@ -23,6 +23,7 @@ export interface FilterOptions {
   cities: string[];
   sources: string[];
   statuses: string[];
+  customFilters?: Record<string, string[]>;
 }
 
 export interface Filters {
@@ -32,6 +33,7 @@ export interface Filters {
   cities: string[];
   sources: string[];
   statuses: string[];
+  customFilters?: Record<string, string[]>;
   savedOnly: boolean;
   netNewOnly?: boolean;
   selectedList?: string | null;
@@ -43,6 +45,7 @@ export interface Filters {
   educations?: string[];
   enrichmentTypes?: string[];
 }
+
 
 export interface AuthState {
   user: any;

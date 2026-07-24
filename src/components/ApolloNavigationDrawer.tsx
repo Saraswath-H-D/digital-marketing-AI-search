@@ -188,9 +188,9 @@ export default function ApolloNavigationDrawer({
               <div className={`space-y-0.5 ${!isCollapsed ? 'mt-1 pl-0.5' : ''}`}>
                 {renderMenuItem('Contacts', <Users className="w-4 h-4" />)}
                 {renderMenuItem('Organizations', <Building className="w-4 h-4" />)}
-                {renderMenuItem('Supabase Sync', <Database className="w-4 h-4 text-emerald-400" />, true)}
                 {renderMenuItem('Directories', <List className="w-4 h-4" />)}
                 {renderMenuItem('Data Enhancement', <Database className="w-4 h-4" />)}
+
               </div>
             )}
           </div>

@@ -1,7 +1,27 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
+import { pushLeadsToSupabase, deleteLeadFromSupabase } from '../lib/supabase.ts';
 
 const STORAGE_KEY = 'apollo_leads_v4';
+const HEADERS_KEY = 'apollo_active_headers';
+
+export const getActiveHeaders = (): string[] | null => {
+  try {
+    const raw = localStorage.getItem(HEADERS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (err) {
+    console.error('Error reading active headers:', err);
+  }
+  return null;
+};
+
+export const setActiveHeaders = (headers: string[]): void => {
+  try {
+    localStorage.setItem(HEADERS_KEY, JSON.stringify(headers));
+  } catch (err) {
+    console.error('Error writing active headers:', err);
+  }
+};
 
 // Get leads from localStorage, initializing with default initialLeads if empty or outdated
 export const getStoredLeads = (): Lead[] => {
@@ -9,17 +29,19 @@ export const getStoredLeads = (): Lead[] => {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data !== null) {
       const parsed = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 5) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
   } catch (err) {
     console.error('Error reading leads from localStorage:', err);
   }
-  // Default initialize with initialLeads
+  // Default initialize with initialLeads only on first load
   localStorage.setItem(STORAGE_KEY, JSON.stringify(initialLeads));
   return initialLeads;
 };
+
+
 
 // Save leads array to localStorage
 export const saveStoredLeads = (leads: Lead[]): void => {
@@ -30,75 +52,123 @@ export const saveStoredLeads = (leads: Lead[]): void => {
   }
 };
 
-// Get unique filter options for sidebar dropdowns
+// Helper to extract values from standard OR dynamic custom keys
+const extractFieldValues = (l: any, aliases: string[]): string[] => {
+  const values: string[] = [];
+  Object.keys(l).forEach(k => {
+    const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (aliases.some(a => cleanK.includes(a))) {
+      const val = l[k];
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        values.push(String(val).trim());
+      }
+    }
+  });
+  return values;
+};
+
+// Get unique filter options for sidebar dropdowns dynamically
 export const getFilterOptions = (): FilterOptions => {
   const leads = getStoredLeads();
-  const getUniqueClean = (fn: (l: Lead) => string | null | undefined): string[] => {
+  
+  const getUniqueForAliases = (aliases: string[]): string[] => {
     const set = new Set<string>();
     leads.forEach(l => {
-      const val = fn(l);
-      if (val && val.trim() !== '') {
-        set.add(val.trim());
-      }
+      const vals = extractFieldValues(l, aliases);
+      vals.forEach(v => set.add(v));
     });
     return Array.from(set).sort();
   };
 
+  // Extract unique filter options for custom CSV columns
+  const activeHeaders = getActiveHeaders();
+  const customFilterMap: Record<string, string[]> = {};
+
+  if (activeHeaders && activeHeaders.length > 0) {
+    activeHeaders.forEach(col => {
+      const cleanCol = col.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isStandardAlias = ['jobtitle', 'title', 'role', 'designation', 'organization', 'company', 'employer', 'city', 'location', 'town', 'country', 'sourcename', 'source', 'approvalstatus', 'status', 'email', 'name', 'phone', 'firstname', 'lastname'].some(a => cleanCol.includes(a));
+      
+      if (!isStandardAlias) {
+        const valSet = new Set<string>();
+        leads.forEach(l => {
+          const val = (l as any)[col];
+          if (val !== undefined && val !== null && String(val).trim() !== '') {
+            valSet.add(String(val).trim());
+          }
+        });
+        if (valSet.size > 0 && valSet.size <= 50) {
+          customFilterMap[col] = Array.from(valSet).sort();
+        }
+      }
+    });
+  }
+
   return {
-    jobTitles: getUniqueClean(l => l.jobTitle),
-    companies: getUniqueClean(l => l.organization),
-    cities: getUniqueClean(l => l.city),
-    sources: getUniqueClean(l => l.sourceName),
-    statuses: getUniqueClean(l => l.approvalStatus),
+    jobTitles: getUniqueForAliases(['jobtitle', 'title', 'role', 'designation', 'position', 'occupation']),
+    companies: getUniqueForAliases(['organization', 'company', 'employer', 'business', 'org', 'firm']),
+    cities: getUniqueForAliases(['city', 'location', 'town', 'country', 'state', 'address', 'region']),
+    sources: getUniqueForAliases(['sourcename', 'source', 'leadsource']),
+    statuses: getUniqueForAliases(['approvalstatus', 'status', 'approved', 'state']),
+    customFilters: customFilterMap,
   };
 };
 
-// Filter leads based on filter criteria
+// Filter leads based on filter criteria dynamically
 export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
   return leads.filter(l => {
-    // 1. Search Query
+    const leadObj = l as any;
+
+    // 1. Search Query across ALL dynamic CSV fields
     if (filters.search && filters.search.trim()) {
       const query = filters.search.trim().toLowerCase();
-      const fullName = `${l.firstName || ''} ${l.lastName || ''}`.toLowerCase();
-      const email = (l.email || '').toLowerCase();
-      const org = (l.organization || '').toLowerCase();
-      const title = (l.jobTitle || '').toLowerCase();
-      const city = (l.city || '').toLowerCase();
-
-      const matches =
-        fullName.includes(query) ||
-        email.includes(query) ||
-        org.includes(query) ||
-        title.includes(query) ||
-        city.includes(query);
-
+      const matches = Object.values(leadObj).some(val => 
+        val !== null && val !== undefined && String(val).toLowerCase().includes(query)
+      );
       if (!matches) return false;
     }
 
-    // 2. Job Titles
+    // 2. Job Titles / Roles
     if (filters.jobTitles && filters.jobTitles.length > 0) {
-      if (!l.jobTitle || !filters.jobTitles.includes(l.jobTitle)) return false;
+      const vals = extractFieldValues(leadObj, ['jobtitle', 'title', 'role', 'designation', 'position', 'occupation']);
+      if (!vals.some(v => filters.jobTitles.includes(v))) return false;
     }
 
-    // 3. Companies
+    // 3. Companies / Organizations
     if (filters.companies && filters.companies.length > 0) {
-      if (!l.organization || !filters.companies.includes(l.organization)) return false;
+      const vals = extractFieldValues(leadObj, ['organization', 'company', 'employer', 'business', 'org', 'firm']);
+      if (!vals.some(v => filters.companies.includes(v))) return false;
     }
 
-    // 4. Cities
+    // 4. Cities / Locations
     if (filters.cities && filters.cities.length > 0) {
-      if (!l.city || !filters.cities.includes(l.city)) return false;
+      const vals = extractFieldValues(leadObj, ['city', 'location', 'town', 'country', 'state', 'address', 'region']);
+      if (!vals.some(v => filters.cities.includes(v))) return false;
     }
 
     // 5. Sources
     if (filters.sources && filters.sources.length > 0) {
-      if (!l.sourceName || !filters.sources.includes(l.sourceName)) return false;
+      const vals = extractFieldValues(leadObj, ['sourcename', 'source', 'leadsource']);
+      if (!vals.some(v => filters.sources.includes(v))) return false;
     }
 
     // 6. Approval Statuses
     if (filters.statuses && filters.statuses.length > 0) {
-      if (!l.approvalStatus || !filters.statuses.includes(l.approvalStatus)) return false;
+      const vals = extractFieldValues(leadObj, ['approvalstatus', 'status', 'approved', 'state']);
+      if (!vals.some(v => filters.statuses.includes(v))) return false;
     }
+
+    // 6.5 Dynamic CSV Custom Filters
+    if (filters.customFilters) {
+      for (const [col, selectedVals] of Object.entries(filters.customFilters)) {
+        if (selectedVals && selectedVals.length > 0) {
+          const val = (leadObj[col] !== undefined && leadObj[col] !== null) ? String(leadObj[col]).trim() : '';
+          if (!selectedVals.includes(val)) return false;
+        }
+      }
+    }
+
+
 
     // 7. Saved Only
     if (filters.savedOnly && !l.isSaved) {
@@ -225,6 +295,10 @@ export const addLead = (newLeadData: Partial<Lead>): Lead => {
 
   const updated = [lead, ...allLeads];
   saveStoredLeads(updated);
+
+  // Real-time automatic background sync to Supabase
+  pushLeadsToSupabase([lead]).catch(err => console.error('Auto-sync to Supabase failed:', err));
+
   return lead;
 };
 
@@ -243,6 +317,8 @@ export const updateLead = (id: number, updateData: Partial<Lead>): Lead | null =
 
   if (updatedLead) {
     saveStoredLeads(updated);
+    // Real-time automatic background sync to Supabase
+    pushLeadsToSupabase([updatedLead]).catch(err => console.error('Auto-sync to Supabase failed:', err));
   }
   return updatedLead;
 };
@@ -250,17 +326,28 @@ export const updateLead = (id: number, updateData: Partial<Lead>): Lead | null =
 // Delete Lead
 export const deleteLead = (id: number): void => {
   const allLeads = getStoredLeads();
+  const target = allLeads.find(l => l.id === id);
   const updated = allLeads.filter(l => l.id !== id);
   saveStoredLeads(updated);
+
+  if (target) {
+    deleteLeadFromSupabase({ email: target.email, id: target.id }).catch(err => console.error('Delete sync to Supabase failed:', err));
+  }
 };
 
 // Bulk Delete Leads
 export const bulkDeleteLeads = (ids: number[]): void => {
   const allLeads = getStoredLeads();
   const idSet = new Set(ids);
+  const targets = allLeads.filter(l => idSet.has(l.id));
   const updated = allLeads.filter(l => !idSet.has(l.id));
   saveStoredLeads(updated);
+
+  targets.forEach(t => {
+    deleteLeadFromSupabase({ email: t.email, id: t.id }).catch(err => console.error('Delete sync to Supabase failed:', err));
+  });
 };
+
 
 // Bulk Import Leads
 export const bulkImportLeads = (newLeadsList: Partial<Lead>[]): number => {
@@ -270,6 +357,7 @@ export const bulkImportLeads = (newLeadsList: Partial<Lead>[]): number => {
   const createdLeads: Lead[] = newLeadsList.map(item => {
     maxId += 1;
     return {
+      ...item, // Preserve _csvHeaders and all original CSV column header fields
       id: maxId,
       firstName: item.firstName || 'Unknown',
       lastName: item.lastName || '',
@@ -289,6 +377,16 @@ export const bulkImportLeads = (newLeadsList: Partial<Lead>[]): number => {
     };
   });
 
+  if (newLeadsList.length > 0 && (newLeadsList[0] as any)._csvHeaders) {
+    setActiveHeaders((newLeadsList[0] as any)._csvHeaders);
+  }
+
   saveStoredLeads([...createdLeads, ...allLeads]);
+
+  // Real-time automatic background sync to Supabase
+  pushLeadsToSupabase(createdLeads).catch(err => console.error('Auto-sync import to Supabase failed:', err));
+
   return createdLeads.length;
 };
+
+

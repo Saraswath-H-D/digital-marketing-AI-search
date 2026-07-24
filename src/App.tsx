@@ -4,6 +4,7 @@ import { auth, googleAuthProvider } from './lib/firebase.ts';
 import { Lead, Filters, FilterOptions, AuthState } from './types.ts';
 import { 
   getStoredLeads, 
+  saveStoredLeads,
   getFilterOptions as getClientFilterOptions, 
   filterLeads as filterClientLeads, 
   getLeadStats as getClientLeadStats, 
@@ -17,6 +18,7 @@ import {
   bulkDeleteLeads, 
   bulkImportLeads 
 } from './data/leadStorage.ts';
+import { pullLeadsFromSupabase } from './lib/supabase.ts';
 import FiltersSidebar from './components/FiltersSidebar.tsx';
 import LeadsTable from './components/LeadsTable.tsx';
 import AddLeadModal from './components/AddLeadModal.tsx';
@@ -24,8 +26,8 @@ import EditLeadModal from './components/EditLeadModal.tsx';
 import CsvImporter from './components/CsvImporter.tsx';
 import ApolloNavigationDrawer from './components/ApolloNavigationDrawer.tsx';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal.tsx';
-import SupabaseModal from './components/SupabaseModal.tsx';
 import { AICopilotDrawer } from './components/AICopilotDrawer.tsx';
+
 import { 
   Search, 
   Plus, 
@@ -219,6 +221,25 @@ export default function App() {
   useEffect(() => {
     fetchLeads();
   }, [filters, page, limit]);
+
+  // Auto-sync live database records from Supabase on app startup
+  useEffect(() => {
+    const syncLiveDatabase = async () => {
+      try {
+        const res = await pullLeadsFromSupabase();
+        if (res.success) {
+          saveStoredLeads(res.leads);
+          fetchLeads();
+          fetchFilterOptions();
+        }
+      } catch (err) {
+        console.error('Initial Supabase fetch failed:', err);
+      }
+    };
+    syncLiveDatabase();
+  }, []);
+
+
 
   // Sync main search input with the active filter's search value
   useEffect(() => {
@@ -1162,18 +1183,8 @@ export default function App() {
         }
       />
 
-      <SupabaseModal
-        isOpen={isSupabaseOpen}
-        onClose={() => setIsSupabaseOpen(false)}
-        leads={leads}
-        onLeadsUpdated={(newLeads) => {
-          setLeads(newLeads);
-          fetchStats();
-          fetchFilterOptions();
-          showStatus('Successfully updated contacts from Supabase!', 'success');
-        }}
-      />
-
     </div>
   );
 }
+
+
