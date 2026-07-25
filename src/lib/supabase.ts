@@ -242,25 +242,33 @@ export const pullLeadsFromSupabase = async (
       return { success: true, leads: [] };
     }
 
-    const mappedLeads: Lead[] = data.map((row: any, index: number) => ({
-      ...row, // Preserve any custom database columns!
-      id: index + 1, // Always assign clean sequential ID starting from 1
-      firstName: row.first_name || row.firstName || 'Unknown',
-      lastName: row.last_name || row.lastName || '',
-      email: row.email || '',
-      registrationTime: row.registration_time || row.registrationTime || new Date().toLocaleString(),
-      approvalStatus: row.approval_status || row.approvalStatus || 'approved',
-      city: row.city || '',
-      phone: row.phone || '',
-      organization: row.organization || '',
-      jobTitle: row.job_title || row.jobTitle || '',
-      questions: row.questions || '',
-      sourceName: row.source_name || row.sourceName || 'Supabase Sync',
-      createdAt: row.created_at || row.createdAt || new Date().toISOString(),
-      isSaved: false,
-      emailUnlocked: false,
-      phoneUnlocked: false
-    }));
+    const mappedLeads: Lead[] = data.map((row: any, index: number) => {
+      const rawSrc = row.source_name || row.sourceName || '';
+      let srcName = rawSrc ? String(rawSrc).trim().replace(/\s+/g, '-') : '-';
+      if (!srcName || /^supabase|^contacts$|^export$|^leads$|^data$/i.test(srcName)) {
+        srcName = '-';
+      }
+
+      return {
+        ...row, // Preserve any custom database columns!
+        id: index + 1, // Always assign clean sequential ID starting from 1
+        firstName: row.first_name || row.firstName || 'Unknown',
+        lastName: row.last_name || row.lastName || '',
+        email: row.email || '',
+        registrationTime: row.registration_time || row.registrationTime || new Date().toLocaleString(),
+        approvalStatus: row.approval_status || row.approvalStatus || 'approved',
+        city: row.city || '',
+        phone: row.phone || '',
+        organization: row.organization || '',
+        jobTitle: row.job_title || row.jobTitle || '',
+        questions: row.questions || '',
+        sourceName: srcName,
+        createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+        isSaved: false,
+        emailUnlocked: false,
+        phoneUnlocked: false
+      };
+    });
 
 
     return { success: true, leads: mappedLeads };

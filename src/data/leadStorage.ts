@@ -2,7 +2,7 @@ import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
 import { pushLeadsToSupabase, deleteLeadFromSupabase } from '../lib/supabase.ts';
 
-const STORAGE_KEY = 'apollo_leads_v8';
+const STORAGE_KEY = 'apollo_leads_v9';
 const HEADERS_KEY = 'apollo_active_headers';
 
 export const getActiveHeaders = (): string[] | null => {
@@ -62,7 +62,7 @@ const sanitizeLead = (l: any): Lead => {
   }
 
   let srcName = l.sourceName ? String(l.sourceName).trim() : '';
-  if (!srcName || /^contacts$|^export$|^leads$|^data$|^apollo_.*export/i.test(srcName)) {
+  if (!srcName || /^contacts$|^export$|^leads$|^data$|^apollo_.*export|^supabase/i.test(srcName)) {
     srcName = '-';
   } else {
     srcName = srcName.replace(/\s+/g, '-');
