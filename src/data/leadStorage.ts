@@ -2,7 +2,7 @@ import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
 import { pushLeadsToSupabase, deleteLeadFromSupabase } from '../lib/supabase.ts';
 
-const STORAGE_KEY = 'apollo_leads_v4';
+const STORAGE_KEY = 'apollo_leads_v8';
 const HEADERS_KEY = 'apollo_active_headers';
 
 export const getActiveHeaders = (): string[] | null => {
@@ -23,12 +23,18 @@ export const setActiveHeaders = (headers: string[]): void => {
   }
 };
 
+const cleanVal = (val: any) => {
+  if (val === undefined || val === null) return '-';
+  const str = String(val).trim();
+  return (str === '' || str === 'undefined' || str === 'null') ? '-' : str;
+};
+
 // Helper to repair/sanitize leads if name was previously defaulted to 'Contact'
 const sanitizeLead = (l: any): Lead => {
-  let fName = l.firstName || '';
-  let lName = l.lastName || '';
+  let fName = l.firstName ? String(l.firstName).trim() : '';
+  let lName = l.lastName ? String(l.lastName).trim() : '';
 
-  if (!fName || fName.toLowerCase() === 'contact' || fName.toLowerCase() === 'unknown') {
+  if (!fName || fName === '-' || fName.toLowerCase() === 'contact' || fName.toLowerCase() === 'unknown') {
     const keys = Object.keys(l);
     const nameKey = keys.find(k => ['full name', 'fullname', 'contact name', 'contact', 'contacts', 'attendee name', 'name'].includes(k.toLowerCase().trim()));
     if (nameKey && l[nameKey] && String(l[nameKey]).trim() && String(l[nameKey]).toLowerCase().trim() !== 'contact') {
@@ -42,23 +48,41 @@ const sanitizeLead = (l: any): Lead => {
       const parts = cleanUser.split(/[._-]/).filter((p: string) => p && !/^\d+$/.test(p));
       if (parts.length > 0) {
         fName = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
-        if (parts.length > 1 && !lName) {
+        if (parts.length > 1 && (!lName || lName === '-')) {
           lName = parts.slice(1).map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
         }
       }
     }
   }
 
-  if (fName && !lName && fName.includes(' ')) {
+  if (fName && (!lName || lName === '-') && fName.includes(' ')) {
     const parts = fName.split(/\s+/);
     fName = parts[0] || '';
     lName = parts.slice(1).join(' ');
   }
 
+  let srcName = l.sourceName ? String(l.sourceName).trim() : '';
+  if (!srcName || /^contacts$|^export$|^leads$|^data$|^apollo_.*export/i.test(srcName)) {
+    srcName = '-';
+  } else {
+    srcName = srcName.replace(/\s+/g, '-');
+  }
+
   return {
     ...l,
-    firstName: fName || 'Attendee',
-    lastName: lName || ''
+    firstName: cleanVal(fName),
+    lastName: cleanVal(lName),
+    email: cleanVal(l.email),
+    organization: cleanVal(l.organization),
+    jobTitle: cleanVal(l.jobTitle),
+    city: cleanVal(l.city),
+    phone: cleanVal(l.phone),
+    approvalStatus: cleanVal(l.approvalStatus || 'approved'),
+    sourceName: srcName,
+    registrationTime: cleanVal(l.registrationTime),
+    questions: cleanVal(l.questions),
+    emailUnlocked: false,
+    phoneUnlocked: false,
   };
 };
 
@@ -69,14 +93,20 @@ export const getStoredLeads = (): Lead[] => {
     if (data !== null) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        return parsed.map(sanitizeLead);
+        return parsed.map((l, idx) => ({
+          ...sanitizeLead(l),
+          id: idx + 1
+        }));
       }
     }
   } catch (err) {
     console.error('Error reading leads from localStorage:', err);
   }
   // Default initialize with initialLeads only on first load
-  const sanitizedDefaults = initialLeads.map(sanitizeLead);
+  const sanitizedDefaults = initialLeads.map((l, idx) => ({
+    ...sanitizeLead(l),
+    id: idx + 1
+  }));
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedDefaults));
   return sanitizedDefaults;
 };
@@ -312,21 +342,22 @@ export const bulkUnlockEmails = (ids: number[]): Lead[] => {
 // Add New Lead
 export const addLead = (newLeadData: Partial<Lead>): Lead => {
   const allLeads = getStoredLeads();
-  const nextId = allLeads.length > 0 ? Math.max(...allLeads.map(l => l.id)) + 1 : 1;
+  const maxId = allLeads.length > 0 ? Math.max(...allLeads.map(l => Number(l.id) || 0)) : 0;
+  const nextId = maxId + 1;
 
   const lead: Lead = {
     id: nextId,
-    firstName: newLeadData.firstName || 'Unknown',
-    lastName: newLeadData.lastName || '',
-    email: newLeadData.email || '',
+    firstName: cleanVal(newLeadData.firstName),
+    lastName: cleanVal(newLeadData.lastName),
+    email: cleanVal(newLeadData.email),
     registrationTime: new Date().toLocaleString(),
-    approvalStatus: newLeadData.approvalStatus || 'approved',
-    city: newLeadData.city || '',
-    phone: newLeadData.phone || '',
-    organization: newLeadData.organization || '',
-    jobTitle: newLeadData.jobTitle || '',
-    questions: newLeadData.questions || '',
-    sourceName: newLeadData.sourceName || 'Manual Entry',
+    approvalStatus: cleanVal(newLeadData.approvalStatus || 'approved'),
+    city: cleanVal(newLeadData.city),
+    phone: cleanVal(newLeadData.phone),
+    organization: cleanVal(newLeadData.organization),
+    jobTitle: cleanVal(newLeadData.jobTitle),
+    questions: cleanVal(newLeadData.questions),
+    sourceName: newLeadData.sourceName && String(newLeadData.sourceName).trim() ? String(newLeadData.sourceName).trim().replace(/\s+/g, '-') : 'Manual-Entry',
     createdAt: new Date().toISOString(),
     isSaved: false,
     emailUnlocked: false,
@@ -399,21 +430,21 @@ export const bulkImportLeads = (newLeadsList: Partial<Lead>[]): number => {
     return {
       ...item, // Preserve _csvHeaders and all original CSV column header fields
       id: maxId,
-      firstName: item.firstName || 'Unknown',
-      lastName: item.lastName || '',
-      email: item.email || '',
-      registrationTime: item.registrationTime || new Date().toLocaleString(),
-      approvalStatus: item.approvalStatus || 'approved',
-      city: item.city || '',
-      phone: item.phone || '',
-      organization: item.organization || '',
-      jobTitle: item.jobTitle || '',
-      questions: item.questions || '',
-      sourceName: item.sourceName || 'CSV Import',
+      firstName: cleanVal(item.firstName),
+      lastName: cleanVal(item.lastName),
+      email: cleanVal(item.email),
+      registrationTime: cleanVal(item.registrationTime),
+      approvalStatus: cleanVal(item.approvalStatus || 'approved'),
+      city: cleanVal(item.city),
+      phone: cleanVal(item.phone),
+      organization: cleanVal(item.organization),
+      jobTitle: cleanVal(item.jobTitle),
+      questions: cleanVal(item.questions),
+      sourceName: item.sourceName && String(item.sourceName).trim() ? String(item.sourceName).trim().replace(/\s+/g, '-') : '-',
       createdAt: new Date().toISOString(),
       isSaved: false,
-      emailUnlocked: false,
-      phoneUnlocked: false,
+      emailUnlocked: true,
+      phoneUnlocked: true,
     };
   });
 

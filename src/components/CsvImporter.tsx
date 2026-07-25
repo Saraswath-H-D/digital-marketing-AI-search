@@ -75,14 +75,18 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
             }
           });
 
-          const findVal = (possibleKeys: string[]) => {
-            const matchedKey = keys.find(k => 
-              possibleKeys.some(pk => {
-                const cleanK = k.toLowerCase().trim();
-                const cleanPk = pk.toLowerCase().trim();
-                return cleanK === cleanPk || cleanK.includes(cleanPk);
-              })
+          const findVal = (possibleKeys: string[], excludeSubstring: string[] = []) => {
+            let matchedKey = keys.find(k => 
+              possibleKeys.some(pk => k.toLowerCase().trim() === pk.toLowerCase().trim())
             );
+
+            if (!matchedKey) {
+              matchedKey = keys.find(k => {
+                const cleanK = k.toLowerCase().trim();
+                if (excludeSubstring.some(ex => cleanK.includes(ex))) return false;
+                return possibleKeys.some(pk => cleanK.includes(pk.toLowerCase().trim()));
+              });
+            }
             return matchedKey ? String(r[matchedKey]).trim() : '';
           };
 
@@ -118,18 +122,45 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
             }
           }
 
+          // Clean fallback default source from file name
+          let defaultSource = selectedFile.name
+            .replace(/\.csv$/i, '')
+            .replace(/^apollo_?(contacts|leads)_?(export_?)?/i, '')
+            .replace(/[-_]/g, ' ')
+            .trim();
+
+          if (!defaultSource || /^export$|^contacts$|^leads$|^data$|^file$|^sheet$/i.test(defaultSource)) {
+            defaultSource = 'Registration Report';
+          } else {
+            defaultSource = defaultSource
+              .split(/\s+/)
+              .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+              .join(' ');
+          }
+
+          const extractedSource = findVal(
+            ['source name', 'source_name', 'lead source', 'lead_source', 'registration source', 'source', 'channel', 'utm_source', 'source medium'],
+            ['resource', 'sourcecode', 'outsource']
+          );
+
+          const cleanVal = (val: any) => {
+            if (val === undefined || val === null) return '-';
+            const str = String(val).trim();
+            return (str === '' || str === 'undefined' || str === 'null') ? '-' : str;
+          };
+
           // Populate standard attributes for filters, searching, and Supabase
-          leadObj.firstName = fName || 'Attendee';
-          leadObj.lastName = lName || '';
-          leadObj.email = rawEmail || `contact_${Math.floor(Math.random()*10000)}@imported.com`;
-          leadObj.organization = findVal(['organization', 'company', 'employer', 'business', 'org', 'firm']);
-          leadObj.jobTitle = findVal(['job title', 'jobtitle', 'title', 'role', 'designation', 'position', 'occupation']);
-          leadObj.city = findVal(['city', 'location', 'town', 'country', 'state', 'address', 'region']);
-          leadObj.phone = findVal(['phone', 'phone number', 'mobile', 'telephone', 'contact number', 'cell']);
-          leadObj.approvalStatus = findVal(['approval status', 'status', 'approved', 'state']) || 'approved';
-          leadObj.questions = findVal(['do have any questions to speaker!', 'questions', 'question', 'inquiry', 'notes', 'comments', 'remarks']);
-          leadObj.sourceName = findVal(['source name', 'source', 'lead source']) || selectedFile.name.replace('.csv', '');
-          leadObj.registrationTime = findVal(['registration time', 'time', 'registered', 'date', 'created at']) || new Date().toLocaleString();
+          leadObj.firstName = cleanVal(fName);
+          leadObj.lastName = cleanVal(lName);
+          leadObj.email = cleanVal(rawEmail);
+          leadObj.organization = cleanVal(findVal(['organization', 'company', 'employer', 'business', 'org', 'firm']));
+          leadObj.jobTitle = cleanVal(findVal(['job title', 'jobtitle', 'title', 'role', 'designation', 'position', 'occupation']));
+          leadObj.city = cleanVal(findVal(['city', 'location', 'town', 'country', 'state', 'address', 'region']));
+          leadObj.phone = cleanVal(findVal(['phone', 'phone number', 'mobile', 'telephone', 'contact number', 'cell']));
+          leadObj.approvalStatus = cleanVal(findVal(['approval status', 'status', 'approved', 'state']) || 'approved');
+          leadObj.questions = cleanVal(findVal(['do have any questions to speaker!', 'questions', 'question', 'inquiry', 'notes', 'comments', 'remarks']));
+          leadObj.sourceName = extractedSource ? extractedSource.trim().replace(/\s+/g, '-') : '-';
+          leadObj.registrationTime = cleanVal(findVal(['registration time', 'time', 'registered', 'date', 'created at']));
 
           return leadObj;
         }).filter(item => item.firstName || item.email);

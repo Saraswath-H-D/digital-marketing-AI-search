@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Lead } from '../types.ts';
 import { getActiveHeaders } from '../data/leadStorage.ts';
 import { 
-
   Check, 
   Mail, 
   Phone, 
@@ -22,7 +21,8 @@ import {
   HelpCircle,
   Clock,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Copy
 } from 'lucide-react';
 
 interface LeadsTableProps {
@@ -68,6 +68,35 @@ export default function LeadsTable({
 }: LeadsTableProps) {
   // Expanded rows state for questions/details
   const [expandedRowIds, setExpandedRowIds] = useState<number[]>([]);
+  const [revealedEmailIds, setRevealedEmailIds] = useState<number[]>([]);
+  const [revealedPhoneIds, setRevealedPhoneIds] = useState<number[]>([]);
+  const [copiedStatus, setCopiedStatus] = useState<{ id: number; field: 'email' | 'phone' } | null>(null);
+
+  const copyToClipboard = (e: React.MouseEvent, text: string, id: number, field: 'email' | 'phone') => {
+    e.stopPropagation();
+    if (!text || text === '-') return;
+    navigator.clipboard.writeText(text);
+    setCopiedStatus({ id, field });
+    setTimeout(() => setCopiedStatus(null), 2000);
+  };
+
+  const handleAccessEmail = (e: React.MouseEvent, lead: Lead) => {
+    e.stopPropagation();
+    setRevealedEmailIds(prev => [...prev, lead.id]);
+    onUnlockEmail(lead);
+    if (lead.email && lead.email !== '-') {
+      window.location.href = `mailto:${lead.email}`;
+    }
+  };
+
+  const handleAccessPhone = (e: React.MouseEvent, lead: Lead) => {
+    e.stopPropagation();
+    setRevealedPhoneIds(prev => [...prev, lead.id]);
+    onUnlockPhone(lead);
+    if (lead.phone && lead.phone !== '-') {
+      window.location.href = `tel:${lead.phone}`;
+    }
+  };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
@@ -152,27 +181,132 @@ export default function LeadsTable({
   }, [leads]);
 
   const getCellValueByHeader = (lead: any, header: string) => {
-    if (lead[header] !== undefined && lead[header] !== null && lead[header] !== '') {
-      return String(lead[header]);
+    if (lead[header] !== undefined && lead[header] !== null && String(lead[header]).trim() !== '') {
+      return String(lead[header]).trim();
     }
     const lower = header.toLowerCase().trim();
     const foundKey = Object.keys(lead).find(k => k.toLowerCase().trim() === lower);
-    if (foundKey && lead[foundKey] !== undefined && lead[foundKey] !== null && lead[foundKey] !== '') {
-      return String(lead[foundKey]);
+    if (foundKey && lead[foundKey] !== undefined && lead[foundKey] !== null && String(lead[foundKey]).trim() !== '') {
+      return String(lead[foundKey]).trim();
     }
-    if (lower.includes('name') || lower.includes('first')) return `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '-';
-    if (lower.includes('email') || lower.includes('mail')) return lead.email || '-';
-    if (lower.includes('company') || lower.includes('organization') || lower.includes('org')) return lead.organization || '-';
-    if (lower.includes('title') || lower.includes('role') || lower.includes('designation')) return lead.jobTitle || '-';
-    if (lower.includes('city') || lower.includes('location')) return lead.city || '-';
-    if (lower.includes('phone') || lower.includes('mobile')) return lead.phone || '-';
-    if (lower.includes('status')) return lead.approvalStatus || '-';
-    if (lower.includes('source')) return lead.sourceName || '-';
 
-    return '-';
+    if (lower.includes('source')) return lead.sourceName || '';
+    if (lower.includes('first name') || lower === 'fname') return lead.firstName || '';
+    if (lower.includes('last name') || lower === 'lname') return lead.lastName || '';
+    if (lower === 'name' || lower === 'full name' || lower === 'contact name' || lower === 'contacts' || lower === 'contact' || lower === 'attendee' || lower.includes('attendee name')) {
+      return `${lead.firstName || ''} ${lead.lastName || ''}`.trim();
+    }
+    if (lower.includes('email') || lower.includes('mail')) return lead.email || '';
+    if (lower.includes('company') || lower.includes('organization') || lower.includes('org')) return lead.organization || '';
+    if (lower.includes('title') || lower.includes('role') || lower.includes('designation')) return lead.jobTitle || '';
+    if (lower.includes('city') || lower.includes('location')) return lead.city || '';
+    if (lower.includes('phone') || lower.includes('mobile')) return lead.phone || '';
+    if (lower.includes('status')) return lead.approvalStatus || '';
+
+    return '';
   };
 
   const isAllSelected = leads.length > 0 && selectedIds.length === leads.length;
+
+  const renderEmailCell = (lead: Lead) => {
+    if (!lead.email || lead.email === '-') {
+      return <span className="text-gray-400 font-medium">-</span>;
+    }
+    const isRevealed = revealedEmailIds.includes(lead.id) || lead.emailUnlocked;
+    if (isRevealed) {
+      return (
+        <div className="flex items-center space-x-1.5 group animate-fadeIn">
+          <div className="w-5 h-5 rounded bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <Mail className="w-3 h-3" />
+          </div>
+          <a
+            href={`mailto:${lead.email}`}
+            className="text-indigo-600 hover:text-indigo-800 font-semibold truncate max-w-[150px]"
+            title={lead.email}
+          >
+            {lead.email}
+          </a>
+          <button
+            onClick={(e) => copyToClipboard(e, lead.email, lead.id, 'email')}
+            title="Copy email address"
+            className="p-1 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+          >
+            {copiedStatus?.id === lead.id && copiedStatus?.field === 'email' ? (
+              <Check className="w-3 h-3 text-emerald-600" />
+            ) : (
+              <Copy className="w-3 h-3" />
+            )}
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button
+        onClick={(e) => handleAccessEmail(e, lead)}
+        className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-2xs font-bold text-indigo-700 bg-indigo-50/90 hover:bg-indigo-600 hover:text-white border border-indigo-200/80 rounded-lg shadow-2xs transition-all hover:scale-102 active:scale-98 cursor-pointer group"
+        title="Click to access and compose email"
+      >
+        <Lock className="w-3 h-3 text-indigo-500 group-hover:text-white transition-colors" />
+        <span>Access email</span>
+      </button>
+    );
+  };
+
+  const renderPhoneCell = (lead: Lead) => {
+    if (!lead.phone || lead.phone === '-') {
+      return <span className="text-gray-400 font-medium">-</span>;
+    }
+    const isRevealed = revealedPhoneIds.includes(lead.id) || lead.phoneUnlocked;
+    if (isRevealed) {
+      return (
+        <div className="flex items-center space-x-1.5 group animate-fadeIn">
+          <div className="w-5 h-5 rounded bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Phone className="w-3 h-3" />
+          </div>
+          <a
+            href={`tel:${lead.phone}`}
+            className="text-gray-800 hover:text-emerald-600 font-semibold truncate max-w-[130px]"
+            title={lead.phone}
+          >
+            {lead.phone}
+          </a>
+          <button
+            onClick={(e) => copyToClipboard(e, lead.phone, lead.id, 'phone')}
+            title="Copy phone number"
+            className="p-1 rounded-md text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+          >
+            {copiedStatus?.id === lead.id && copiedStatus?.field === 'phone' ? (
+              <Check className="w-3 h-3 text-emerald-600" />
+            ) : (
+              <Copy className="w-3 h-3" />
+            )}
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button
+        onClick={(e) => handleAccessPhone(e, lead)}
+        className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-2xs font-bold text-emerald-700 bg-emerald-50/90 hover:bg-emerald-600 hover:text-white border border-emerald-200/80 rounded-lg shadow-2xs transition-all hover:scale-102 active:scale-98 cursor-pointer group"
+        title="Click to access and call number"
+      >
+        <Lock className="w-3 h-3 text-emerald-500 group-hover:text-white transition-colors" />
+        <span>Access Mobile</span>
+      </button>
+    );
+  };
+
+  const renderDynamicCell = (lead: Lead, header: string) => {
+    const cleanH = header.toLowerCase().trim();
+    if (cleanH.includes('email') || cleanH.includes('mail')) {
+      return renderEmailCell(lead);
+    }
+    if (cleanH.includes('phone') || cleanH.includes('mobile') || cleanH.includes('contact number')) {
+      return renderPhoneCell(lead);
+    }
+    const val = getCellValueByHeader(lead, header);
+    return val || '-';
+  };
 
   return (
     <div id="leads-table-container" className="flex-1 overflow-x-auto bg-white select-none">
@@ -270,7 +404,7 @@ export default function LeadsTable({
                       // Render dynamic cells directly matching uploaded CSV headers
                       csvHeaders.map((header) => (
                         <td key={header} className="py-3.5 px-4 text-gray-800 font-semibold truncate max-w-[240px]">
-                          {getCellValueByHeader(lead, header)}
+                          {renderDynamicCell(lead, header)}
                         </td>
                       ))
                     ) : (
@@ -285,7 +419,7 @@ export default function LeadsTable({
                             <div>
                               <div className="font-semibold text-gray-900 leading-snug flex items-center space-x-1.5">
                                 <span className="hover:text-indigo-600 cursor-pointer transition-colors">
-                                  {lead.firstName} {lead.lastName}
+                                  {`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '-'}
                                 </span>
                                 {lead.questions && (
                                   <button
@@ -308,12 +442,16 @@ export default function LeadsTable({
 
                         {/* Job Title column */}
                         <td className="py-3.5 px-4">
-                          <div className="flex items-center space-x-1.5 max-w-[190px]">
-                            <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="truncate text-gray-700 font-medium" title={lead.jobTitle || 'N/A'}>
-                              {lead.jobTitle || <span className="text-gray-450 italic text-2xs">Not specified</span>}
-                            </span>
-                          </div>
+                          {lead.jobTitle ? (
+                            <div className="flex items-center space-x-1.5 max-w-[190px]">
+                              <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              <span className="truncate text-gray-700 font-medium" title={lead.jobTitle}>
+                                {lead.jobTitle}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 font-medium">-</span>
+                          )}
                         </td>
 
                         {/* Company column */}
@@ -328,50 +466,18 @@ export default function LeadsTable({
                               </span>
                             </div>
                           ) : (
-                            <span className="text-gray-400 italic text-2xs">N/A</span>
+                            <span className="text-gray-400 font-medium">-</span>
                           )}
                         </td>
 
                         {/* Email column */}
                         <td className="py-3.5 px-4">
-                          {lead.emailUnlocked || !isAuthenticated ? (
-                            <div className="flex items-center space-x-1.5">
-                              <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                              <a href={`mailto:${lead.email}`} className="text-indigo-600 hover:underline font-medium truncate max-w-[150px]">
-                                {lead.email}
-                              </a>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => onUnlockEmail(lead)}
-                              className="inline-flex items-center space-x-1.5 px-2.5 py-1 text-2xs font-semibold text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-100 rounded-lg transition-all"
-                            >
-                              <Lock className="w-3 h-3" />
-                              <span>Access email</span>
-                            </button>
-                          )}
+                          {renderEmailCell(lead)}
                         </td>
 
                         {/* Phone column */}
                         <td className="py-3.5 px-4">
-                          {lead.phone ? (
-                            lead.phoneUnlocked || !isAuthenticated ? (
-                              <div className="flex items-center space-x-1.5">
-                                <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                                <span className="text-gray-700 font-semibold truncate">{lead.phone}</span>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => onUnlockPhone(lead)}
-                                className="inline-flex items-center space-x-1.5 px-2.5 py-1 text-2xs font-semibold text-indigo-600 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-100 rounded-lg transition-all"
-                              >
-                                <Lock className="w-3 h-3" />
-                                <span>Access Mobile</span>
-                              </button>
-                            )
-                          ) : (
-                            <span className="text-gray-400 italic text-2xs">No phone</span>
-                          )}
+                          {renderPhoneCell(lead)}
                         </td>
 
                         {/* Location column */}
@@ -384,7 +490,7 @@ export default function LeadsTable({
                               </span>
                             </div>
                           ) : (
-                            <span className="text-gray-400 italic text-2xs">N/A</span>
+                            <span className="text-gray-400 font-medium">-</span>
                           )}
                         </td>
 
@@ -395,9 +501,13 @@ export default function LeadsTable({
 
                         {/* Source column */}
                         <td className="py-3.5 px-4">
-                          <span className="inline-flex px-2 py-0.5 rounded-md text-2xs font-medium bg-gray-100 text-gray-600 border border-gray-150 truncate max-w-[110px]" title={lead.sourceName || 'Direct'}>
-                            {lead.sourceName || 'Direct'}
-                          </span>
+                          {lead.sourceName ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-md text-2xs font-medium bg-gray-100 text-gray-600 border border-gray-150 truncate max-w-[110px]" title={lead.sourceName}>
+                              {lead.sourceName}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 font-medium">-</span>
+                          )}
                         </td>
 
                         {/* Dynamic Custom Columns Cell Values */}

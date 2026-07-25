@@ -455,6 +455,12 @@ export default function App() {
     let headers: string[];
     let rows: string[][];
 
+    const cleanExportVal = (val: any) => {
+      if (val === undefined || val === null) return '-';
+      const str = String(val).trim();
+      return (str === '' || str === 'undefined' || str === 'null') ? '-' : str;
+    };
+
     if (activeHeaders && Array.isArray(activeHeaders) && activeHeaders.length > 0) {
       headers = activeHeaders;
       rows = leadsToExport.map(l => {
@@ -464,21 +470,24 @@ export default function App() {
             return String(leadObj[h]).trim();
           }
           const cleanH = h.toLowerCase().trim();
-          if (cleanH.includes('first name') || cleanH === 'fname') return l.firstName || '';
-          if (cleanH.includes('last name') || cleanH === 'lname') return l.lastName || '';
-          if (cleanH.includes('name') || cleanH.includes('contact') || cleanH.includes('attendee')) {
-            return `${l.firstName || ''} ${l.lastName || ''}`.trim() || 'Attendee';
+          if (cleanH.includes('source')) return cleanExportVal(l.sourceName);
+          if (cleanH.includes('first name') || cleanH === 'fname') return cleanExportVal(l.firstName);
+          if (cleanH.includes('last name') || cleanH === 'lname') return cleanExportVal(l.lastName);
+          if (cleanH === 'name' || cleanH === 'full name' || cleanH === 'contact name' || cleanH === 'contacts' || cleanH === 'contact' || cleanH === 'attendee' || cleanH.includes('attendee name')) {
+            const f = l.firstName && l.firstName !== '-' ? l.firstName : '';
+            const last = l.lastName && l.lastName !== '-' ? l.lastName : '';
+            const full = `${f} ${last}`.trim();
+            return full || '-';
           }
-          if (cleanH.includes('email') || cleanH.includes('mail')) return l.email || '';
-          if (cleanH.includes('company') || cleanH.includes('organization') || cleanH.includes('org')) return l.organization || '';
-          if (cleanH.includes('title') || cleanH.includes('role') || cleanH.includes('designation')) return l.jobTitle || '';
-          if (cleanH.includes('city') || cleanH.includes('location')) return l.city || '';
-          if (cleanH.includes('phone') || cleanH.includes('mobile')) return l.phone || '';
-          if (cleanH.includes('status')) return l.approvalStatus || '';
-          if (cleanH.includes('source')) return l.sourceName || '';
-          if (cleanH.includes('time') || cleanH.includes('date')) return l.registrationTime || '';
-          if (cleanH.includes('question')) return l.questions || '';
-          return '';
+          if (cleanH.includes('email') || cleanH.includes('mail')) return cleanExportVal(l.email);
+          if (cleanH.includes('company') || cleanH.includes('organization') || cleanH.includes('org')) return cleanExportVal(l.organization);
+          if (cleanH.includes('title') || cleanH.includes('role') || cleanH.includes('designation')) return cleanExportVal(l.jobTitle);
+          if (cleanH.includes('city') || cleanH.includes('location')) return cleanExportVal(l.city);
+          if (cleanH.includes('phone') || cleanH.includes('mobile')) return cleanExportVal(l.phone);
+          if (cleanH.includes('status')) return cleanExportVal(l.approvalStatus);
+          if (cleanH.includes('time') || cleanH.includes('date')) return cleanExportVal(l.registrationTime);
+          if (cleanH.includes('question')) return cleanExportVal(l.questions);
+          return '-';
         });
       });
     } else {
@@ -497,20 +506,25 @@ export default function App() {
         'Speaker Questions'
       ];
 
-      rows = leadsToExport.map(l => [
-        `${l.firstName || ''} ${l.lastName || ''}`.trim() || 'Attendee',
-        l.firstName || '',
-        l.lastName || '',
-        l.email || '',
-        l.phone || '',
-        l.organization || '',
-        l.jobTitle || '',
-        l.city || '',
-        l.sourceName || '',
-        l.approvalStatus || '',
-        l.registrationTime || '',
-        l.questions || ''
-      ]);
+      rows = leadsToExport.map(l => {
+        const f = l.firstName && l.firstName !== '-' ? l.firstName : '';
+        const last = l.lastName && l.lastName !== '-' ? l.lastName : '';
+        const full = `${f} ${last}`.trim() || '-';
+        return [
+          full,
+          cleanExportVal(l.firstName),
+          cleanExportVal(l.lastName),
+          cleanExportVal(l.email),
+          cleanExportVal(l.phone),
+          cleanExportVal(l.organization),
+          cleanExportVal(l.jobTitle),
+          cleanExportVal(l.city),
+          cleanExportVal(l.sourceName),
+          cleanExportVal(l.approvalStatus),
+          cleanExportVal(l.registrationTime),
+          cleanExportVal(l.questions)
+        ];
+      });
     }
 
     const csvContent = "data:text/csv;charset=utf-8," 
