@@ -528,16 +528,19 @@ export const deleteLeadsByTagFromSupabase = async (
       }
     }
 
-    // Tier 2: Flexible case-insensitive query on source_name column in Supabase
-    const filterQuery = `source_name.ilike.${cleanTagHyphen},source_name.ilike.${cleanTagSpace},source_name.ilike.${rawTag}`;
-    const { data, error } = await client
-      .from(tableName)
-      .delete()
-      .or(filterQuery)
-      .select();
+    // Tier 2: Flexible case-insensitive query on source_name column ONLY for specific non-generic tags
+    const isGenericTag = !rawTag || rawTag === '-' || rawTag === 'all' || rawTag === 'default' || rawTag === 'contacts' || rawTag === 'export' || rawTag === 'leads';
+    if (!isGenericTag) {
+      const filterQuery = `source_name.ilike.${cleanTagHyphen},source_name.ilike.${cleanTagSpace},source_name.ilike.${rawTag}`;
+      const { data, error } = await client
+        .from(tableName)
+        .delete()
+        .or(filterQuery)
+        .select();
 
-    if (!error && data) {
-      deletedCount += data.length;
+      if (!error && data) {
+        deletedCount += data.length;
+      }
     }
 
     return { success: true, count: deletedCount };
