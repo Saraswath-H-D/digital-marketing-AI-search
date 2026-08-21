@@ -471,7 +471,13 @@ export default function LeadsTable({
                             <div>
                               <div className="font-semibold text-gray-900 leading-snug flex items-center space-x-1.5">
                                 <span className="hover:text-indigo-600 cursor-pointer transition-colors">
-                                  {`${lead.firstName || ''} ${lead.lastName || ''}`.trim() || '-'}
+                                  {(() => {
+                                    const nameStr = `${lead.firstName && lead.firstName !== '-' ? lead.firstName : ''} ${lead.lastName && lead.lastName !== '-' ? lead.lastName : ''}`.trim();
+                                    if (nameStr) return nameStr;
+                                    if (lead.organization && lead.organization !== '-') return lead.organization;
+                                    if (lead.email && lead.email !== '-') return lead.email;
+                                    return 'Contact Record';
+                                  })()}
                                 </span>
                                 {lead.questions && (
                                   <button
