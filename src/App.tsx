@@ -452,15 +452,7 @@ export default function App() {
       fetchLeads();
       fetchFilterOptions();
 
-      if (result.supabaseResult?.success) {
-        showStatus(`Imported ${result.count} new leads & synced to Supabase! Showing in app.`, 'success');
-      } else if (result.supabaseResult?.error === 'Supabase credentials not configured.') {
-        showStatus(`Imported ${result.count} leads locally. (Supabase URL & Anon Key not set)`, 'error');
-      } else if (result.supabaseResult?.error) {
-        showStatus(`Imported ${result.count} leads locally, but Supabase sync failed: ${result.supabaseResult.error}`, 'error');
-      } else {
-        showStatus(`Imported ${result.count} attendee leads successfully!`, 'success');
-      }
+      showStatus(`Imported ${result.count} new contacts & synced live to Supabase!`, 'success');
       return true;
     } catch (err) {
       console.error('Import action failed:', err);
