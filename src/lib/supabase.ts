@@ -170,7 +170,25 @@ export const pushLeadsToSupabase = async (
     // Deleted lead IDs are NEVER considered for primary key allocation!
     const assignedId = dbMaxId + index + 1;
 
+    // Extract custom/extra key-values for flexible CSV header support
+    const customMeta: Record<string, string> = {};
+    Object.keys(l).forEach(k => {
+      if (!internalKeys.has(k) && !k.startsWith('_')) {
+        const val = (l as any)[k];
+        if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim() !== '-') {
+          customMeta[k] = String(val).trim();
+        }
+      }
+    });
+
     let finalQuestions = l.questions || '';
+    if (Object.keys(customMeta).length > 0) {
+      const metaTag = `__META__:${JSON.stringify(customMeta)}`;
+      if (!finalQuestions.includes('__META__:')) {
+        finalQuestions = finalQuestions ? `${metaTag}\n${finalQuestions}` : metaTag;
+      }
+    }
+
     if (index === 0) {
       const allActiveHeaders = getActiveHeaders() || ((l as any)._csvHeaders && Array.isArray((l as any)._csvHeaders) ? (l as any)._csvHeaders : null);
       if (allActiveHeaders && allActiveHeaders.length > 0) {
@@ -243,11 +261,7 @@ export const pushLeadsToSupabase = async (
     }
   }
 
-  return { 
-    success: true, 
-    count: totalPushed,
-    error: undefined
-  };
+  return { success: totalPushed > 0, count: totalPushed, error: totalPushed === 0 ? lastError : undefined };
 };
 
 
@@ -329,12 +343,25 @@ export const pullLeadsFromSupabase = async (
       }
 
       let cleanQuestions = row.questions || '';
+      let restoredCustomMeta: Record<string, any> = {};
+
+      if (cleanQuestions.includes('__META__:')) {
+        const metaMatch = cleanQuestions.match(/__META__:(.+?)(\n|$)/);
+        if (metaMatch) {
+          try {
+            restoredCustomMeta = JSON.parse(metaMatch[1]);
+          } catch (e) {}
+        }
+        cleanQuestions = cleanQuestions.replace(/__META__:.+?(\n|$)/, '').trim();
+      }
+
       if (cleanQuestions.includes('__HEADERS__:')) {
         cleanQuestions = cleanQuestions.replace(/__HEADERS__:.+?(\n|$)/, '').trim();
       }
 
       return {
-        ...row, // Preserve any custom database columns!
+        ...row,
+        ...restoredCustomMeta, // Restore all custom flexible CSV key-values onto lead object!
         _csvHeaders: extractedHeaders || row._csvHeaders,
         id: index + 1, // Always assign clean sequential ID starting from 1
         firstName: row.first_name || row.firstName || '-',
