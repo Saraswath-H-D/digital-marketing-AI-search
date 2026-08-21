@@ -161,11 +161,18 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
           leadObj.approvalStatus = cleanVal(findVal(['approval status', 'status', 'approved', 'state']) || 'approved');
           leadObj.questions = cleanVal(findVal(['do have any questions to speaker!', 'questions', 'question', 'inquiry', 'notes', 'comments', 'remarks']));
           leadObj.sourceName = extractedSource ? extractedSource.trim().replace(/\s+/g, '-') : '-';
-          leadObj.registrationTime = cleanVal(findVal(['registration time', 'time', 'registered', 'date', 'created at']));
-
           const isClean = (v: any) => v !== undefined && v !== null && String(v).trim() !== '' && String(v).trim() !== '-';
-          const hasData = isClean(leadObj.firstName) || isClean(leadObj.lastName) || isClean(leadObj.email) || isClean(leadObj.organization) || isClean(leadObj.jobTitle) || isClean(leadObj.phone) || isClean(leadObj.city) || isClean(leadObj.questions);
-          return hasData ? leadObj : null;
+          
+          // Fallback: If first name is missing, use first available text column value
+          if (!isClean(leadObj.firstName)) {
+            const firstTextVal = keys.map(k => String(r[k] || '').trim()).find(v => v !== '' && v !== '-' && v.length > 1);
+            if (firstTextVal) {
+              leadObj.firstName = firstTextVal;
+            }
+          }
+
+          const hasAnyRowData = Object.values(r).some(v => v !== undefined && v !== null && String(v).trim() !== '' && String(v).trim() !== '-');
+          return hasAnyRowData ? leadObj : null;
         }).filter(Boolean) as any[];
 
  // Must have at least name and email
