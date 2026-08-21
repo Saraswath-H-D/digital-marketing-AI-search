@@ -153,7 +153,8 @@ export const pushLeadsToSupabase = async (
     
     let emailToInsert = rawEmail;
     if (!hasValidEmail) {
-      emailToInsert = ''; // Leave email blank in Supabase when missing
+      const uniqueRand = `${index + 1}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      emailToInsert = `contact_blank_${dbMaxId + index + 1}_${uniqueRand}@imported.com`;
     } else {
       // If two leads share the same email address, ensure BOTH leads are preserved in Supabase
       const count = seenEmails.get(rawEmail) || 0;
