@@ -144,14 +144,26 @@ export const pushLeadsToSupabase = async (
     }
   }
 
-  // 4. Construct exact SQL table row objects with guaranteed non-colliding IDs
+  // 4. Construct exact SQL table row objects with guaranteed non-colliding IDs and preserved entries
+  const seenEmails = new Map<string, number>();
+
   const rowsToInsert = leads.map((l, index) => {
-    const rawEmail = (l.email || '').trim();
+    const rawEmail = (l.email || '').trim().toLowerCase();
     const hasValidEmail = rawEmail !== '' && rawEmail !== '-' && rawEmail !== 'undefined' && rawEmail !== 'null' && rawEmail.includes('@');
-    const uniqueRand = `${index + 1}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    const emailToInsert = hasValidEmail 
-      ? rawEmail 
-      : `contact_${l.id || index + 1}_${uniqueRand}@imported.com`;
+    
+    let emailToInsert = rawEmail;
+    if (!hasValidEmail) {
+      const uniqueRand = `${index + 1}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+      emailToInsert = `contact_${l.id || index + 1}_${uniqueRand}@imported.com`;
+    } else {
+      // If two leads share the same email address, ensure BOTH leads are preserved in Supabase
+      const count = seenEmails.get(rawEmail) || 0;
+      seenEmails.set(rawEmail, count + 1);
+      if (count > 0) {
+        const parts = rawEmail.split('@');
+        emailToInsert = `${parts[0]}_entry${count + 1}@${parts[1]}`;
+      }
+    }
 
     const assignedId = (l.id && Number(l.id) > dbMaxId) ? Number(l.id) : (dbMaxId + index + 1);
 
@@ -185,26 +197,18 @@ export const pushLeadsToSupabase = async (
     return row;
   });
 
-  // Deduplicate rows by email to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time"
-  const emailMap = new Map<string, Record<string, any>>();
-  rowsToInsert.forEach(r => {
-    const key = String(r.email).toLowerCase();
-    emailMap.set(key, r);
-  });
-  const dedupedRows = Array.from(emailMap.values());
-
   const BATCH_SIZE = 200;
   let totalPushed = 0;
   let lastError = '';
 
-  for (let i = 0; i < dedupedRows.length; i += BATCH_SIZE) {
-    const batch = dedupedRows.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < rowsToInsert.length; i += BATCH_SIZE) {
+    const batch = rowsToInsert.slice(i, i + BATCH_SIZE);
 
     try {
-      // Attempt 1: Upsert with onConflict: 'email'
+      // Attempt 1: Upsert with onConflict: 'id' so every record is preserved as a separate entry
       const { data, error } = await client
         .from(tableName)
-        .upsert(batch, { onConflict: 'email' })
+        .upsert(batch, { onConflict: 'id' })
         .select();
 
       if (error) {
@@ -235,25 +239,15 @@ export const pushLeadsToSupabase = async (
           created_at: r.created_at
         }));
 
-        // Attempt 2: Standard column upsert with onConflict
+        // Attempt 2: Standard column insert
         const { data: retryData, error: retryErr } = await client
           .from(tableName)
-          .upsert(cleanBatch, { onConflict: 'email' })
+          .insert(cleanBatch)
           .select();
 
         if (retryErr) {
-          // Attempt 3: Simple insert if upsert/onConflict failed
-          const { data: insertData, error: insertErr } = await client
-            .from(tableName)
-            .insert(cleanBatch)
-            .select();
-
-          if (insertErr) {
-            console.error(`Chunk starting at ${i} insert failed:`, insertErr.message);
-            lastError = insertErr.message;
-          } else {
-            totalPushed += insertData ? insertData.length : cleanBatch.length;
-          }
+          console.error(`Chunk starting at ${i} insert failed:`, retryErr.message);
+          lastError = retryErr.message;
         } else {
           totalPushed += retryData ? retryData.length : cleanBatch.length;
         }
@@ -267,9 +261,9 @@ export const pushLeadsToSupabase = async (
   }
 
   return { 
-    success: totalPushed > 0 || dedupedRows.length === 0, 
+    success: totalPushed > 0 || rowsToInsert.length === 0, 
     count: totalPushed,
-    error: totalPushed === 0 && dedupedRows.length > 0 ? lastError || 'Push operation failed' : undefined
+    error: totalPushed === 0 && rowsToInsert.length > 0 ? lastError || 'Push operation failed' : undefined
   };
 };
 
