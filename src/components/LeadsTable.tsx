@@ -22,7 +22,8 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
-  Copy
+  Copy,
+  Tag
 } from 'lucide-react';
 
 interface LeadsTableProps {
@@ -550,11 +551,12 @@ export default function LeadsTable({
                           {getStatusBadge(lead.approvalStatus)}
                         </td>
 
-                        {/* Source column */}
+                        {/* Source / CSV Tag column */}
                         <td className="py-3.5 px-4">
-                          {lead.sourceName ? (
-                            <span className="inline-flex px-2 py-0.5 rounded-md text-2xs font-medium bg-gray-100 text-gray-600 border border-gray-150 truncate max-w-[110px]" title={lead.sourceName}>
-                              {lead.sourceName}
+                          {lead.sourceName && lead.sourceName !== '-' ? (
+                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-2xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200/90 truncate max-w-[130px] shadow-2xs hover:scale-105 transition-transform cursor-pointer" title={`CSV Import Tag: ${lead.sourceName}`}>
+                              <Tag className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
+                              <span>{lead.sourceName}</span>
                             </span>
                           ) : (
                             <span className="text-gray-400 font-medium">-</span>

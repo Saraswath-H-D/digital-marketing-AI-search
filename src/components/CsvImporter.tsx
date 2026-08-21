@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { motion, AnimatePresence } from 'motion/react';
-import { Upload, X, Check, AlertCircle, FileSpreadsheet, Eye, ArrowRight, Table } from 'lucide-react';
+import { Upload, X, Check, AlertCircle, FileSpreadsheet, Eye, ArrowRight, Table, Tag } from 'lucide-react';
 import { setActiveHeaders } from '../data/leadStorage.ts';
 
 
@@ -14,6 +14,7 @@ interface CsvImporterProps {
 export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterProps) {
   const [file, setFile] = useState<File | null>(null);
   const [parsedData, setParsedData] = useState<any[]>([]);
+  const [importTag, setImportTag] = useState('');
   const [error, setError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -205,12 +206,25 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     if (parsedData.length === 0) return;
     setIsUploading(true);
     
-    const success = await onImport(parsedData);
+    // Attach custom import tag to each lead if specified
+    const finalData = parsedData.map(item => {
+      let src = item.sourceName;
+      if (importTag && importTag.trim()) {
+        src = importTag.trim().replace(/\s+/g, '-');
+      }
+      return {
+        ...item,
+        sourceName: src || 'Registration-Report'
+      };
+    });
+
+    const success = await onImport(finalData);
     
     setIsUploading(false);
     if (success) {
       setFile(null);
       setParsedData([]);
+      setImportTag('');
       onClose();
     } else {
       setError('Import failed. Please check backend connection and try again.');
@@ -333,33 +347,49 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 focus:outline-hidden transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={isUploading || parsedData.length === 0}
-                  onClick={handleImportSubmit}
-                  className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center space-x-1.5"
-                >
-                  {isUploading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Importing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4" />
-                      <span>Import {parsedData.length} Leads</span>
-                    </>
-                  )}
-                </button>
+              {/* Action Buttons & Tag Input */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-gray-100">
+                {/* Tag Input Box beside Import Button */}
+                <div className="flex-1 relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-indigo-500">
+                    <Tag className="w-3.5 h-3.5" />
+                  </div>
+                  <input
+                    type="text"
+                    value={importTag}
+                    onChange={(e) => setImportTag(e.target.value)}
+                    placeholder="Tag this CSV import (e.g. Q3-Marketing, Event-Leads)..."
+                    className="w-full pl-8.5 pr-3 py-2 text-xs font-semibold border border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-indigo-50/20 text-slate-800 placeholder-slate-400 transition-all shadow-2xs"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end space-x-2.5">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-4 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 focus:outline-none transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isUploading || parsedData.length === 0}
+                    onClick={handleImportSubmit}
+                    className="px-5 py-2 text-xs font-black text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer active:scale-95 shrink-0"
+                  >
+                    {isUploading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Importing...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Import {parsedData.length} Leads</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>
