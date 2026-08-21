@@ -206,7 +206,7 @@ export default function LeadsTable({
     }
 
     // 3. Precise alias mapping
-    if (cleanLower.includes('source')) return (lead.sourceName && lead.sourceName !== '-') ? lead.sourceName : '';
+    if (cleanLower.includes('source') || cleanLower.includes('tag')) return ''; // Leave blank / dash mark as requested!
     if (cleanLower.includes('firstname') || cleanLower === 'fname' || cleanLower === 'first') return (lead.firstName && lead.firstName !== '-') ? lead.firstName : '';
     if (cleanLower.includes('lastname') || cleanLower === 'lname' || cleanLower === 'last' || cleanLower === 'surname') return lead.lastName || '';
     if (cleanLower === 'name' || cleanLower === 'fullname' || cleanLower === 'contactname' || cleanLower === 'contacts' || cleanLower === 'contact' || cleanLower === 'attendee' || cleanLower.includes('attendeename')) {
@@ -574,14 +574,7 @@ export default function LeadsTable({
 
                         {/* Source / CSV Tag column */}
                         <td className="py-3.5 px-4">
-                          {lead.sourceName && lead.sourceName !== '-' ? (
-                            <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-2xs font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200/90 truncate max-w-[130px] shadow-2xs hover:scale-105 transition-transform cursor-pointer" title={`CSV Import Tag: ${lead.sourceName}`}>
-                              <Tag className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
-                              <span>{lead.sourceName}</span>
-                            </span>
-                          ) : (
-                            <span className="text-gray-400 font-medium">-</span>
-                          )}
+                          <span className="text-gray-400 font-medium text-xs select-none">-</span>
                         </td>
 
                         {/* Dynamic Custom Columns Cell Values */}
