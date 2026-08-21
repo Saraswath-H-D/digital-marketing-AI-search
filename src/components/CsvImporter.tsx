@@ -163,8 +163,10 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
           leadObj.sourceName = extractedSource ? extractedSource.trim().replace(/\s+/g, '-') : '-';
           leadObj.registrationTime = cleanVal(findVal(['registration time', 'time', 'registered', 'date', 'created at']));
 
-          return leadObj;
-        }).filter(item => item.firstName || item.email);
+          const isClean = (v: any) => v !== undefined && v !== null && String(v).trim() !== '' && String(v).trim() !== '-';
+          const hasData = isClean(leadObj.firstName) || isClean(leadObj.lastName) || isClean(leadObj.email) || isClean(leadObj.organization) || isClean(leadObj.jobTitle) || isClean(leadObj.phone) || isClean(leadObj.city) || isClean(leadObj.questions);
+          return hasData ? leadObj : null;
+        }).filter(Boolean) as any[];
 
  // Must have at least name and email
 

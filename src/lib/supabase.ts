@@ -315,9 +315,13 @@ export const pullLeadsFromSupabase = async (
         const fn = (row.first_name || row.firstName || '').trim();
         const ln = (row.last_name || row.lastName || '').trim();
         const em = (row.email || '').trim();
-        const org = (row.organization || '').trim();
-        const isBlank = (fn === '' || fn === '-') && (ln === '' || ln === '-') && (em === '' || em === '-') && (org === '' || org === '-');
-        return !isBlank;
+        const org = (row.organization || row.company || '').trim();
+        const jt = (row.job_title || row.jobTitle || '').trim();
+        const phone = (row.phone || '').trim();
+        const city = (row.city || '').trim();
+        
+        const isClean = (v: string) => v !== '' && v !== '-';
+        return isClean(fn) || isClean(ln) || isClean(em) || isClean(org) || isClean(jt) || isClean(phone) || isClean(city);
       })
       .map((row: any, index: number) => {
       const rawSrc = row.source_name || row.sourceName || '';
