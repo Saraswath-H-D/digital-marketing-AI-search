@@ -616,40 +616,40 @@ export default function FiltersSidebar({
   };
 
   return (
-    <aside id="filters-sidebar" className="w-80 border-r border-gray-200 bg-white flex flex-col h-full overflow-hidden select-none shrink-0">
-      {/* Sidebar Header */}
-      <div className="p-4 bg-[#0f172a] text-white flex items-center justify-between shadow-xs border-b border-slate-800 shrink-0">
+    <aside id="filters-sidebar" className="w-80 border-r border-pink-200/80 bg-[#FFF5F8] flex flex-col h-full overflow-hidden select-none shrink-0">
+      {/* Sidebar Header - Soft Light Pink Tint */}
+      <div className="p-4 bg-[#FCE7F3]/90 text-slate-900 flex items-center justify-between shadow-2xs border-b border-pink-200/80 shrink-0">
         <div className="flex items-center space-x-2.5">
-          <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
+          <div className="w-8 h-8 rounded-xl bg-pink-100 text-pink-600 border border-pink-200 flex items-center justify-center shadow-2xs">
+            <SlidersHorizontal className="w-4 h-4 text-pink-600" />
           </div>
           <div>
             <div className="flex items-center space-x-1.5">
-              <span className="font-extrabold text-xs tracking-wider uppercase text-white font-display">Targeting Filters</span>
+              <span className="font-black text-xs tracking-widest uppercase text-slate-900 font-display">Targeting Filters</span>
               {hasActiveFilters && (
-                <span className="inline-flex items-center justify-center px-1.5 py-0.2 text-[9px] font-extrabold text-emerald-300 bg-emerald-950/60 border border-emerald-700/60 rounded-full">
+                <span className="inline-flex items-center justify-center px-2 py-0.5 text-[9px] font-black text-pink-800 bg-pink-100 border border-pink-300 rounded-full">
                   {filters.jobTitles.length + filters.companies.length + filters.cities.length + filters.sources.length + filters.statuses.length + (filters.savedOnly ? 1 : 0)} Active
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-slate-400 font-medium">Refine lead directory & personas</p>
+            <p className="text-[10px] text-slate-500 font-medium">Refine lead directory & personas</p>
           </div>
         </div>
         {hasActiveFiltersOrSearches && (
           <button
             onClick={handleClearAll}
-            className="text-2xs font-extrabold text-slate-200 hover:text-white flex items-center space-x-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-full transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-2xs"
+            className="text-2xs font-extrabold text-slate-700 hover:text-slate-900 flex items-center space-x-1.5 px-2.5 py-1 bg-white hover:bg-pink-50 border border-pink-200 rounded-xl transition-all cursor-pointer shadow-2xs"
           >
-            <X className="w-3 h-3 text-rose-400" />
+            <X className="w-3 h-3 text-rose-500" />
             <span>Reset All</span>
           </button>
         )}
       </div>
 
-      {/* Global Filter Search */}
-      <div className="p-3 border-b border-indigo-100/70 bg-gradient-to-r from-indigo-50/60 via-purple-50/40 to-slate-50/60">
+      {/* Global Filter Search - Soft Pink Container */}
+      <div className="p-3 border-b border-pink-200/60 bg-[#FDF2F8]">
         <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-indigo-500">
+          <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-pink-500">
             <Search className="w-4 h-4" />
           </span>
           <input
@@ -657,13 +657,13 @@ export default function FiltersSidebar({
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
             placeholder="Search all targeting filters..."
-            className="w-full pl-9.5 pr-8 py-2 text-xs border border-indigo-200/80 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 transition-all bg-white/90 placeholder-slate-400 font-semibold text-slate-800 shadow-2xs"
+            className="w-full pl-9.5 pr-8 py-2 text-xs border border-pink-200 rounded-2xl focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all bg-white/95 placeholder-slate-400 font-semibold text-slate-800 shadow-2xs"
           />
           {globalSearch && (
             <button
               type="button"
               onClick={() => setGlobalSearch('')}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-indigo-600 active:scale-90"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-pink-600 active:scale-90"
             >
               <X className="w-3.5 h-3.5" />
             </button>
