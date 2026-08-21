@@ -58,6 +58,8 @@ import {
   Trash2,
   Unlock,
   Building,
+  MapPin,
+  Briefcase,
   X,
   ChevronDown,
   Table,
@@ -132,6 +134,7 @@ export default function App() {
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false);
   const [tagSearchInput, setTagSearchInput] = useState('');
   const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const [mainSearchDropdownOpen, setMainSearchDropdownOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Sync Auth State
@@ -1009,8 +1012,14 @@ export default function App() {
               
               {/* Dual Search Bar Container: Main Contact Search + CSV Tag Search */}
               <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2.5 flex-1">
-                {/* 1. Main Search Bar */}
-                <form onSubmit={handleSearchSubmit} className="flex items-center flex-1 w-full relative">
+                {/* 1. Main Search Bar with Autocomplete Suggestions */}
+                <form 
+                  onSubmit={(e) => {
+                    handleSearchSubmit(e);
+                    setMainSearchDropdownOpen(false);
+                  }} 
+                  className="flex items-center flex-1 w-full relative"
+                >
                   <div className="relative w-full">
                     <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
                       <Search className="w-4 h-4" />
@@ -1018,24 +1027,179 @@ export default function App() {
                     <input
                       type="text"
                       value={searchInput}
+                      onFocus={() => setMainSearchDropdownOpen(true)}
                       onChange={(e) => {
                         const val = e.target.value;
                         setSearchInput(val);
                         setFilters(prev => ({ ...prev, search: val }));
                         setPage(1);
+                        setMainSearchDropdownOpen(true);
                       }}
-                      placeholder="Search contacts,"
-                      className="w-full pl-9 pr-8 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white font-medium text-gray-900 placeholder-gray-500 shadow-2xs"
+                      placeholder="Search contacts by name, company, title, location..."
+                      className="w-full pl-9 pr-8 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all bg-white font-medium text-gray-900 placeholder-gray-500 shadow-2xs"
                     />
                     {searchInput && (
                       <button
                         type="button"
-                        onClick={handleClearSearch}
+                        onClick={() => {
+                          handleClearSearch();
+                          setMainSearchDropdownOpen(false);
+                        }}
                         className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     )}
+
+                    {/* Main Search Autocomplete Suggestions Dropdown */}
+                    {mainSearchDropdownOpen && (() => {
+                      const term = searchInput.trim().toLowerCase();
+                      const storedLeads = getStoredLeads();
+                      
+                      const matchingNames: { label: string; sub: string }[] = [];
+                      const matchingCompanies = new Set<string>();
+                      const matchingTitles = new Set<string>();
+                      const matchingCities = new Set<string>();
+
+                      storedLeads.forEach(l => {
+                        const name = `${l.firstName || ''} ${l.lastName || ''}`.trim();
+                        if (name && name !== 'Unknown' && name !== '-') {
+                          if (!term || name.toLowerCase().includes(term)) {
+                            if (!matchingNames.some(n => n.label.toLowerCase() === name.toLowerCase())) {
+                              matchingNames.push({ label: name, sub: l.organization && l.organization !== '-' ? l.organization : l.jobTitle || '' });
+                            }
+                          }
+                        }
+                        if (l.organization && l.organization !== '-' && (!term || l.organization.toLowerCase().includes(term))) {
+                          matchingCompanies.add(l.organization);
+                        }
+                        if (l.jobTitle && l.jobTitle !== '-' && (!term || l.jobTitle.toLowerCase().includes(term))) {
+                          matchingTitles.add(l.jobTitle);
+                        }
+                        if (l.city && l.city !== '-' && (!term || l.city.toLowerCase().includes(term))) {
+                          matchingCities.add(l.city);
+                        }
+                      });
+
+                      const nameList = matchingNames.slice(0, 4);
+                      const companyList = Array.from(matchingCompanies).slice(0, 3);
+                      const titleList = Array.from(matchingTitles).slice(0, 3);
+                      const cityList = Array.from(matchingCities).slice(0, 3);
+
+                      const totalResults = nameList.length + companyList.length + titleList.length + cityList.length;
+
+                      if (totalResults === 0) return null;
+
+                      const handleSelect = (val: string) => {
+                        setSearchInput(val);
+                        setFilters(prev => ({ ...prev, search: val }));
+                        setPage(1);
+                        setMainSearchDropdownOpen(false);
+                      };
+
+                      return (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-40" 
+                            onClick={() => setMainSearchDropdownOpen(false)}
+                          />
+                          <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl py-2 z-45 max-h-72 overflow-y-auto animate-fadeIn">
+                            {/* Contact Names */}
+                            {nameList.length > 0 && (
+                              <div className="mb-2">
+                                <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-blue-600 bg-blue-50/60 border-y border-blue-100 flex items-center justify-between">
+                                  <span>Contacts</span>
+                                  <User className="w-3 h-3 text-blue-500" />
+                                </div>
+                                {nameList.map(item => (
+                                  <button
+                                    key={item.label}
+                                    type="button"
+                                    onClick={() => handleSelect(item.label)}
+                                    className="w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-blue-50 text-slate-800 transition-colors cursor-pointer"
+                                  >
+                                    <div className="flex items-center space-x-2 truncate">
+                                      <User className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                      <span className="font-bold text-slate-900 truncate">{item.label}</span>
+                                    </div>
+                                    {item.sub && <span className="text-[10px] text-gray-400 truncate max-w-[120px] ml-2 font-normal">{item.sub}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Companies */}
+                            {companyList.length > 0 && (
+                              <div className="mb-2">
+                                <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-emerald-600 bg-emerald-50/60 border-y border-emerald-100 flex items-center justify-between">
+                                  <span>Companies</span>
+                                  <Building className="w-3 h-3 text-emerald-500" />
+                                </div>
+                                {companyList.map(comp => (
+                                  <button
+                                    key={comp}
+                                    type="button"
+                                    onClick={() => handleSelect(comp)}
+                                    className="w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-emerald-50 text-slate-800 transition-colors cursor-pointer"
+                                  >
+                                    <div className="flex items-center space-x-2 truncate">
+                                      <Building className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                      <span className="font-bold text-slate-900 truncate">{comp}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Job Titles */}
+                            {titleList.length > 0 && (
+                              <div className="mb-2">
+                                <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-purple-600 bg-purple-50/60 border-y border-purple-100 flex items-center justify-between">
+                                  <span>Job Titles</span>
+                                  <Briefcase className="w-3 h-3 text-purple-500" />
+                                </div>
+                                {titleList.map(title => (
+                                  <button
+                                    key={title}
+                                    type="button"
+                                    onClick={() => handleSelect(title)}
+                                    className="w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-purple-50 text-slate-800 transition-colors cursor-pointer"
+                                  >
+                                    <div className="flex items-center space-x-2 truncate">
+                                      <Briefcase className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                      <span className="font-bold text-slate-900 truncate">{title}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Locations */}
+                            {cityList.length > 0 && (
+                              <div>
+                                <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-amber-600 bg-amber-50/60 border-y border-amber-100 flex items-center justify-between">
+                                  <span>Locations</span>
+                                  <MapPin className="w-3 h-3 text-amber-500" />
+                                </div>
+                                {cityList.map(city => (
+                                  <button
+                                    key={city}
+                                    type="button"
+                                    onClick={() => handleSelect(city)}
+                                    className="w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-amber-50 text-slate-800 transition-colors cursor-pointer"
+                                  >
+                                    <div className="flex items-center space-x-2 truncate">
+                                      <MapPin className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                      <span className="font-bold text-slate-900 truncate">{city}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                   <button
                     type="submit"
