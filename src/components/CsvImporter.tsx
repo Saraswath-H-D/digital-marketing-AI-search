@@ -77,10 +77,14 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
           });
 
           const findVal = (possibleKeys: string[], excludeSubstring: string[] = []) => {
-            let matchedKey = keys.find(k => 
-              possibleKeys.some(pk => k.toLowerCase().trim() === pk.toLowerCase().trim())
-            );
+            // 1. Exact match first
+            let matchedKey = keys.find(k => {
+              const cleanK = k.toLowerCase().trim();
+              if (excludeSubstring.some(ex => cleanK.includes(ex))) return false;
+              return possibleKeys.some(pk => cleanK === pk.toLowerCase().trim());
+            });
 
+            // 2. Controlled substring match
             if (!matchedKey) {
               matchedKey = keys.find(k => {
                 const cleanK = k.toLowerCase().trim();
@@ -95,24 +99,23 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
           let fName = findVal(['first name', 'firstname', 'fname', 'first_name']);
           let lName = findVal(['last name', 'lastname', 'lname', 'last_name', 'surname']);
 
-          // Full Name column lookups (covers 'name', 'full name', 'contact name', 'contacts', 'attendee', etc.)
-          const fullName = findVal(['full name', 'fullname', 'contact name', 'contact person', 'person name', 'attendee name', 'name of attendee', 'participant name', 'delegate name', 'lead name', 'contacts', 'contact', 'name', 'names', 'attendee', 'participant', 'delegate']);
+          // Full Name column lookups
+          const fullName = findVal(['full name', 'fullname', 'contact name', 'contact person', 'person name', 'attendee name', 'name of attendee', 'name', 'attendee']);
 
           if (!fName && fullName) {
             const parts = fullName.split(/\s+/);
             fName = parts[0] || '';
             lName = parts.slice(1).join(' ');
-          } else if (fName && !lName && fName.includes(' ')) {
-            const parts = fName.split(/\s+/);
-            fName = parts[0] || '';
-            lName = parts.slice(1).join(' ');
           }
 
-          const rawEmail = findVal(['email', 'email address', 'mail', 'e-mail', 'contact email']);
+          const rawEmail = findVal(
+            ['email', 'email address', 'primary email', 'work email', 'mail', 'e-mail', 'contact email'],
+            ['status', 'secondary', 'alt', 'backup', 'validation', 'verified', 'flag']
+          );
 
           const extractedSource = findVal(
-            ['source name', 'source_name', 'lead source', 'lead_source', 'registration source', 'source', 'channel', 'utm_source', 'source medium'],
-            ['resource', 'sourcecode', 'outsource']
+            ['source name', 'source_name', 'lead source', 'lead_source', 'registration source', 'source', 'channel', 'utm_source'],
+            ['resource', 'sourcecode', 'outsource', 'status']
           );
 
           const cleanVal = (val: any) => {
