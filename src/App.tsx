@@ -1102,16 +1102,32 @@ export default function App() {
 
                     {/* CSV Tag Autocomplete Suggestions Dropdown */}
                     {tagDropdownOpen && (() => {
+                      // ONLY show custom tags explicitly created by the user during CSV uploads!
                       const storedTags = getStoredCsvTags();
-                      const sourceTags = filterOptions.sources.filter(s => {
-                        if (!s || s === '-' || s.trim() === '') return false;
-                        const clean = s.trim().toLowerCase();
-                        return !['registration-report', 'registration report', 'manual-entry', 'contacts', 'leads', 'export', 'data', 'file', 'sheet', 'supabase', 'null', 'undefined'].includes(clean);
+                      const mockSourcesToIgnore = new Set([
+                        'facebook ads', 
+                        'old registrants email campaign', 
+                        'whatsapp invitation',
+                        'registration-report', 
+                        'registration report', 
+                        'manual-entry', 
+                        'contacts', 
+                        'leads', 
+                        'export', 
+                        'data', 
+                        'file', 
+                        'sheet', 
+                        'supabase', 
+                        'null', 
+                        'undefined'
+                      ]);
+
+                      const csvImportTags = storedTags.filter(t => {
+                        if (!t || t === '-' || t.trim() === '') return false;
+                        return !mockSourcesToIgnore.has(t.trim().toLowerCase());
                       });
 
-                      const combinedTags = Array.from(new Set([...storedTags, ...sourceTags]));
-
-                      if (combinedTags.length === 0) return null;
+                      if (csvImportTags.length === 0) return null;
 
                       return (
                         <>
@@ -1121,10 +1137,10 @@ export default function App() {
                           />
                           <div className="absolute left-0 right-0 mt-1 bg-white border border-purple-150 rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
                             <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-purple-600 border-b border-purple-100 mb-1 flex items-center justify-between">
-                              <span>Uploaded CSV Tags</span>
-                              <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-bold">{combinedTags.length} active</span>
+                              <span>Your Uploaded CSV Tags</span>
+                              <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-bold">{csvImportTags.length} active</span>
                             </div>
-                            {combinedTags
+                            {csvImportTags
                               .filter(s => s.toLowerCase().includes(tagSearchInput.toLowerCase()))
                               .map((tag) => {
                                 const isSelected = filters.sources.includes(tag);
