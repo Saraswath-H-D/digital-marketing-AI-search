@@ -1,9 +1,34 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
-import { pushLeadsToSupabase, deleteLeadFromSupabase } from '../lib/supabase.ts';
+import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase } from '../lib/supabase.ts';
 
 const STORAGE_KEY = 'apollo_leads_v9';
 const HEADERS_KEY = 'apollo_active_headers';
+const TRASH_KEY = 'apollo_deleted_trash_v1';
+const DELETED_HISTORY_KEY = 'apollo_deleted_history_v1';
+
+// Immediate cleanup of any legacy blank lead rows from localStorage
+(() => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.filter((l: any) => {
+          const fn = String(l.firstName || '').trim();
+          const ln = String(l.lastName || '').trim();
+          const em = String(l.email || '').trim();
+          const org = String(l.organization || '').trim();
+          const isBlank = (fn === '' || fn === '-') && (ln === '' || ln === '-') && (em === '' || em === '-') && (org === '' || org === '-');
+          return !isBlank;
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      }
+    }
+  } catch (err) {
+    console.error('Initial cleanup error:', err);
+  }
+})();
 
 export const getActiveHeaders = (): string[] | null => {
   try {
@@ -86,14 +111,23 @@ const sanitizeLead = (l: any): Lead => {
   };
 };
 
-// Get leads from localStorage, initializing with default initialLeads if empty or outdated
+// Get leads from localStorage & purge any blank (- - -) junk rows
 export const getStoredLeads = (): Lead[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data !== null) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        return parsed.map((l, idx) => ({
+        const validOnly = parsed.filter(l => {
+          const fn = (l.firstName || '').trim();
+          const ln = (l.lastName || '').trim();
+          const em = (l.email || '').trim();
+          const org = (l.organization || '').trim();
+          const isBlank = (fn === '' || fn === '-') && (ln === '' || ln === '-') && (em === '' || em === '-') && (org === '' || org === '-');
+          return !isBlank;
+        });
+
+        return validOnly.map((l, idx) => ({
           ...sanitizeLead(l),
           id: idx + 1
         }));
@@ -102,7 +136,6 @@ export const getStoredLeads = (): Lead[] => {
   } catch (err) {
     console.error('Error reading leads from localStorage:', err);
   }
-  // Default initialize with initialLeads only on first load
   const sanitizedDefaults = initialLeads.map((l, idx) => ({
     ...sanitizeLead(l),
     id: idx + 1
@@ -111,8 +144,6 @@ export const getStoredLeads = (): Lead[] => {
   return sanitizedDefaults;
 };
 
-
-
 // Save leads array to localStorage
 export const saveStoredLeads = (leads: Lead[]): void => {
   try {
@@ -120,6 +151,60 @@ export const saveStoredLeads = (leads: Lead[]): void => {
   } catch (err) {
     console.error('Error writing leads to localStorage:', err);
   }
+};
+
+// Trash & Historical Deletion Vault Storage Helpers
+export const getTrashLeads = (): Lead[] => {
+  try {
+    const data = localStorage.getItem(TRASH_KEY);
+    if (data) return JSON.parse(data);
+  } catch (err) {
+    console.error('Error reading trash:', err);
+  }
+  return [];
+};
+
+export const saveTrashLeads = (leads: Lead[]): void => {
+  try {
+    localStorage.setItem(TRASH_KEY, JSON.stringify(leads));
+  } catch (err) {
+    console.error('Error writing trash:', err);
+  }
+};
+
+export const getDeletedHistory = (): Lead[] => {
+  try {
+    const data = localStorage.getItem(DELETED_HISTORY_KEY);
+    if (data) return JSON.parse(data);
+  } catch (err) {
+    console.error('Error reading deleted history:', err);
+  }
+  return [];
+};
+
+export const addLeadsToDeletedHistory = (leads: Lead[]): void => {
+  try {
+    const current = getDeletedHistory();
+    const map = new Map<string, Lead>();
+    [...leads, ...current].forEach(l => {
+      const key = l.email && l.email !== '-' ? `email:${l.email.toLowerCase()}` : `key:${(l.firstName || '').toLowerCase()}_${(l.lastName || '').toLowerCase()}_${(l.organization || '').toLowerCase()}`;
+      if (!map.has(key)) map.set(key, l);
+    });
+    localStorage.setItem(DELETED_HISTORY_KEY, JSON.stringify(Array.from(map.values())));
+  } catch (err) {
+    console.error('Error writing deleted history:', err);
+  }
+};
+
+export const addLeadsToTrash = (leads: Lead[]): void => {
+  const current = getTrashLeads();
+  const map = new Map<string, Lead>();
+  [...leads, ...current].forEach(l => {
+    const key = l.email && l.email !== '-' ? `email:${l.email.toLowerCase()}` : `key:${(l.firstName || '').toLowerCase()}_${(l.lastName || '').toLowerCase()}_${(l.organization || '').toLowerCase()}`;
+    if (!map.has(key)) map.set(key, l);
+  });
+  saveTrashLeads(Array.from(map.values()));
+  addLeadsToDeletedHistory(leads);
 };
 
 // Helper to extract values from standard OR dynamic custom keys
@@ -150,7 +235,6 @@ export const getFilterOptions = (): FilterOptions => {
     return Array.from(set).sort();
   };
 
-  // Extract unique filter options for custom CSV columns
   const activeHeaders = getActiveHeaders();
   const customFilterMap: Record<string, string[]> = {};
 
@@ -189,7 +273,6 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
   return leads.filter(l => {
     const leadObj = l as any;
 
-    // 1. Search Query across ALL dynamic CSV fields
     if (filters.search && filters.search.trim()) {
       const query = filters.search.trim().toLowerCase();
       const matches = Object.values(leadObj).some(val => 
@@ -198,59 +281,54 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
       if (!matches) return false;
     }
 
-    // 2. Job Titles / Roles
     if (filters.jobTitles && filters.jobTitles.length > 0) {
       const vals = extractFieldValues(leadObj, ['jobtitle', 'title', 'role', 'designation', 'position', 'occupation']);
-      if (!vals.some(v => filters.jobTitles.includes(v))) return false;
+      const lowerSelected = filters.jobTitles.map(t => t.toLowerCase());
+      if (!vals.some(v => lowerSelected.includes(v.toLowerCase()))) return false;
     }
 
-    // 3. Companies / Organizations
     if (filters.companies && filters.companies.length > 0) {
       const vals = extractFieldValues(leadObj, ['organization', 'company', 'employer', 'business', 'org', 'firm']);
-      if (!vals.some(v => filters.companies.includes(v))) return false;
+      const lowerSelected = filters.companies.map(c => c.toLowerCase());
+      if (!vals.some(v => lowerSelected.includes(v.toLowerCase()))) return false;
     }
 
-    // 4. Cities / Locations
     if (filters.cities && filters.cities.length > 0) {
       const vals = extractFieldValues(leadObj, ['city', 'location', 'town', 'country', 'state', 'address', 'region']);
-      if (!vals.some(v => filters.cities.includes(v))) return false;
+      const lowerSelected = filters.cities.map(c => c.toLowerCase());
+      if (!vals.some(v => lowerSelected.includes(v.toLowerCase()))) return false;
     }
 
-    // 5. Sources
     if (filters.sources && filters.sources.length > 0) {
       const vals = extractFieldValues(leadObj, ['sourcename', 'source', 'leadsource']);
-      if (!vals.some(v => filters.sources.includes(v))) return false;
+      const lowerSelected = filters.sources.map(s => s.toLowerCase());
+      if (!vals.some(v => lowerSelected.includes(v.toLowerCase()))) return false;
     }
 
-    // 6. Approval Statuses
     if (filters.statuses && filters.statuses.length > 0) {
       const vals = extractFieldValues(leadObj, ['approvalstatus', 'status', 'approved', 'state']);
-      if (!vals.some(v => filters.statuses.includes(v))) return false;
+      const lowerSelected = filters.statuses.map(s => s.toLowerCase());
+      if (!vals.some(v => lowerSelected.includes(v.toLowerCase()))) return false;
     }
 
-    // 6.5 Dynamic CSV Custom Filters
     if (filters.customFilters) {
       for (const [col, selectedVals] of Object.entries(filters.customFilters)) {
         if (selectedVals && selectedVals.length > 0) {
-          const val = (leadObj[col] !== undefined && leadObj[col] !== null) ? String(leadObj[col]).trim() : '';
-          if (!selectedVals.includes(val)) return false;
+          const val = (leadObj[col] !== undefined && leadObj[col] !== null) ? String(leadObj[col]).trim().toLowerCase() : '';
+          const lowerSelected = selectedVals.map(sv => sv.toLowerCase());
+          if (!lowerSelected.includes(val)) return false;
         }
       }
     }
 
-
-
-    // 7. Saved Only
     if (filters.savedOnly && !l.isSaved) {
       return false;
     }
 
-    // 8. Net New Only
     if (filters.netNewOnly && l.isSaved) {
       return false;
     }
 
-    // 9. Persona Filter
     if (filters.persona) {
       const title = (l.jobTitle || '').toLowerCase();
       if (filters.persona === 'Founders & Executives') {
@@ -265,7 +343,6 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
       }
     }
 
-    // 10. Email Status Filter
     if (filters.emailStatuses && filters.emailStatuses.length > 0) {
       const emailLower = (l.email || '').toLowerCase();
       let matchEmailStatus = false;
@@ -296,7 +373,6 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
 // Calculate Lead Stats (Total, Net New, Saved)
 export const getLeadStats = (filters: Filters): { total: number; netNew: number; saved: number } => {
   const allLeads = getStoredLeads();
-  // Filter base leads (excluding savedOnly / netNewOnly flags for broad count calculation)
   const baseFiltered = filterLeads(allLeads, { ...filters, savedOnly: false, netNewOnly: false });
 
   const total = baseFiltered.length;
@@ -339,17 +415,37 @@ export const bulkUnlockEmails = (ids: number[]): Lead[] => {
   return updated;
 };
 
-// Add New Lead
-export const addLead = (newLeadData: Partial<Lead>): Lead => {
+// Add New Lead with guaranteed non-blank name
+export const addLead = async (newLeadData: Partial<Lead>): Promise<Lead> => {
   const allLeads = getStoredLeads();
   const maxId = allLeads.length > 0 ? Math.max(...allLeads.map(l => Number(l.id) || 0)) : 0;
   const nextId = maxId + 1;
 
+  let fName = cleanVal(newLeadData.firstName);
+  let lName = cleanVal(newLeadData.lastName);
+  const emailVal = cleanVal(newLeadData.email);
+
+  if (fName === '-' || fName === '') {
+    if (emailVal !== '-' && emailVal.includes('@')) {
+      const username = emailVal.split('@')[0].replace(/[^a-zA-Z]/g, ' ');
+      const parts = username.trim().split(/\s+/).filter(Boolean);
+      if (parts.length > 0) {
+        fName = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+        if (parts.length > 1 && lName === '-') {
+          lName = parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+        }
+      }
+    }
+    if (fName === '-' || fName === '') {
+      fName = 'Contact';
+    }
+  }
+
   const lead: Lead = {
     id: nextId,
-    firstName: cleanVal(newLeadData.firstName),
-    lastName: cleanVal(newLeadData.lastName),
-    email: cleanVal(newLeadData.email),
+    firstName: fName,
+    lastName: lName,
+    email: emailVal,
     registrationTime: new Date().toLocaleString(),
     approvalStatus: cleanVal(newLeadData.approvalStatus || 'approved'),
     city: cleanVal(newLeadData.city),
@@ -367,14 +463,17 @@ export const addLead = (newLeadData: Partial<Lead>): Lead => {
   const updated = [lead, ...allLeads];
   saveStoredLeads(updated);
 
-  // Real-time automatic background sync to Supabase
-  pushLeadsToSupabase([lead]).catch(err => console.error('Auto-sync to Supabase failed:', err));
+  try {
+    await pushLeadsToSupabase([lead]);
+  } catch (err) {
+    console.error('Auto-sync add to Supabase failed:', err);
+  }
 
   return lead;
 };
 
 // Update Existing Lead
-export const updateLead = (id: number, updateData: Partial<Lead>): Lead | null => {
+export const updateLead = async (id: number, updateData: Partial<Lead>): Promise<Lead | null> => {
   const allLeads = getStoredLeads();
   let updatedLead: Lead | null = null;
 
@@ -388,47 +487,128 @@ export const updateLead = (id: number, updateData: Partial<Lead>): Lead | null =
 
   if (updatedLead) {
     saveStoredLeads(updated);
-    // Real-time automatic background sync to Supabase
-    pushLeadsToSupabase([updatedLead]).catch(err => console.error('Auto-sync to Supabase failed:', err));
+    try {
+      await pushLeadsToSupabase([updatedLead]);
+    } catch (err) {
+      console.error('Auto-sync update to Supabase failed:', err);
+    }
   }
   return updatedLead;
 };
 
-// Delete Lead
-export const deleteLead = (id: number): void => {
+// Delete Lead (with automatic Trash backup)
+export const deleteLead = async (id: number): Promise<void> => {
   const allLeads = getStoredLeads();
   const target = allLeads.find(l => l.id === id);
   const updated = allLeads.filter(l => l.id !== id);
   saveStoredLeads(updated);
 
   if (target) {
-    deleteLeadFromSupabase({ email: target.email, id: target.id }).catch(err => console.error('Delete sync to Supabase failed:', err));
+    addLeadsToTrash([target]);
+    try {
+      await deleteLeadFromSupabase({ email: target.email, id: target.id });
+    } catch (err) {
+      console.error('Delete sync to Supabase failed:', err);
+    }
   }
 };
 
-// Bulk Delete Leads
-export const bulkDeleteLeads = (ids: number[]): void => {
+// Bulk Delete Leads (with automatic Trash backup)
+export const bulkDeleteLeads = async (ids: number[]): Promise<void> => {
   const allLeads = getStoredLeads();
   const idSet = new Set(ids);
   const targets = allLeads.filter(l => idSet.has(l.id));
   const updated = allLeads.filter(l => !idSet.has(l.id));
   saveStoredLeads(updated);
 
-  targets.forEach(t => {
-    deleteLeadFromSupabase({ email: t.email, id: t.id }).catch(err => console.error('Delete sync to Supabase failed:', err));
-  });
+  if (targets.length > 0) {
+    addLeadsToTrash(targets);
+    try {
+      await bulkDeleteLeadsFromSupabase(targets);
+    } catch (err) {
+      console.error('Bulk delete sync to Supabase failed:', err);
+    }
+  }
 };
 
+// Strict Zero-Repetition Restore Deleted Leads from Trash or Specific Candidates
+export const restoreLeadsFromTrash = async (specificLeads?: Lead[]): Promise<{ updatedLeads: Lead[]; restoredCount: number; restoredList: Lead[] }> => {
+  const trash = specificLeads && specificLeads.length > 0 ? specificLeads : getTrashLeads();
+  if (trash.length === 0) {
+    const current = getStoredLeads();
+    return { updatedLeads: current, restoredCount: 0, restoredList: [] };
+  }
+
+  const allLeads = getStoredLeads();
+
+  const activeEmails = new Set(allLeads.map(l => (l.email || '').toLowerCase()).filter(e => e && e !== '-'));
+  const activeKeys = new Set(allLeads.map(l => `${(l.firstName || '').toLowerCase()}_${(l.lastName || '').toLowerCase()}_${(l.organization || '').toLowerCase()}`));
+
+  const uniqueCandidatesMap = new Map<string, Lead>();
+  trash.forEach(l => {
+    const key = l.email && l.email !== '-' ? `email:${l.email.toLowerCase()}` : `name:${(l.firstName || '').toLowerCase()}_${(l.lastName || '').toLowerCase()}_${(l.organization || '').toLowerCase()}`;
+    if (!uniqueCandidatesMap.has(key)) {
+      uniqueCandidatesMap.set(key, l);
+    }
+  });
+
+  const uniqueCandidates = Array.from(uniqueCandidatesMap.values());
+
+  const trulyMissingToRestore = uniqueCandidates.filter(l => {
+    const emailLower = (l.email || '').toLowerCase();
+    if (emailLower && emailLower !== '-' && activeEmails.has(emailLower)) {
+      return false;
+    }
+    const nameKey = `${(l.firstName || '').toLowerCase()}_${(l.lastName || '').toLowerCase()}_${(l.organization || '').toLowerCase()}`;
+    if (activeKeys.has(nameKey)) {
+      return false;
+    }
+    return true;
+  });
+
+  if (trulyMissingToRestore.length === 0) {
+    saveTrashLeads([]);
+    return { updatedLeads: allLeads, restoredCount: 0, restoredList: [] };
+  }
+
+  let maxId = allLeads.length > 0 ? Math.max(...allLeads.map(l => Number(l.id) || 0)) : 0;
+
+  const restoredLeadsWithFreshIds: Lead[] = trulyMissingToRestore.map(item => {
+    maxId += 1;
+    return {
+      ...item,
+      id: maxId
+    };
+  });
+
+  const updatedLeads = [...restoredLeadsWithFreshIds, ...allLeads];
+  saveStoredLeads(updatedLeads);
+  saveTrashLeads([]);
+
+  try {
+    await pushLeadsToSupabase(restoredLeadsWithFreshIds);
+  } catch (err) {
+    console.error('Restore sync to Supabase failed:', err);
+  }
+
+  return {
+    updatedLeads,
+    restoredCount: restoredLeadsWithFreshIds.length,
+    restoredList: restoredLeadsWithFreshIds
+  };
+};
 
 // Bulk Import Leads
-export const bulkImportLeads = (newLeadsList: Partial<Lead>[]): number => {
+export const bulkImportLeads = async (
+  newLeadsList: Partial<Lead>[]
+): Promise<{ count: number; supabaseResult: { success: boolean; count: number; error?: string } }> => {
   const allLeads = getStoredLeads();
   let maxId = allLeads.length > 0 ? Math.max(...allLeads.map(l => l.id)) : 0;
 
   const createdLeads: Lead[] = newLeadsList.map(item => {
     maxId += 1;
     return {
-      ...item, // Preserve _csvHeaders and all original CSV column header fields
+      ...item,
       id: maxId,
       firstName: cleanVal(item.firstName),
       lastName: cleanVal(item.lastName),
@@ -454,10 +634,18 @@ export const bulkImportLeads = (newLeadsList: Partial<Lead>[]): number => {
 
   saveStoredLeads([...createdLeads, ...allLeads]);
 
-  // Real-time automatic background sync to Supabase
-  pushLeadsToSupabase(createdLeads).catch(err => console.error('Auto-sync import to Supabase failed:', err));
+  let supabaseResult: { success: boolean; count: number; error?: string } = { success: false, count: 0, error: 'No leads created' };
+  if (createdLeads.length > 0) {
+    try {
+      supabaseResult = await pushLeadsToSupabase(createdLeads);
+    } catch (err: any) {
+      console.error('Auto-sync import to Supabase failed:', err);
+      supabaseResult = { success: false, count: 0, error: err?.message || 'Sync failed' };
+    }
+  }
 
-  return createdLeads.length;
+  return {
+    count: createdLeads.length,
+    supabaseResult
+  };
 };
-
-

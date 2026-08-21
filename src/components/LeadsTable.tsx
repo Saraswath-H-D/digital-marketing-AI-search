@@ -185,23 +185,25 @@ export default function LeadsTable({
       return String(lead[header]).trim();
     }
     const lower = header.toLowerCase().trim();
-    const foundKey = Object.keys(lead).find(k => k.toLowerCase().trim() === lower);
+    const cleanLower = lower.replace(/[^a-z0-9]/g, '');
+
+    const foundKey = Object.keys(lead).find(k => k.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanLower);
     if (foundKey && lead[foundKey] !== undefined && lead[foundKey] !== null && String(lead[foundKey]).trim() !== '') {
       return String(lead[foundKey]).trim();
     }
 
-    if (lower.includes('source')) return lead.sourceName || '';
-    if (lower.includes('first name') || lower === 'fname') return lead.firstName || '';
-    if (lower.includes('last name') || lower === 'lname') return lead.lastName || '';
-    if (lower === 'name' || lower === 'full name' || lower === 'contact name' || lower === 'contacts' || lower === 'contact' || lower === 'attendee' || lower.includes('attendee name')) {
-      return `${lead.firstName || ''} ${lead.lastName || ''}`.trim();
+    if (cleanLower.includes('source')) return lead.sourceName || '';
+    if (cleanLower.includes('firstname') || cleanLower === 'fname' || cleanLower === 'first') return lead.firstName || '';
+    if (cleanLower.includes('lastname') || cleanLower === 'lname' || cleanLower === 'last' || cleanLower === 'surname') return lead.lastName || '';
+    if (cleanLower === 'name' || cleanLower === 'fullname' || cleanLower === 'contactname' || cleanLower === 'contacts' || cleanLower === 'contact' || cleanLower === 'attendee' || cleanLower.includes('attendeename')) {
+      return `${lead.firstName || ''} ${lead.lastName && lead.lastName !== '-' ? lead.lastName : ''}`.trim();
     }
-    if (lower.includes('email') || lower.includes('mail')) return lead.email || '';
-    if (lower.includes('company') || lower.includes('organization') || lower.includes('org')) return lead.organization || '';
-    if (lower.includes('title') || lower.includes('role') || lower.includes('designation')) return lead.jobTitle || '';
-    if (lower.includes('city') || lower.includes('location')) return lead.city || '';
-    if (lower.includes('phone') || lower.includes('mobile')) return lead.phone || '';
-    if (lower.includes('status')) return lead.approvalStatus || '';
+    if (cleanLower.includes('email') || cleanLower.includes('mail') || cleanLower.includes('gmail')) return lead.email || '';
+    if (cleanLower.includes('company') || cleanLower.includes('organization') || cleanLower.includes('organisation') || cleanLower.includes('oranisation') || cleanLower.includes('org') || cleanLower.includes('firm')) return lead.organization || '';
+    if (cleanLower.includes('title') || cleanLower.includes('role') || cleanLower.includes('designation') || cleanLower.includes('job')) return lead.jobTitle || '';
+    if (cleanLower.includes('city') || cleanLower.includes('location') || cleanLower.includes('town')) return lead.city || '';
+    if (cleanLower.includes('phone') || cleanLower.includes('mobile') || cleanLower.includes('tel')) return lead.phone || '';
+    if (cleanLower.includes('status')) return lead.approvalStatus || '';
 
     return '';
   };
@@ -221,7 +223,7 @@ export default function LeadsTable({
           </div>
           <a
             href={`mailto:${lead.email}`}
-            className="text-indigo-600 hover:text-indigo-800 font-semibold truncate max-w-[150px]"
+            className="text-gray-800 hover:text-indigo-600 font-semibold truncate max-w-[130px]"
             title={lead.email}
           >
             {lead.email}
@@ -232,7 +234,7 @@ export default function LeadsTable({
             className="p-1 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
           >
             {copiedStatus?.id === lead.id && copiedStatus?.field === 'email' ? (
-              <Check className="w-3 h-3 text-emerald-600" />
+              <Check className="w-3 h-3 text-indigo-600" />
             ) : (
               <Copy className="w-3 h-3" />
             )}
@@ -244,10 +246,10 @@ export default function LeadsTable({
       <button
         onClick={(e) => handleAccessEmail(e, lead)}
         className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-2xs font-bold text-indigo-700 bg-indigo-50/90 hover:bg-indigo-600 hover:text-white border border-indigo-200/80 rounded-lg shadow-2xs transition-all hover:scale-102 active:scale-98 cursor-pointer group"
-        title="Click to access and compose email"
+        title="Click to access and send email"
       >
         <Lock className="w-3 h-3 text-indigo-500 group-hover:text-white transition-colors" />
-        <span>Access email</span>
+        <span>Access Email</span>
       </button>
     );
   };
@@ -297,11 +299,11 @@ export default function LeadsTable({
   };
 
   const renderDynamicCell = (lead: Lead, header: string) => {
-    const cleanH = header.toLowerCase().trim();
-    if (cleanH.includes('email') || cleanH.includes('mail')) {
+    const cleanH = header.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    if (cleanH.includes('email') || cleanH.includes('mail') || cleanH.includes('gmail')) {
       return renderEmailCell(lead);
     }
-    if (cleanH.includes('phone') || cleanH.includes('mobile') || cleanH.includes('contact number')) {
+    if (cleanH.includes('phone') || cleanH.includes('mobile') || cleanH.includes('tel') || cleanH.includes('contactnumber')) {
       return renderPhoneCell(lead);
     }
     const val = getCellValueByHeader(lead, header);

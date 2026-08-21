@@ -2,46 +2,73 @@ import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, Mail, Target, Copy, Check, RotateCcw, 
   Brain, User, Lightbulb, Send, X, ArrowRight, ArrowLeft,
-  Briefcase, MapPin, Building, HelpCircle, Loader2, MessageSquare, Flame
+  Briefcase, MapPin, Building, HelpCircle, Loader2, MessageSquare, Flame,
+  Search, Plus, Edit3, Trash2, Zap, Terminal, CheckCircle2
 } from 'lucide-react';
-
-interface Lead {
-  id: number;
-  firstName: string;
-  lastName: string | null;
-  email: string;
-  phone: string | null;
-  organization: string | null;
-  jobTitle: string | null;
-  city: string | null;
-  questions: string | null;
-  sourceName: string | null;
-  approvalStatus: string;
-}
+import { Lead, Filters, FilterOptions } from '../types.ts';
+import { processNaturalLanguageCommand, AICommandResult } from '../lib/aiAssistant.ts';
+import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory } from '../data/leadStorage.ts';
 
 interface AICopilotDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   selectedLeads: Lead[];
+  allLeads?: Lead[];
+  filterOptions?: FilterOptions;
   onApplyLeadFilter: (leadIds: number[] | null) => void;
   onSelectLeadInTable: (leadId: number) => void;
   onShowMessage: (text: string, type: 'success' | 'error') => void;
   creditBalance: number;
   setCreditBalance: React.Dispatch<React.SetStateAction<number>>;
+  // NL AI Action Handlers
+  onAddLead?: (leadData: any) => Promise<boolean | undefined>;
+  onUpdateLead?: (id: number, leadData: any) => Promise<boolean | undefined>;
+  onDeleteLead?: (lead: Lead) => Promise<void>;
+  onSetSearchInput?: (query: string) => void;
+  onRefreshLeads?: () => void;
+}
+
+interface ChatMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  text: string;
+  result?: AICommandResult;
+  timestamp: string;
 }
 
 export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
   isOpen,
   onClose,
   selectedLeads,
+  allLeads = [],
+  filterOptions = { jobTitles: [], companies: [], cities: [], sources: [], statuses: [] },
   onApplyLeadFilter,
   onSelectLeadInTable,
   onShowMessage,
   creditBalance,
-  setCreditBalance
+  setCreditBalance,
+  onAddLead,
+  onUpdateLead,
+  onDeleteLead,
+  onSetSearchInput,
+  onRefreshLeads
 }) => {
-  const [activeTab, setActiveTab] = useState<'pitch' | 'matcher'>('pitch');
+  const [activeTab, setActiveTab] = useState<'assistant' | 'pitch' | 'matcher'>('assistant');
   const [selectedLeadForPitch, setSelectedLeadForPitch] = useState<Lead | null>(null);
+
+  // Natural Language AI Assistant States
+  const [naturalPrompt, setNaturalPrompt] = useState<string>('');
+  const [isProcessingCommand, setIsProcessingCommand] = useState<boolean>(false);
+  const [deletedLeadsHistory, setDeletedLeadsHistory] = useState<Lead[]>([]);
+  const [restoredLeadsHistory, setRestoredLeadsHistory] = useState<Lead[]>([]);
+  const [chatLogs, setChatLogs] = useState<ChatMessage[]>([
+    {
+      id: 'welcome-1',
+      sender: 'assistant',
+      text: 'Hello! I am your AI Command Assistant. Type any search term, or instruct me in plain English to insert new leads or update existing records.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  ]);
 
   // Outreach Pitch Form States
   const [outreachAngle, setOutreachAngle] = useState<string>('Value-First Pitch');
@@ -73,16 +100,157 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
   // Auto-select the first selected lead from the table if available
   useEffect(() => {
     if (selectedLeads.length > 0) {
-      // Keep selected lead if it's still in the list, otherwise choose the first one
       if (!selectedLeadForPitch || !selectedLeads.some(l => l.id === selectedLeadForPitch.id)) {
         setSelectedLeadForPitch(selectedLeads[0]);
-        // Reset the pitch result when switching leads
         setPitchResult(null);
       }
     } else {
       setSelectedLeadForPitch(null);
     }
   }, [selectedLeads]);
+
+  // ==================== NATURAL LANGUAGE COMMAND EXECUTION ====================
+  const handleExecuteNLCommand = async (inputPrompt?: string) => {
+    const queryToProcess = (inputPrompt || naturalPrompt).trim();
+    if (!queryToProcess) return;
+
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: queryToProcess,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setChatLogs(prev => [...prev, userMsg]);
+    if (!inputPrompt) setNaturalPrompt('');
+    setIsProcessingCommand(true);
+
+    try {
+      // Build conversation history and active page context
+      const historyItems = chatLogs.map(m => ({ sender: m.sender, text: m.text }));
+      const activePageLeads = selectedLeads.length > 0 ? selectedLeads : allLeads;
+
+      // Process using AI engine (Gemini or offline NLP fallback with conversation memory)
+      const res: AICommandResult = await processNaturalLanguageCommand(
+        queryToProcess,
+        allLeads,
+        filterOptions,
+        historyItems,
+        activePageLeads
+      );
+
+      // Execute Action directly on Database & UI
+      let assistantReplyText = res.explanation;
+
+      if (res.action === 'search') {
+        if (res.searchQuery && onSetSearchInput) {
+          onSetSearchInput(res.searchQuery);
+        }
+        if (res.matchingLeadIds) {
+          onApplyLeadFilter(res.matchingLeadIds);
+        }
+        onShowMessage(`Found ${res.matchingLeadIds?.length || 0} matching records directly on page.`, 'success');
+      } else if (res.action === 'create' && res.newLeadData && onAddLead) {
+        const success = await onAddLead(res.newLeadData);
+        if (success) {
+          const displayName = res.newLeadData.lastName && res.newLeadData.lastName !== '-'
+            ? `${res.newLeadData.firstName} ${res.newLeadData.lastName}`
+            : `${res.newLeadData.firstName}`;
+          assistantReplyText = `✅ Inserted new record for "${displayName}" (${res.newLeadData.organization || 'Company'}) into database. Page refreshed immediately.`;
+          onShowMessage(`Successfully added lead ${displayName}!`, 'success');
+        }
+      } else if (res.action === 'update' && res.targetLeadId && res.updateData && onUpdateLead) {
+        const success = await onUpdateLead(res.targetLeadId, res.updateData);
+        if (success) {
+          assistantReplyText = `✏️ Successfully updated lead #${res.targetLeadId}. Changed fields: ${Object.keys(res.updateData).join(', ')}. Page refreshed immediately.`;
+          onShowMessage(`Updated lead #${res.targetLeadId} successfully!`, 'success');
+        }
+      } else if (res.action === 'delete') {
+        if (res.deleteLeadId) {
+          const target = allLeads.find(l => l.id === res.deleteLeadId);
+          if (target && onDeleteLead) {
+            await onDeleteLead(target);
+            setDeletedLeadsHistory(prev => [target, ...prev]);
+            assistantReplyText = `🗑️ Permanently deleted lead #${res.deleteLeadId} (${target.firstName} ${target.lastName || ''}) from database.`;
+            onShowMessage(`Deleted lead #${res.deleteLeadId} successfully!`, 'success');
+          }
+        } else if (res.matchingLeadIds && res.matchingLeadIds.length > 0 && onDeleteLead) {
+          const targets = allLeads.filter(l => res.matchingLeadIds!.includes(l.id));
+          for (const t of targets) {
+            await onDeleteLead(t);
+          }
+          setDeletedLeadsHistory(prev => [...targets, ...prev]);
+          assistantReplyText = `🗑️ Permanently deleted ${targets.length} lead record(s) matching your condition. Page refreshed immediately.`;
+          onShowMessage(`Deleted ${targets.length} lead(s) successfully!`, 'success');
+        } else {
+          assistantReplyText = `No matching lead records found to delete for your prompt condition.`;
+        }
+      } else if (res.action === 'restore') {
+        const trash = deletedLeadsHistory.length > 0 ? deletedLeadsHistory : getTrashLeads();
+        if (trash.length > 0) {
+          const { updatedLeads, restoredCount, restoredList } = await restoreLeadsFromTrash(trash);
+          if (restoredCount > 0) {
+            setRestoredLeadsHistory(restoredList);
+            onApplyLeadFilter(null);
+            if (onSetSearchInput) onSetSearchInput('');
+            if (onRefreshLeads) onRefreshLeads();
+            assistantReplyText = `🔄 Restored exactly ${restoredCount} deleted lead record(s) back into table without duplicates! Total active contacts: ${updatedLeads.length}.`;
+            onShowMessage(`Restored ${restoredCount} lead(s) back to table!`, 'success');
+          } else {
+            assistantReplyText = `All matching deleted leads are already active on your page (0 duplicates added).`;
+          }
+          setDeletedLeadsHistory([]);
+        } else {
+          assistantReplyText = `No deleted leads found in trash memory to restore.`;
+        }
+      } else if (res.action === 'show_revived') {
+        if (restoredLeadsHistory.length > 0) {
+          const listStr = restoredLeadsHistory.map((l, idx) => `${idx + 1}. ${l.firstName} ${l.lastName || ''} (${l.jobTitle || '-'} at ${l.organization || '-'}, Email: ${l.email})`).join('\n');
+          assistantReplyText = `Here are the ${restoredLeadsHistory.length} lead records that were recently revived:\n${listStr}`;
+        } else {
+          assistantReplyText = `No recently revived leads found in session memory. Currently showing ${allLeads.length} active leads on page.`;
+        }
+      } else if (res.action === 'show_deleted') {
+        const trash = getTrashLeads();
+        const history = getDeletedHistory();
+        const combined = [...deletedLeadsHistory, ...trash, ...history];
+        const uniqueLeads = Array.from(new Map(combined.map(l => [`${l.firstName}_${l.lastName}_${l.email}_${l.organization}`, l])).values());
+
+        if (uniqueLeads.length > 0) {
+          const listStr = uniqueLeads.slice(0, 30).map((l, idx) => `${idx + 1}. ${l.firstName} ${l.lastName && l.lastName !== '-' ? l.lastName : ''} (${l.jobTitle || '-'} at ${l.organization || '-'}, Email: ${l.email || '-'})`).join('\n');
+          assistantReplyText = `Here are the ${uniqueLeads.length} earlier & recently deleted lead records:\n${listStr}`;
+        } else {
+          assistantReplyText = `No deleted leads found in trash or audit history.`;
+        }
+      }
+
+      // Add assistant response log
+      const assistantMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'assistant',
+        text: assistantReplyText,
+        result: res,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setChatLogs(prev => [...prev, assistantMsg]);
+      if (onRefreshLeads) onRefreshLeads();
+
+    } catch (err: any) {
+      console.error('AI command execution failed:', err);
+      setChatLogs(prev => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          sender: 'assistant',
+          text: `An error occurred: ${err.message || 'Could not execute command.'}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    } finally {
+      setIsProcessingCommand(false);
+    }
+  };
 
   // Handle Personalized Pitch Generation
   const handleGeneratePitch = async (isRefinement = false) => {
@@ -97,7 +265,6 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     }
 
     setIsGeneratingPitch(true);
-    // Simulate smart AI processing delay
     await new Promise(resolve => setTimeout(resolve, 800));
 
     try {
@@ -145,13 +312,7 @@ Apollo AI Growth Team`;
           : 'High engagement probability based on event participation'
       ];
 
-      setPitchResult({
-        subject,
-        body,
-        insights
-      });
-
-      // Deduct 2 credits for pitch generation
+      setPitchResult({ subject, body, insights });
       setCreditBalance(prev => Math.max(0, prev - 2));
       onShowMessage('AI Personalized Pitch generated successfully!', 'success');
     } catch (err: any) {
@@ -178,15 +339,13 @@ Apollo AI Growth Team`;
     await new Promise(resolve => setTimeout(resolve, 900));
 
     try {
-      // Get all leads from local storage
       const storageModule = await import('../data/leadStorage.ts');
-      const allLeads = storageModule.getStoredLeads();
+      const allLeadsData = storageModule.getStoredLeads();
       const queryLower = icpQuery.toLowerCase();
-
       const keywords = queryLower.split(/\s+/).filter(k => k.length > 2);
 
-      const scored = allLeads.map(l => {
-        let score = 30; // base score
+      const scored = allLeadsData.map(l => {
+        let score = 30;
         const title = (l.jobTitle || '').toLowerCase();
         const org = (l.organization || '').toLowerCase();
         const city = (l.city || '').toLowerCase();
@@ -199,7 +358,6 @@ Apollo AI Growth Team`;
           if (question.includes(kw)) score += 25;
         });
 
-        // Cap at 98%
         score = Math.min(98, Math.max(score, 45));
 
         let explanation = `${l.jobTitle || 'Professional'} ${l.organization ? `at ${l.organization}` : ''} in ${l.city || 'Target Region'}`;
@@ -220,8 +378,6 @@ Apollo AI Growth Team`;
 
       setMatchResults(topMatches);
       setHasAppliedIcpFilter(false);
-
-      // Deduct 3 credits for full-database semantic matching
       setCreditBalance(prev => Math.max(0, prev - 3));
       onShowMessage(`AI found ${topMatches.length} matching target leads!`, 'success');
     } catch (err: any) {
@@ -232,7 +388,6 @@ Apollo AI Growth Team`;
     }
   };
 
-  // Apply matched leads as active filter on main table
   const applyIcpFilter = (matches: any[]) => {
     if (!matches || matches.length === 0) return;
     const matchingIds = matches.map(m => m.leadId);
@@ -241,7 +396,6 @@ Apollo AI Growth Team`;
     onShowMessage(`Applied AI recommendation filter: Showing ${matchingIds.length} leads.`, 'success');
   };
 
-  // Clear matched filter
   const clearIcpFilter = () => {
     onApplyLeadFilter(null);
     setHasAppliedIcpFilter(false);
@@ -263,7 +417,7 @@ Apollo AI Growth Team`;
   if (!isOpen) return null;
 
   return (
-    <div className="w-[420px] shrink-0 border-l border-gray-200 bg-white flex flex-col h-full shadow-2xl relative z-30 animate-slideIn">
+    <div className="w-[430px] shrink-0 border-l border-gray-200 bg-white flex flex-col h-full shadow-2xl relative z-30 animate-slideIn">
       
       {/* Drawer Header */}
       <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-indigo-50/40 via-white to-white">
@@ -272,9 +426,9 @@ Apollo AI Growth Team`;
             <Sparkles className="w-4.5 h-4.5 text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-black text-gray-950 leading-none font-display tracking-tight">Apollo AI Copilot</h2>
+            <h2 className="text-sm font-black text-gray-950 leading-none font-display tracking-tight">Apollo AI Assistant</h2>
             <span className="text-4xs uppercase tracking-wider text-indigo-600 font-black block mt-1 font-mono">
-              Powered by Gemini 3.5 Flash
+              Natural Language Command & Control
             </span>
           </div>
         </div>
@@ -289,31 +443,131 @@ Apollo AI Growth Team`;
       {/* Tabs Row */}
       <div className="flex border-b border-gray-200 p-1 bg-gray-50/50 shrink-0 select-none">
         <button
+          onClick={() => setActiveTab('assistant')}
+          className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center space-x-1 transition-all ${
+            activeTab === 'assistant' 
+              ? 'bg-white text-indigo-700 shadow-3xs border border-gray-200/50' 
+              : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <Terminal className="w-3.5 h-3.5" />
+          <span>AI Command</span>
+        </button>
+        <button
           onClick={() => setActiveTab('pitch')}
-          className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center space-x-1.5 transition-all ${
+          className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center space-x-1 transition-all ${
             activeTab === 'pitch' 
               ? 'bg-white text-indigo-700 shadow-3xs border border-gray-200/50' 
               : 'text-gray-500 hover:text-gray-800'
           }`}
         >
           <Mail className="w-3.5 h-3.5" />
-          <span>Smart Outreach Pitch</span>
+          <span>Pitch</span>
         </button>
         <button
           onClick={() => setActiveTab('matcher')}
-          className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center space-x-1.5 transition-all ${
+          className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center space-x-1 transition-all ${
             activeTab === 'matcher' 
               ? 'bg-white text-indigo-700 shadow-3xs border border-gray-200/50' 
               : 'text-gray-500 hover:text-gray-800'
           }`}
         >
           <Target className="w-3.5 h-3.5" />
-          <span>ICP Semantic Matcher</span>
+          <span>ICP Matcher</span>
         </button>
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+        {/* ==================== TAB 0: Natural Language AI Assistant ==================== */}
+        {activeTab === 'assistant' && (
+          <div className="flex flex-col h-full space-y-3 animate-fadeIn">
+            
+            {/* Conversational Chat Log */}
+            <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-3 min-h-[300px] overflow-y-auto font-sans">
+              {chatLogs.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex flex-col ${
+                    msg.sender === 'user' ? 'items-end' : 'items-start'
+                  }`}
+                >
+                  <div
+                    className={`max-w-[90%] rounded-xl p-3 text-xs leading-relaxed font-medium ${
+                      msg.sender === 'user'
+                        ? 'bg-indigo-600 text-white rounded-br-none shadow-sm font-semibold'
+                        : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-3xs'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{msg.text}</p>
+
+                    {/* Result Details Card */}
+                    {msg.result && msg.result.action === 'create' && msg.result.newLeadData && (
+                      <div className="mt-2 pt-2 border-t border-gray-150 text-2xs text-gray-700 space-y-1 bg-emerald-50/50 p-2 rounded-lg">
+                        <div className="font-bold text-emerald-800 flex items-center space-x-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Inserted Record</span>
+                        </div>
+                        <div>Name: <b>{msg.result.newLeadData.firstName} {msg.result.newLeadData.lastName || ''}</b></div>
+                        <div>Title: {msg.result.newLeadData.jobTitle} at {msg.result.newLeadData.organization}</div>
+                        <div>Email: {msg.result.newLeadData.email}</div>
+                      </div>
+                    )}
+
+                    {msg.result && msg.result.action === 'update' && (
+                      <div className="mt-2 pt-2 border-t border-gray-150 text-2xs text-gray-700 space-y-1 bg-amber-50/50 p-2 rounded-lg">
+                        <div className="font-bold text-amber-800 flex items-center space-x-1">
+                          <CheckCircle2 className="w-3 h-3 text-amber-600" />
+                          <span>Updated Record #{msg.result.targetLeadId}</span>
+                        </div>
+                        {msg.result.updateData && Object.entries(msg.result.updateData).map(([k, v]) => (
+                          <div key={k} className="font-mono">
+                            <span className="capitalize">{k}</span>: <b>{String(v)}</b>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[9px] text-gray-400 mt-1 px-1 font-mono">{msg.timestamp}</span>
+                </div>
+              ))}
+
+              {isProcessingCommand && (
+                <div className="flex items-center space-x-2 text-xs text-indigo-600 font-semibold bg-white p-2.5 rounded-xl border border-gray-200">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                  <span>AI Assistant is understanding and executing payload...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Input Bar */}
+            <div className="relative">
+              <textarea
+                value={naturalPrompt}
+                onChange={(e) => setNaturalPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleExecuteNLCommand();
+                  }
+                }}
+                placeholder="Type natural language command... e.g. 'Search Procurement Managers' or 'Add lead VP Sales at Acme Corp' or 'Update lead #1 email to contact@acme.com'"
+                rows={2}
+                className="w-full text-xs p-3 pr-10 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 resize-none bg-white font-medium shadow-3xs"
+              />
+              <button
+                onClick={() => handleExecuteNLCommand()}
+                disabled={isProcessingCommand || !naturalPrompt.trim()}
+                className="absolute right-2.5 bottom-3.5 p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-40 transition-colors shadow-sm cursor-pointer"
+                title="Send AI Command"
+              >
+                <Send className="w-3.5 h-3.5 text-white" />
+              </button>
+            </div>
+
+          </div>
+        )}
         
         {/* ==================== TAB 1: Outreach Pitch Generator ==================== */}
         {activeTab === 'pitch' && (
@@ -328,7 +582,6 @@ Apollo AI Growth Team`;
               
               {selectedLeads.length > 0 ? (
                 <div className="space-y-3">
-                  {/* Lead Picker Dropdown (If multiple selected) */}
                   {selectedLeads.length > 1 && (
                     <div className="mb-2">
                       <label className="block text-4xs font-extrabold text-gray-400 uppercase mb-1">
@@ -380,15 +633,6 @@ Apollo AI Growth Team`;
                             <span>{selectedLeadForPitch.city}</span>
                           </div>
                         )}
-                        {selectedLeadForPitch.questions && selectedLeadForPitch.questions !== 'no' && (
-                          <div className="mt-2.5 pt-2.5 border-t border-gray-200/60 bg-indigo-50/30 p-2 rounded-lg text-xs text-indigo-900 border-l-2 border-indigo-500">
-                            <div className="font-bold flex items-center space-x-1 mb-1 text-indigo-950 text-3xs uppercase tracking-wider">
-                              <MessageSquare className="w-3 h-3 text-indigo-500" />
-                              <span>Submitted Question / Note</span>
-                            </div>
-                            <p className="italic font-medium leading-relaxed">"{selectedLeadForPitch.questions}"</p>
-                          </div>
-                        )}
                       </div>
                     </div>
                   )}
@@ -402,11 +646,9 @@ Apollo AI Growth Team`;
               )}
             </div>
 
-            {/* Outreach Pitch Preferences Form */}
             {selectedLeadForPitch && (
               <div className="space-y-3 pt-1">
                 <div className="grid grid-cols-2 gap-3">
-                  {/* Outreach Angle */}
                   <div>
                     <label className="block text-4xs font-extrabold text-gray-400 uppercase tracking-wider mb-1">
                       Outreach Angle
@@ -423,7 +665,6 @@ Apollo AI Growth Team`;
                     </select>
                   </div>
 
-                  {/* Outreach Tone */}
                   <div>
                     <label className="block text-4xs font-extrabold text-gray-400 uppercase tracking-wider mb-1">
                       Pitch Tone
@@ -441,22 +682,6 @@ Apollo AI Growth Team`;
                   </div>
                 </div>
 
-                {/* Custom Refinement */}
-                <div>
-                  <label className="block text-4xs font-extrabold text-gray-400 uppercase tracking-wider mb-1 flex justify-between">
-                    <span>Custom Instruction (Optional)</span>
-                    <span className="text-[9px] text-gray-400 normal-case font-normal">e.g. "Keep it under 3 sentences"</span>
-                  </label>
-                  <textarea
-                    value={refinementPrompt}
-                    onChange={(e) => setRefinementPrompt(e.target.value)}
-                    placeholder="Enter any custom constraints, product/service name, or specific offer hooks..."
-                    rows={2}
-                    className="w-full text-xs p-2.5 border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 resize-none bg-white font-medium"
-                  />
-                </div>
-
-                {/* Generate Button */}
                 <button
                   onClick={() => handleGeneratePitch(false)}
                   disabled={isGeneratingPitch}
@@ -477,30 +702,9 @@ Apollo AI Growth Team`;
               </div>
             )}
 
-            {/* Generated Results Presentation */}
             {pitchResult && selectedLeadForPitch && (
               <div className="space-y-4 pt-3 border-t border-gray-200/80 animate-fadeIn">
-                
-                {/* Insights bullets first */}
-                {pitchResult.insights && pitchResult.insights.length > 0 && (
-                  <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3.5">
-                    <h4 className="text-3xs font-extrabold text-amber-800 uppercase tracking-widest mb-2 flex items-center space-x-1">
-                      <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Strategic AI Lead Insights</span>
-                    </h4>
-                    <ul className="space-y-2 text-xs font-medium text-amber-900">
-                      {pitchResult.insights.map((insight, idx) => (
-                        <li key={idx} className="flex items-start">
-                          <Flame className="w-3.5 h-3.5 text-amber-500 mr-2 shrink-0 mt-0.5" />
-                          <span>{insight}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Subject Line */}
-                <div className="space-y-1 bg-gray-550 border border-gray-150 rounded-xl p-3 bg-gray-50/50">
+                <div className="space-y-1 bg-gray-50/50 border border-gray-150 rounded-xl p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-4xs font-extrabold text-gray-400 uppercase tracking-wider">
                       Subject Line
@@ -508,7 +712,6 @@ Apollo AI Growth Team`;
                     <button
                       onClick={() => handleCopy(pitchResult.subject, 'subject')}
                       className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center space-x-1"
-                      title="Copy Subject"
                     >
                       {copiedSubject ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                       <span className="text-4xs font-bold">{copiedSubject ? 'Copied' : 'Copy'}</span>
@@ -519,7 +722,6 @@ Apollo AI Growth Team`;
                   </div>
                 </div>
 
-                {/* Email Body */}
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-4xs font-extrabold text-gray-400 uppercase tracking-wider">
@@ -528,7 +730,6 @@ Apollo AI Growth Team`;
                     <button
                       onClick={() => handleCopy(pitchResult.body, 'body')}
                       className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center space-x-1"
-                      title="Copy Email Body"
                     >
                       {copiedBody ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                       <span className="text-4xs font-bold">{copiedBody ? 'Copied' : 'Copy'}</span>
@@ -538,32 +739,6 @@ Apollo AI Growth Team`;
                     {pitchResult.body}
                   </div>
                 </div>
-
-                {/* Pitch refinement */}
-                <div className="pt-2">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="text"
-                      value={refinementPrompt}
-                      onChange={(e) => setRefinementPrompt(e.target.value)}
-                      placeholder="Ask AI to adjust this draft... (e.g. 'Make it more casual')"
-                      className="flex-1 text-xs py-1.5 px-3 border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 bg-white font-medium"
-                    />
-                    <button
-                      onClick={() => handleGeneratePitch(true)}
-                      disabled={isGeneratingPitch}
-                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-150 text-indigo-700 rounded-lg text-xs font-bold flex items-center space-x-1"
-                    >
-                      {isGeneratingPitch ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Send className="w-3.5 h-3.5" />
-                      )}
-                      <span>Refine</span>
-                    </button>
-                  </div>
-                </div>
-
               </div>
             )}
 
@@ -573,61 +748,34 @@ Apollo AI Growth Team`;
         {/* ==================== TAB 2: ICP Lead Matcher ==================== */}
         {activeTab === 'matcher' && (
           <div className="space-y-4 animate-fadeIn">
-            
-            {/* Description panel */}
-            <div className="bg-gradient-to-r from-indigo-550 to-indigo-650 bg-indigo-900 rounded-xl p-4 text-white shadow-md relative overflow-hidden">
-              <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 opacity-10">
-                <Brain className="w-24 h-24 text-white" />
-              </div>
+            <div className="bg-indigo-900 rounded-xl p-4 text-white shadow-md relative overflow-hidden">
               <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-200 flex items-center space-x-1.5 mb-1.5">
                 <Brain className="w-4 h-4 text-indigo-300" />
                 <span>AI Ideal Customer Profiler</span>
               </h3>
               <p className="text-2xs text-indigo-100 leading-relaxed font-medium">
-                Describe your target segment in plain English. Gemini will scan all event registrants, evaluate matching indicators, and return scored suggestions with matching explanations.
+                Describe your target segment in plain English. Gemini will scan all event registrants and return scored matches.
               </p>
             </div>
 
-            {/* Input Form */}
             <div className="space-y-2">
-              <label className="block text-4xs font-extrabold text-gray-400 uppercase tracking-wider">
-                Describe Your target persona or ICP
-              </label>
               <div className="relative">
                 <textarea
                   value={icpQuery}
                   onChange={(e) => setIcpQuery(e.target.value)}
-                  placeholder="e.g. 'Founders or CEOs based in Boston or SF interested in marketing tech and engineering integrations'"
+                  placeholder="e.g. 'Founders or CEOs based in Boston or SF interested in marketing tech'"
                   rows={3}
-                  className="w-full text-xs p-3 pr-10 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 resize-none bg-white font-medium leading-relaxed"
+                  className="w-full text-xs p-3 pr-10 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 resize-none bg-white font-medium"
                 />
                 <button
                   onClick={handleIcpMatch}
                   disabled={isMatching}
                   className="absolute right-2.5 bottom-2.5 p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50 transition-colors shadow-sm"
-                  title="Run matching"
                 >
-                  {isMatching ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-                  ) : (
-                    <ArrowRight className="w-3.5 h-3.5 text-white" />
-                  )}
+                  {isMatching ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" /> : <ArrowRight className="w-3.5 h-3.5 text-white" />}
                 </button>
               </div>
-              <span className="text-[10px] text-gray-400 block font-medium">
-                Uses 3 credits to run full list semantic scoring and analytical evaluation.
-              </span>
             </div>
-
-            {/* Matching Results List */}
-            {isMatching && (
-              <div className="py-12 flex flex-col items-center justify-center space-y-3">
-                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-                <span className="text-xs text-gray-500 font-semibold tracking-wide">
-                  Gemini is evaluating lead score metrics...
-                </span>
-              </div>
-            )}
 
             {matchResults && !isMatching && (
               <div className="space-y-3 pt-2">
@@ -637,18 +785,12 @@ Apollo AI Growth Team`;
                   </h4>
                   {matchResults.length > 0 && (
                     hasAppliedIcpFilter ? (
-                      <button
-                        onClick={clearIcpFilter}
-                        className="text-4xs font-extrabold text-red-600 hover:text-red-800 hover:underline flex items-center space-x-1"
-                      >
+                      <button onClick={clearIcpFilter} className="text-4xs font-extrabold text-red-600 flex items-center space-x-1">
                         <X className="w-3 h-3" />
                         <span>Clear AI Filter</span>
                       </button>
                     ) : (
-                      <button
-                        onClick={() => applyIcpFilter(matchResults)}
-                        className="text-4xs font-extrabold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center space-x-1"
-                      >
+                      <button onClick={() => applyIcpFilter(matchResults)} className="text-4xs font-extrabold text-indigo-600 flex items-center space-x-1">
                         <Check className="w-3 h-3" />
                         <span>Filter Main Table</span>
                       </button>
@@ -656,58 +798,29 @@ Apollo AI Growth Team`;
                   )}
                 </div>
 
-                {matchResults.length === 0 ? (
-                  <div className="bg-gray-50 rounded-xl p-6 text-center border border-gray-150">
-                    <p className="text-xs text-gray-500 font-semibold">
-                      No strong matches found (score &gt; 40) for this description. Try broadening your criteria.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {matchResults.map((match) => (
-                      <div 
-                        key={match.leadId}
-                        onClick={() => onSelectLeadInTable(match.leadId)}
-                        className="group bg-white hover:bg-indigo-50/20 border border-gray-200/85 hover:border-indigo-150 rounded-xl p-3 cursor-pointer transition-all shadow-3xs flex items-start justify-between"
-                      >
-                        <div className="space-y-1 flex-1 pr-3">
-                          <div className="flex items-center space-x-1.5">
-                            <span className="font-extrabold text-xs text-neutral-900 group-hover:text-indigo-900">
-                              Lead #{match.leadId}
-                            </span>
-                            <span className="text-4xs text-gray-400 font-bold uppercase">
-                              Evaluated
-                            </span>
-                          </div>
-                          <p className="text-xs font-semibold text-gray-700 leading-normal italic">
-                            "{match.explanation}"
-                          </p>
-                          <div className="pt-1.5 flex items-center text-4xs text-indigo-500 font-bold uppercase tracking-wider">
-                            <span>Inspect Lead Row</span>
-                            <ArrowRight className="w-2.5 h-2.5 ml-1 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-0.5" />
-                          </div>
-                        </div>
-
-                        {/* Match Score Badge */}
-                        <div className={`px-2 py-1 rounded-lg text-center shrink-0 flex flex-col justify-center min-w-14 border ${
-                          match.matchScore >= 80 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                            : match.matchScore >= 60
-                            ? 'bg-amber-50 text-amber-700 border-amber-100'
-                            : 'bg-gray-50 text-gray-600 border-gray-100'
-                        }`}>
-                          <span className="text-[9px] font-black leading-none uppercase opacity-85 font-sans">Match</span>
-                          <span className="text-xs font-black mt-0.5 leading-none font-mono">{match.matchScore}%</span>
-                        </div>
-
+                <div className="space-y-2.5">
+                  {matchResults.map((match) => (
+                    <div 
+                      key={match.leadId}
+                      onClick={() => onSelectLeadInTable(match.leadId)}
+                      className="group bg-white hover:bg-indigo-50/20 border border-gray-200 hover:border-indigo-150 rounded-xl p-3 cursor-pointer transition-all flex items-start justify-between"
+                    >
+                      <div className="space-y-1 flex-1 pr-3">
+                        <span className="font-extrabold text-xs text-neutral-900 group-hover:text-indigo-900 block">
+                          Lead #{match.leadId}
+                        </span>
+                        <p className="text-xs font-semibold text-gray-700 italic">
+                          "{match.explanation}"
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                )}
-
+                      <div className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg text-center font-mono text-xs font-bold">
+                        {match.matchScore}%
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
-
           </div>
         )}
 

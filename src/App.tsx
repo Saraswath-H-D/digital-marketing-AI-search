@@ -323,10 +323,10 @@ export default function App() {
   // Add Lead Action Handler
   const handleAddLead = async (leadData: any) => {
     try {
-      addLead(leadData);
+      await addLead(leadData);
       fetchLeads();
       fetchFilterOptions();
-      showStatus('Lead created successfully!', 'success');
+      showStatus('Lead created & synced to Supabase!', 'success');
       return true;
     } catch (err) {
       console.error('Create lead failed:', err);
@@ -337,10 +337,10 @@ export default function App() {
   // Update Lead Action Handler
   const handleUpdateLead = async (id: number, leadData: any) => {
     try {
-      updateLead(id, leadData);
+      await updateLead(id, leadData);
       fetchLeads();
       fetchFilterOptions();
-      showStatus('Lead updated successfully!', 'success');
+      showStatus('Lead updated & synced to Supabase!', 'success');
       return true;
     } catch (err) {
       console.error('Update lead failed:', err);
@@ -356,11 +356,11 @@ export default function App() {
 
   const executeDeleteLead = async (lead: Lead) => {
     try {
-      deleteLead(lead.id);
+      await deleteLead(lead.id);
       fetchLeads();
       fetchFilterOptions();
       setSelectedIds(prev => prev.filter(id => id !== lead.id));
-      showStatus('Lead deleted successfully.', 'success');
+      showStatus('Lead deleted & synced to Supabase.', 'success');
     } catch (err) {
       console.error('Delete lead failed:', err);
       showStatus('An error occurred while deleting the lead.', 'error');
@@ -376,12 +376,12 @@ export default function App() {
 
   const executeBulkDelete = async () => {
     try {
-      bulkDeleteLeads(selectedIds);
+      await bulkDeleteLeads(selectedIds);
       fetchLeads();
       fetchFilterOptions();
       setSelectedIds([]);
       setBulkMenuOpen(false);
-      showStatus('Bulk deletion complete!', 'success');
+      showStatus('Bulk deletion complete & synced to Supabase!', 'success');
     } catch (err) {
       console.error('Bulk delete failed:', err);
       showStatus('An error occurred during bulk deletion.', 'error');
@@ -426,13 +426,23 @@ export default function App() {
   // CSV Import Action Handler
   const handleImportLeads = async (items: any[]) => {
     try {
-      const count = bulkImportLeads(items);
+      const result = await bulkImportLeads(items);
       fetchLeads();
       fetchFilterOptions();
-      showStatus(`Imported ${count} attendee leads successfully!`, 'success');
+
+      if (result.supabaseResult?.success) {
+        showStatus(`Imported ${result.count} attendee leads and synced to Supabase!`, 'success');
+      } else if (result.supabaseResult?.error === 'Supabase credentials not configured.') {
+        showStatus(`Imported ${result.count} leads locally. (Supabase URL & Anon Key not configured — open Supabase settings to connect)`, 'error');
+      } else if (result.supabaseResult?.error) {
+        showStatus(`Imported ${result.count} leads locally, but Supabase sync failed: ${result.supabaseResult.error}`, 'error');
+      } else {
+        showStatus(`Imported ${result.count} attendee leads successfully!`, 'success');
+      }
       return true;
     } catch (err) {
       console.error('Import action failed:', err);
+      showStatus('An error occurred during CSV import.', 'error');
     }
     return false;
   };
@@ -1192,6 +1202,8 @@ export default function App() {
           isOpen={showAICopilot}
           onClose={() => setShowAICopilot(false)}
           selectedLeads={leads.filter(l => selectedIds.includes(l.id))}
+          allLeads={getStoredLeads()}
+          filterOptions={filterOptions}
           onApplyLeadFilter={(leadIds) => setAiFilteredLeadIds(leadIds)}
           onSelectLeadInTable={(leadId) => {
             if (!selectedIds.includes(leadId)) {
@@ -1202,6 +1214,18 @@ export default function App() {
           onShowMessage={showStatus}
           creditBalance={creditBalance}
           setCreditBalance={setCreditBalance}
+          onAddLead={handleAddLead}
+          onUpdateLead={handleUpdateLead}
+          onDeleteLead={executeDeleteLead}
+          onSetSearchInput={(q) => {
+            setSearchInput(q);
+            setFilters(prev => ({ ...prev, search: q }));
+            setPage(1);
+          }}
+          onRefreshLeads={() => {
+            fetchLeads();
+            fetchFilterOptions();
+          }}
         />
       </div>
 

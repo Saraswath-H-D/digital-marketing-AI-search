@@ -128,13 +128,18 @@ export const pushLeadsToSupabase = async (
     }
   }
 
-  // 3. Construct exact SQL table row objects
+  // 3. Construct exact SQL table row objects (omitting client-side ID so PostgreSQL auto-generates IDs without primary key collisions)
   const rowsToInsert = leads.map((l, index) => {
+    const rawEmail = (l.email || '').trim();
+    const hasValidEmail = rawEmail !== '' && rawEmail !== '-' && rawEmail !== 'undefined' && rawEmail !== 'null' && rawEmail.includes('@');
+    const emailToInsert = hasValidEmail 
+      ? rawEmail 
+      : `contact_${l.id || index + 1}_${Date.now()}_${Math.floor(Math.random() * 1000)}@imported.com`;
+
     const row: Record<string, any> = {
-      id: l.id || (index + 1),
       first_name: l.firstName || '',
       last_name: l.lastName || '',
-      email: l.email || `contact_${Math.floor(Math.random()*100000)}@imported.com`,
+      email: emailToInsert,
       registration_time: l.registrationTime || new Date().toLocaleString(),
       approval_status: l.approvalStatus || 'approved',
       city: l.city || '',
@@ -160,31 +165,23 @@ export const pushLeadsToSupabase = async (
     return row;
   });
 
+  const BATCH_SIZE = 100;
+  let totalPushed = 0;
+
   try {
-    // Upsert into Supabase on email match
-    const { data, error } = await client
-      .from(tableName)
-      .upsert(rowsToInsert, { onConflict: 'email' })
-      .select();
+    for (let i = 0; i < rowsToInsert.length; i += BATCH_SIZE) {
+      const batch = rowsToInsert.slice(i, i + BATCH_SIZE);
 
-    if (error) {
-      console.warn('Supabase upsert with custom columns warning:', error.message);
-      
-      // Fallback 1: If PostgreSQL identity column blocks explicit ID, retry without ID column
-      if (error.code === '428C9' || error.message?.includes('identity column')) {
-        const cleanWithoutId = rowsToInsert.map(({ id, ...rest }) => rest);
-        const { data: retryData, error: retryErr } = await client
-          .from(tableName)
-          .upsert(cleanWithoutId, { onConflict: 'email' })
-          .select();
-        if (retryErr) return { success: false, count: 0, error: retryErr.message };
-        return { success: true, count: retryData ? retryData.length : cleanWithoutId.length };
-      }
+      const { data, error } = await client
+        .from(tableName)
+        .upsert(batch, { onConflict: 'email' })
+        .select();
 
-      // Fallback 2: If PostgreSQL column does not exist yet, sanitize row to standard columns
-      if (error.code === 'PGRST204' || error.message?.includes('schema cache')) {
-        const cleanRows = rowsToInsert.map(r => ({
-          id: r.id,
+      if (error) {
+        console.warn(`Supabase upsert batch chunk starting at index ${i} warning:`, error.message);
+        
+        // Fallback: If custom columns cause issues or schema cache error, sanitize to standard columns
+        const cleanBatch = batch.map(r => ({
           first_name: r.first_name,
           last_name: r.last_name,
           email: r.email,
@@ -198,20 +195,25 @@ export const pushLeadsToSupabase = async (
           source_name: r.source_name,
           created_at: r.created_at
         }));
+
         const { data: retryData, error: retryErr } = await client
           .from(tableName)
-          .upsert(cleanRows, { onConflict: 'email' })
+          .upsert(cleanBatch, { onConflict: 'email' })
           .select();
-        if (retryErr) return { success: false, count: 0, error: retryErr.message };
-        return { success: true, count: retryData ? retryData.length : cleanRows.length };
+
+        if (retryErr) {
+          return { success: false, count: totalPushed, error: retryErr.message };
+        }
+        totalPushed += retryData ? retryData.length : cleanBatch.length;
+      } else {
+        totalPushed += data ? data.length : batch.length;
       }
-      return { success: false, count: 0, error: error.message };
     }
 
-    return { success: true, count: data ? data.length : rowsToInsert.length };
+    return { success: true, count: totalPushed };
   } catch (err: any) {
     console.error('Supabase push failed:', err);
-    return { success: false, count: 0, error: err?.message || 'Push operation failed' };
+    return { success: false, count: totalPushed, error: err?.message || 'Push operation failed' };
   }
 };
 
@@ -242,7 +244,16 @@ export const pullLeadsFromSupabase = async (
       return { success: true, leads: [] };
     }
 
-    const mappedLeads: Lead[] = data.map((row: any, index: number) => {
+    const mappedLeads: Lead[] = data
+      .filter((row: any) => {
+        const fn = (row.first_name || row.firstName || '').trim();
+        const ln = (row.last_name || row.lastName || '').trim();
+        const em = (row.email || '').trim();
+        const org = (row.organization || '').trim();
+        const isBlank = (fn === '' || fn === '-') && (ln === '' || ln === '-') && (em === '' || em === '-') && (org === '' || org === '-');
+        return !isBlank;
+      })
+      .map((row: any, index: number) => {
       const rawSrc = row.source_name || row.sourceName || '';
       let srcName = rawSrc ? String(rawSrc).trim().replace(/\s+/g, '-') : '-';
       if (!srcName || /^supabase|^contacts$|^export$|^leads$|^data$/i.test(srcName)) {
@@ -289,18 +300,54 @@ export const deleteLeadFromSupabase = async (
   }
 
   const tableName = activeConfig.tableName || 'registration_contacts';
+  const cleanEmail = (identifier.email || '').trim();
 
   try {
-    if (identifier.email) {
-      const { error } = await client.from(tableName).delete().eq('email', identifier.email);
-      if (error) return { success: false, error: error.message };
-    } else if (identifier.id) {
-      const { error } = await client.from(tableName).delete().eq('id', identifier.id);
+    if (cleanEmail && cleanEmail !== '-' && cleanEmail !== 'undefined' && cleanEmail !== 'null') {
+      const { error } = await client.from(tableName).delete().eq('email', cleanEmail);
       if (error) return { success: false, error: error.message };
     }
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Delete operation failed' };
+  }
+};
+
+export const bulkDeleteLeadsFromSupabase = async (
+  leads: Lead[],
+  config?: SupabaseConfig
+): Promise<{ success: boolean; count: number; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  
+  if (!client) {
+    return { success: false, count: 0, error: 'Supabase credentials not configured.' };
+  }
+
+  const tableName = activeConfig.tableName || 'registration_contacts';
+  const emailsToDelete = leads
+    .map(l => (l.email || '').trim())
+    .filter(e => e && e !== '-' && e !== 'undefined' && e !== 'null');
+
+  try {
+    let deletedCount = 0;
+    if (emailsToDelete.length > 0) {
+      const { data, error } = await client
+        .from(tableName)
+        .delete()
+        .in('email', emailsToDelete)
+        .select();
+
+      if (error) {
+        console.warn('Bulk delete from Supabase warning:', error.message);
+        return { success: false, count: 0, error: error.message };
+      }
+      deletedCount = data ? data.length : emailsToDelete.length;
+    }
+    return { success: true, count: deletedCount };
+  } catch (err: any) {
+    console.error('Bulk delete from Supabase failed:', err);
+    return { success: false, count: 0, error: err?.message || 'Bulk delete operation failed' };
   }
 };
 
