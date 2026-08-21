@@ -313,10 +313,10 @@ export default function LeadsTable({
   };
 
   return (
-    <div id="leads-table-container" className="flex-1 overflow-x-auto bg-[#FFF5F8] select-none">
+    <div id="leads-table-container" className="flex-1 overflow-x-auto bg-[#FFF5F8] select-none shadow-3d-card rounded-xl m-2 border border-pink-200/80">
       <table className="w-full text-left border-collapse min-w-[1000px]">
-        {/* Table Header - Professional Refined Soft Lavender-Pink Enterprise Theme */}
-        <thead className="bg-[#F3E8FF] text-purple-950 border-b border-purple-200 sticky top-0 z-10 shadow-2xs">
+        {/* Table Header - 3D Elevation Soft Lavender Theme */}
+        <thead className="bg-[#F3E8FF] text-purple-950 border-b-2 border-purple-200/90 sticky top-0 z-10 shadow-3d-sm">
           <tr className="text-2xs font-black uppercase tracking-widest text-purple-950">
             {/* Checkbox */}
             <th className="py-3.5 px-4 w-12 text-center bg-purple-100/80 border-r border-purple-200">

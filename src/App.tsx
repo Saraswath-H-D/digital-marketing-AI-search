@@ -735,45 +735,45 @@ export default function App() {
           <div className="px-6 py-4 bg-[#FCE7F3]/40 border-b border-pink-200/60 shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               
-              {/* Card 1: Total Contacts */}
-              <div className="p-4 bg-white/90 border border-pink-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+              {/* Card 1: Total Contacts - 3D Lift Elevation */}
+              <div className="p-4 bg-white/95 border border-pink-200/90 rounded-2xl shadow-3d-card hover:shadow-3d-lg transition-all duration-200 hover:-translate-y-1 group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Contacts</span>
-                  <div className="w-8 h-8 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <div className="w-8 h-8 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
                     <Users className="w-4 h-4" />
                   </div>
                 </div>
                 <div className="flex items-baseline justify-between">
                   <span className="text-2xl font-black text-slate-900 font-display tracking-tight">{totalLeads}</span>
-                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full flex items-center gap-1">
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full flex items-center gap-1 shadow-2xs">
                     +14.2% <TrendingUp className="w-2.5 h-2.5" />
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1 font-medium">Verified leads in system</p>
               </div>
 
-              {/* Card 2: Supabase Storage */}
-              <div className="p-4 bg-white/90 border border-pink-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+              {/* Card 2: Supabase Storage - 3D Lift Elevation */}
+              <div className="p-4 bg-white/95 border border-pink-200/90 rounded-2xl shadow-3d-card hover:shadow-3d-lg transition-all duration-200 hover:-translate-y-1 group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">PostgreSQL Cloud DB</span>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
                     <Database className="w-4 h-4" />
                   </div>
                 </div>
                 <div className="flex items-baseline justify-between">
                   <span className="text-2xl font-black text-slate-900 font-display tracking-tight">Active</span>
-                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full shadow-2xs">
                     Auto-Sync
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1 font-medium">Table: <code className="text-emerald-700 font-mono font-bold">registration_contacts</code></p>
               </div>
 
-              {/* Card 3: Apollo AI Copilot - Light Purple Theme */}
-              <div className="p-4 bg-gradient-to-br from-purple-100 via-pink-100 to-purple-50 border border-purple-200/90 text-purple-950 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+              {/* Card 3: Apollo AI Copilot - 3D Lift Elevation */}
+              <div className="p-4 bg-gradient-to-br from-purple-100 via-pink-100 to-purple-50 border border-purple-200/90 text-purple-950 rounded-2xl shadow-3d-card hover:shadow-3d-lg transition-all duration-200 hover:-translate-y-1 group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-purple-800">AI Outreach Copilot</span>
-                  <div className="w-8 h-8 rounded-xl bg-purple-200/60 text-purple-700 border border-purple-300/50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <div className="w-8 h-8 rounded-xl bg-purple-200/60 text-purple-700 border border-purple-300/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
                     <Sparkles className="w-4 h-4 text-purple-600" />
                   </div>
                 </div>
@@ -781,7 +781,7 @@ export default function App() {
                   <span className="text-xl font-extrabold text-purple-950 font-display tracking-tight">AI Assistant</span>
                   <button
                     onClick={() => setShowAICopilot(true)}
-                    className="px-3 py-1.5 text-[10px] font-black text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-full transition-all cursor-pointer shadow-2xs active:scale-95"
+                    className="px-3 py-1.5 text-[10px] font-black text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-full btn-3d-primary cursor-pointer active:scale-95"
                   >
                     Open AI Chat
                   </button>

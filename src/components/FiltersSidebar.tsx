@@ -371,10 +371,10 @@ export default function FiltersSidebar({
     return (
       <button
         onClick={() => toggleSection(sectionKey)}
-        className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-full border transition-all duration-200 text-left cursor-pointer group mb-2 shadow-2xs hover:shadow-md hover:-translate-y-0.5 hover:scale-[1.01] active:scale-[0.98] ${
+        className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-full border transition-all duration-200 text-left cursor-pointer group mb-2 shadow-3d-card hover:shadow-3d-lg hover:-translate-y-1 active:translate-y-0 ${
           isActive 
-            ? `${theme.bg} ${theme.border} shadow-xs` 
-            : 'bg-white hover:bg-slate-50 border-slate-200/90 hover:border-slate-300'
+            ? `${theme.bg} ${theme.border} shadow-sm font-black` 
+            : 'bg-white hover:bg-pink-50/50 border-pink-200/90'
         }`}
       >
         <div className="flex items-center space-x-3">
