@@ -236,19 +236,23 @@ export default function App() {
 
         if (res.success) {
           if (res.leads.length > 0) {
-            // Merge Supabase records with local records, preserving unsynced local uploads
-            const supabaseEmails = new Set(res.leads.map(l => (l.email || '').toLowerCase()).filter(e => e && e !== '-'));
-            const unsyncedLocal = localLeads.filter(l => {
-              const em = (l.email || '').toLowerCase();
-              return em && em !== '-' && !supabaseEmails.has(em);
-            });
+            // Guarantee zero lead drops: If Supabase has equal or more leads, use Supabase records
+            if (res.leads.length >= localLeads.length) {
+              saveStoredLeads(res.leads);
+            } else {
+              // Supabase returned fewer records than local -> preserve all local leads and push missing ones
+              const existingKeys = new Set(res.leads.map(l => `${l.firstName}_${l.lastName}_${l.email}_${l.organization}`.toLowerCase()));
+              const unsynced = localLeads.filter(l => {
+                const k = `${l.firstName}_${l.lastName}_${l.email}_${l.organization}`.toLowerCase();
+                return !existingKeys.has(k);
+              });
 
-            const merged = [...res.leads, ...unsyncedLocal];
-            saveStoredLeads(merged);
+              const merged = [...res.leads, ...unsynced];
+              saveStoredLeads(merged);
 
-            // Automatically push any unsynced local leads into Supabase
-            if (unsyncedLocal.length > 0) {
-              await pushLeadsToSupabase(unsyncedLocal);
+              if (unsynced.length > 0) {
+                await pushLeadsToSupabase(unsynced);
+              }
             }
           } else if (localLeads.length > 0) {
             // Supabase table is empty but local storage has uploaded leads -> auto-push to Supabase!

@@ -328,12 +328,19 @@ export const pullLeadsFromSupabase = async (
         srcName = '-';
       }
 
+      let cleanEmail = row.email || '';
+      if (cleanEmail.includes('_entry')) {
+        cleanEmail = cleanEmail.replace(/_entry\d+_\d+@/, '@').replace(/_entry\d+@/, '@');
+      } else if (cleanEmail.startsWith('contact_') && cleanEmail.includes('@imported.com')) {
+        cleanEmail = '-';
+      }
+
       return {
         ...row, // Preserve any custom database columns!
         id: index + 1, // Always assign clean sequential ID starting from 1
         firstName: row.first_name || row.firstName || 'Unknown',
         lastName: row.last_name || row.lastName || '',
-        email: row.email || '',
+        email: cleanEmail,
         registrationTime: row.registration_time || row.registrationTime || new Date().toLocaleString(),
         approvalStatus: row.approval_status || row.approvalStatus || 'approved',
         city: row.city || '',
