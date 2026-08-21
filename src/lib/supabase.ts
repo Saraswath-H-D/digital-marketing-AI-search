@@ -194,6 +194,16 @@ export const pushLeadsToSupabase = async (
       created_at: l.createdAt || new Date().toISOString()
     };
 
+    // Attach all custom/extra CSV columns onto row for complete zero-data-loss Supabase sync
+    Object.keys(l).forEach(k => {
+      if (!internalKeys.has(k) && !k.startsWith('_')) {
+        const sqlCol = k.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        if (sqlCol && !['id', 'first_name', 'last_name', 'email', 'registration_time', 'approval_status', 'city', 'phone', 'organization', 'job_title', 'questions', 'source_name', 'created_at'].includes(sqlCol)) {
+          row[sqlCol] = l[k] !== undefined && l[k] !== null ? String(l[k]).trim() : '';
+        }
+      }
+    });
+
     return row;
   });
 
