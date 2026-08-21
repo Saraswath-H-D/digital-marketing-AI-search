@@ -110,35 +110,6 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
 
           const rawEmail = findVal(['email', 'email address', 'mail', 'e-mail', 'contact email']);
 
-          // Fallback to name from email if name is still missing
-          if (!fName && rawEmail && rawEmail.includes('@')) {
-            const username = rawEmail.split('@')[0];
-            const cleanUser = username.replace(/[^a-zA-Z0-9._-]/g, '');
-            const parts = cleanUser.split(/[._-]/).filter(Boolean);
-            if (parts.length > 0) {
-              fName = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
-              if (parts.length > 1 && !lName) {
-                lName = parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-              }
-            }
-          }
-
-          // Clean fallback default source from file name
-          let defaultSource = selectedFile.name
-            .replace(/\.csv$/i, '')
-            .replace(/^apollo_?(contacts|leads)_?(export_?)?/i, '')
-            .replace(/[-_]/g, ' ')
-            .trim();
-
-          if (!defaultSource || /^export$|^contacts$|^leads$|^data$|^file$|^sheet$/i.test(defaultSource)) {
-            defaultSource = 'Registration Report';
-          } else {
-            defaultSource = defaultSource
-              .split(/\s+/)
-              .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-              .join(' ');
-          }
-
           const extractedSource = findVal(
             ['source name', 'source_name', 'lead source', 'lead_source', 'registration source', 'source', 'channel', 'utm_source', 'source medium'],
             ['resource', 'sourcecode', 'outsource']
@@ -161,15 +132,6 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
           leadObj.approvalStatus = cleanVal(findVal(['approval status', 'status', 'approved', 'state']) || 'approved');
           leadObj.questions = cleanVal(findVal(['do have any questions to speaker!', 'questions', 'question', 'inquiry', 'notes', 'comments', 'remarks']));
           leadObj.sourceName = extractedSource ? extractedSource.trim().replace(/\s+/g, '-') : '-';
-          const isClean = (v: any) => v !== undefined && v !== null && String(v).trim() !== '' && String(v).trim() !== '-';
-          
-          // Fallback: If first name is missing, use first available text column value
-          if (!isClean(leadObj.firstName)) {
-            const firstTextVal = keys.map(k => String(r[k] || '').trim()).find(v => v !== '' && v !== '-' && v.length > 1);
-            if (firstTextVal) {
-              leadObj.firstName = firstTextVal;
-            }
-          }
 
           const hasAnyRowData = Object.values(r).some(v => v !== undefined && v !== null && String(v).trim() !== '' && String(v).trim() !== '-');
           return hasAnyRowData ? leadObj : null;

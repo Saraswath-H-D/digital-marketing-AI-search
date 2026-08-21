@@ -214,8 +214,6 @@ export default function LeadsTable({
       const ln = (lead.lastName && lead.lastName !== '-') ? lead.lastName : '';
       const combined = `${fn} ${ln}`.trim();
       if (combined) return combined;
-      if (lead.organization) return lead.organization;
-      if (lead.email) return lead.email;
       return '';
     }
     if (cleanLower.includes('email') || cleanLower.includes('mail') || cleanLower.includes('gmail')) return (lead.email && lead.email !== '-') ? lead.email : '';

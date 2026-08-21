@@ -324,7 +324,7 @@ export const pullLeadsFromSupabase = async (
         ...row, // Preserve any custom database columns!
         _csvHeaders: extractedHeaders || row._csvHeaders,
         id: index + 1, // Always assign clean sequential ID starting from 1
-        firstName: row.first_name || row.firstName || 'Unknown',
+        firstName: row.first_name || row.firstName || '-',
         lastName: row.last_name || row.lastName || '',
         email: cleanEmail,
         registrationTime: row.registration_time || row.registrationTime || new Date().toLocaleString(),
