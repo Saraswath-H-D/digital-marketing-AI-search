@@ -429,6 +429,40 @@ export const bulkDeleteLeadsFromSupabase = async (
   }
 };
 
+export const deleteLeadsByTagFromSupabase = async (
+  tag: string,
+  config?: SupabaseConfig
+): Promise<{ success: boolean; count: number; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  
+  if (!client || !tag || !tag.trim()) {
+    return { success: false, count: 0, error: 'Tag missing or Supabase client unconfigured' };
+  }
+
+  const tableName = activeConfig.tableName || 'registration_contacts';
+  const cleanTag = tag.trim().replace(/\s+/g, '-');
+
+  try {
+    const { data, error } = await client
+      .from(tableName)
+      .delete()
+      .eq('source_name', cleanTag)
+      .select();
+
+    if (error) {
+      console.warn(`Delete by tag '${cleanTag}' warning:`, error.message);
+      return { success: false, count: 0, error: error.message };
+    }
+
+    const count = data ? data.length : 0;
+    return { success: true, count };
+  } catch (err: any) {
+    console.error(`Delete by tag '${cleanTag}' failed:`, err);
+    return { success: false, count: 0, error: err?.message || 'Delete operation failed' };
+  }
+};
+
 
 export const generateSupabaseSQL = (tableName: string = 'registration_contacts'): string => {
 

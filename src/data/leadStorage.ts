@@ -1,6 +1,6 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
-import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase } from '../lib/supabase.ts';
+import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase } from '../lib/supabase.ts';
 
 const STORAGE_KEY = 'apollo_leads_v9';
 const HEADERS_KEY = 'apollo_active_headers';
@@ -547,6 +547,36 @@ export const bulkDeleteLeads = async (ids: number[]): Promise<void> => {
       console.error('Bulk delete sync to Supabase failed:', err);
     }
   }
+};
+
+// Delete all leads associated with a specific CSV Tag / Source Name
+export const deleteLeadsByTag = async (tag: string): Promise<number> => {
+  if (!tag || !tag.trim()) return 0;
+  const cleanTag = tag.trim().replace(/\s+/g, '-').toLowerCase();
+
+  const allLeads = getStoredLeads();
+  const targetLeads = allLeads.filter(l => {
+    const src = (l.sourceName || '').trim().replace(/\s+/g, '-').toLowerCase();
+    return src === cleanTag;
+  });
+
+  const updatedLeads = allLeads.filter(l => {
+    const src = (l.sourceName || '').trim().replace(/\s+/g, '-').toLowerCase();
+    return src !== cleanTag;
+  });
+
+  saveStoredLeads(updatedLeads);
+
+  if (targetLeads.length > 0) {
+    addLeadsToTrash(targetLeads);
+    try {
+      await deleteLeadsByTagFromSupabase(tag);
+    } catch (err) {
+      console.error(`Delete leads by tag '${tag}' from Supabase failed:`, err);
+    }
+  }
+
+  return targetLeads.length;
 };
 
 // Strict Zero-Repetition Restore Deleted Leads from Trash or Specific Candidates

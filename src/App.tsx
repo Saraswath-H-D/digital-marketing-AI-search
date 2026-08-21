@@ -16,6 +16,7 @@ import {
   updateLead, 
   deleteLead, 
   bulkDeleteLeads, 
+  deleteLeadsByTag,
   bulkImportLeads,
   getActiveHeaders
 } from './data/leadStorage.ts';
@@ -1058,93 +1059,138 @@ export default function App() {
                   </button>
                 </form>
 
-                {/* 2. CSV Tag Search Bar (Beside Search Bar) */}
-                <div className="relative w-full sm:w-64 shrink-0">
-                  <div className="relative w-full">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-purple-600">
-                      <Tag className="w-3.5 h-3.5" />
-                    </span>
-                    <input
-                      type="text"
-                      value={tagSearchInput}
-                      onFocus={() => setTagDropdownOpen(true)}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setTagSearchInput(val);
-                        setFilters(prev => ({
-                          ...prev,
-                          sources: val.trim() ? [val.trim()] : []
-                        }));
-                        setPage(1);
-                      }}
-                      placeholder="Search CSV Tag (e.g. Q3-Marketing)..."
-                      className="w-full pl-8.5 pr-8 py-2 text-xs font-bold border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all bg-purple-50/30 text-purple-950 placeholder-purple-400 shadow-2xs"
-                    />
-                    {tagSearchInput && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTagSearchInput('');
-                          setFilters(prev => ({ ...prev, sources: [] }));
+                {/* 2. CSV Tag Search Bar & Delete Tag Button */}
+                <div className="flex items-center space-x-1.5 w-full sm:w-auto shrink-0">
+                  <div className="relative w-full sm:w-64 shrink-0">
+                    <div className="relative w-full">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-purple-600">
+                        <Tag className="w-3.5 h-3.5" />
+                      </span>
+                      <input
+                        type="text"
+                        value={tagSearchInput}
+                        onFocus={() => setTagDropdownOpen(true)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTagSearchInput(val);
+                          setFilters(prev => ({
+                            ...prev,
+                            sources: val.trim() ? [val.trim()] : []
+                          }));
                           setPage(1);
                         }}
-                        className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-purple-400 hover:text-purple-700"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                        placeholder="Search CSV Tag (e.g. Q3-Marketing)..."
+                        className="w-full pl-8.5 pr-8 py-2 text-xs font-bold border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all bg-purple-50/30 text-purple-950 placeholder-purple-400 shadow-2xs"
+                      />
+                      {tagSearchInput && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTagSearchInput('');
+                            setFilters(prev => ({ ...prev, sources: [] }));
+                            setPage(1);
+                          }}
+                          className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-purple-400 hover:text-purple-700"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* CSV Tag Autocomplete Suggestions Dropdown */}
+                    {tagDropdownOpen && (() => {
+                      const csvImportTags = filterOptions.sources.filter(s => {
+                        if (!s || s === '-' || s.trim() === '') return false;
+                        const clean = s.trim().toLowerCase();
+                        return !['registration-report', 'registration report', 'manual-entry', 'contacts', 'leads', 'export', 'data', 'file', 'sheet', 'supabase', 'null', 'undefined'].includes(clean);
+                      });
+
+                      if (csvImportTags.length === 0) return null;
+
+                      return (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-40" 
+                            onClick={() => setTagDropdownOpen(false)}
+                          />
+                          <div className="absolute left-0 right-0 mt-1 bg-white border border-purple-150 rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
+                            <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-purple-600 border-b border-purple-100 mb-1 flex items-center justify-between">
+                              <span>Uploaded CSV Tags</span>
+                              <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-bold">{csvImportTags.length} active</span>
+                            </div>
+                            {csvImportTags
+                              .filter(s => s.toLowerCase().includes(tagSearchInput.toLowerCase()))
+                              .map((tag) => {
+                                const isSelected = filters.sources.includes(tag);
+                                return (
+                                  <button
+                                    key={tag}
+                                    onClick={() => {
+                                      setTagSearchInput(tag);
+                                      setFilters(prev => ({ ...prev, sources: [tag] }));
+                                      setPage(1);
+                                      setTagDropdownOpen(false);
+                                    }}
+                                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-purple-50 transition-colors cursor-pointer ${
+                                      isSelected ? 'text-purple-700 bg-purple-50 font-extrabold' : 'text-slate-700'
+                                    }`}
+                                  >
+                                    <div className="flex items-center space-x-2 truncate">
+                                      <Tag className="w-3 h-3 text-purple-500 shrink-0" />
+                                      <span className="truncate font-bold">#{tag}</span>
+                                    </div>
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
 
-                  {/* CSV Tag Autocomplete Suggestions Dropdown */}
-                  {tagDropdownOpen && (() => {
-                    const csvImportTags = filterOptions.sources.filter(s => {
-                      if (!s || s === '-' || s.trim() === '') return false;
-                      const clean = s.trim().toLowerCase();
-                      return !['registration-report', 'registration report', 'manual-entry', 'contacts', 'leads', 'export', 'data', 'file', 'sheet', 'supabase', 'null', 'undefined'].includes(clean);
-                    });
+                  {/* Red Delete Tagged CSV Button */}
+                  <button
+                    type="button"
+                    disabled={!tagSearchInput.trim()}
+                    onClick={async () => {
+                      const tagToDelete = tagSearchInput.trim();
+                      if (!tagToDelete) return;
 
-                    if (csvImportTags.length === 0) return null;
+                      const confirmDelete = window.confirm(
+                        `⚠️ Are you sure you want to PERMANENTLY DELETE all contact data tagged with "${tagToDelete}" from your local directory and Supabase database?`
+                      );
 
-                    return (
-                      <>
-                        <div 
-                          className="fixed inset-0 z-40" 
-                          onClick={() => setTagDropdownOpen(false)}
-                        />
-                        <div className="absolute left-0 right-0 mt-1 bg-white border border-purple-150 rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
-                          <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-purple-600 border-b border-purple-100 mb-1 flex items-center justify-between">
-                            <span>Uploaded CSV Tags</span>
-                            <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-bold">{csvImportTags.length} active</span>
-                          </div>
-                          {csvImportTags
-                            .filter(s => s.toLowerCase().includes(tagSearchInput.toLowerCase()))
-                            .map((tag) => {
-                              const isSelected = filters.sources.includes(tag);
-                              return (
-                                <button
-                                  key={tag}
-                                  onClick={() => {
-                                    setTagSearchInput(tag);
-                                    setFilters(prev => ({ ...prev, sources: [tag] }));
-                                    setPage(1);
-                                    setTagDropdownOpen(false);
-                                  }}
-                                  className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-purple-50 transition-colors cursor-pointer ${
-                                    isSelected ? 'text-purple-700 bg-purple-50 font-extrabold' : 'text-slate-700'
-                                  }`}
-                                >
-                                  <div className="flex items-center space-x-2 truncate">
-                                    <Tag className="w-3 h-3 text-purple-500 shrink-0" />
-                                    <span className="truncate font-bold">#{tag}</span>
-                                  </div>
-                                  {isSelected && <Check className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
-                                </button>
-                              );
-                            })}
-                        </div>
-                      </>
-                    );
-                  })()}
+                      if (confirmDelete) {
+                        showStatus(`Deleting contacts tagged with "${tagToDelete}"...`, 'success');
+                        const deletedCount = await deleteLeadsByTag(tagToDelete);
+                        
+                        setTagSearchInput('');
+                        setFilters(prev => ({ ...prev, sources: [] }));
+                        setPage(1);
+                        await fetchLeads();
+                        await fetchFilterOptions();
+                        
+                        showStatus(
+                          `Successfully deleted ${deletedCount} contact(s) tagged with "${tagToDelete}" from system & Supabase database.`,
+                          'success'
+                        );
+                      }
+                    }}
+                    title={
+                      tagSearchInput.trim() 
+                        ? `Delete all contacts tagged with "${tagSearchInput.trim()}"` 
+                        : "Type or select a CSV tag to delete its data"
+                    }
+                    className={`inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-extrabold rounded-xl transition-all shadow-2xs shrink-0 cursor-pointer ${
+                      tagSearchInput.trim()
+                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200 active:scale-95'
+                        : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-70'
+                    }`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Delete Tag CSV</span>
+                  </button>
                 </div>
               </div>
 
