@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Lead } from '../types.ts';
-import { setActiveHeaders } from '../data/leadStorage.ts';
+import { setActiveHeaders, getActiveHeaders } from '../data/leadStorage.ts';
 
 const SUPABASE_CONFIG_KEY = 'apollo_supabase_config_v1';
 
@@ -171,10 +171,13 @@ export const pushLeadsToSupabase = async (
     const assignedId = dbMaxId + index + 1;
 
     let finalQuestions = l.questions || '';
-    if (index === 0 && (l as any)._csvHeaders && Array.isArray((l as any)._csvHeaders) && (l as any)._csvHeaders.length > 0) {
-      const headerMeta = `__HEADERS__:${JSON.stringify((l as any)._csvHeaders)}`;
-      if (!finalQuestions.includes('__HEADERS__:')) {
-        finalQuestions = finalQuestions ? `${headerMeta}\n${finalQuestions}` : headerMeta;
+    if (index === 0) {
+      const allActiveHeaders = getActiveHeaders() || ((l as any)._csvHeaders && Array.isArray((l as any)._csvHeaders) ? (l as any)._csvHeaders : null);
+      if (allActiveHeaders && allActiveHeaders.length > 0) {
+        const headerMeta = `__HEADERS__:${JSON.stringify(allActiveHeaders)}`;
+        if (!finalQuestions.includes('__HEADERS__:')) {
+          finalQuestions = finalQuestions ? `${headerMeta}\n${finalQuestions}` : headerMeta;
+        }
       }
     }
 

@@ -85,7 +85,27 @@ export const getActiveHeaders = (): string[] | null => {
 
 export const setActiveHeaders = (headers: string[]): void => {
   try {
-    localStorage.setItem(HEADERS_KEY, JSON.stringify(headers));
+    const current = getActiveHeaders() || [];
+    const mergedSet = new Set<string>();
+    
+    // Preserve existing headers first
+    current.forEach(h => {
+      if (h && h.trim()) mergedSet.add(h.trim());
+    });
+
+    // Add new unique headers from new CSV file (skip if already present)
+    headers.forEach(h => {
+      if (h && h.trim()) {
+        const lowerH = h.trim().toLowerCase();
+        const exists = Array.from(mergedSet).some(existing => existing.toLowerCase() === lowerH);
+        if (!exists) {
+          mergedSet.add(h.trim());
+        }
+      }
+    });
+
+    const finalHeaders = Array.from(mergedSet);
+    localStorage.setItem(HEADERS_KEY, JSON.stringify(finalHeaders));
   } catch (err) {
     console.error('Error writing active headers:', err);
   }
