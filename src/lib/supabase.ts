@@ -199,7 +199,7 @@ export const pushLeadsToSupabase = async (
     return row;
   });
 
-  const BATCH_SIZE = 200;
+  const BATCH_SIZE = 500;
   let totalPushed = 0;
   let lastError = '';
 
@@ -207,17 +207,16 @@ export const pushLeadsToSupabase = async (
     const batch = rowsToInsert.slice(i, i + BATCH_SIZE);
 
     try {
-      // Attempt 1: Upsert with onConflict: 'id' so every record is preserved
-      const { data, error } = await client
+      // High-Speed Bulk Upsert for 100,000+ records
+      const { error } = await client
         .from(tableName)
-        .upsert(batch, { onConflict: 'id' })
-        .select();
+        .upsert(batch, { onConflict: 'id' });
 
       if (error) {
         console.warn(`Supabase upsert chunk at index ${i} warning:`, error.message);
         lastError = error.message;
 
-        // Fallback Tier 2: Standard column insert
+        // Fallback Tier 2: Standard column batch insert
         const cleanBatch = batch.map(r => ({
           id: r.id,
           first_name: r.first_name,
@@ -234,10 +233,9 @@ export const pushLeadsToSupabase = async (
           created_at: r.created_at
         }));
 
-        const { data: retryData, error: retryErr } = await client
+        const { error: retryErr } = await client
           .from(tableName)
-          .insert(cleanBatch)
-          .select();
+          .insert(cleanBatch);
 
         if (retryErr) {
           console.warn(`Chunk insert failed, attempting row-by-row fallback:`, retryErr.message);
@@ -247,10 +245,10 @@ export const pushLeadsToSupabase = async (
             if (!rowErr) totalPushed += 1;
           }
         } else {
-          totalPushed += retryData ? retryData.length : cleanBatch.length;
+          totalPushed += cleanBatch.length;
         }
       } else {
-        totalPushed += data ? data.length : batch.length;
+        totalPushed += batch.length;
       }
     } catch (err: any) {
       console.warn(`Exception during chunk push at index ${i}:`, err);
