@@ -19,7 +19,7 @@ import {
   bulkImportLeads,
   getActiveHeaders
 } from './data/leadStorage.ts';
-import { pullLeadsFromSupabase } from './lib/supabase.ts';
+import { pullLeadsFromSupabase, pushLeadsToSupabase } from './lib/supabase.ts';
 import FiltersSidebar from './components/FiltersSidebar.tsx';
 import LeadsTable from './components/LeadsTable.tsx';
 import AddLeadModal from './components/AddLeadModal.tsx';
@@ -227,9 +227,29 @@ export default function App() {
   useEffect(() => {
     const syncLiveDatabase = async () => {
       try {
+        const localLeads = getStoredLeads();
         const res = await pullLeadsFromSupabase();
+
         if (res.success) {
-          saveStoredLeads(res.leads);
+          if (res.leads.length > 0) {
+            // Merge Supabase records with local records, preserving unsynced local uploads
+            const supabaseEmails = new Set(res.leads.map(l => (l.email || '').toLowerCase()).filter(e => e && e !== '-'));
+            const unsyncedLocal = localLeads.filter(l => {
+              const em = (l.email || '').toLowerCase();
+              return em && em !== '-' && !supabaseEmails.has(em);
+            });
+
+            const merged = [...res.leads, ...unsyncedLocal];
+            saveStoredLeads(merged);
+
+            // Automatically push any unsynced local leads into Supabase
+            if (unsyncedLocal.length > 0) {
+              await pushLeadsToSupabase(unsyncedLocal);
+            }
+          } else if (localLeads.length > 0) {
+            // Supabase table is empty but local storage has uploaded leads -> auto-push to Supabase!
+            await pushLeadsToSupabase(localLeads);
+          }
           fetchLeads();
           fetchFilterOptions();
         }
@@ -427,13 +447,14 @@ export default function App() {
   const handleImportLeads = async (items: any[]) => {
     try {
       const result = await bulkImportLeads(items);
+      setPage(1); // Jump to Page 1 so newly uploaded leads display immediately at top of app table
       fetchLeads();
       fetchFilterOptions();
 
       if (result.supabaseResult?.success) {
-        showStatus(`Imported ${result.count} attendee leads and synced to Supabase!`, 'success');
+        showStatus(`Imported ${result.count} new leads & synced to Supabase! Showing in app.`, 'success');
       } else if (result.supabaseResult?.error === 'Supabase credentials not configured.') {
-        showStatus(`Imported ${result.count} leads locally. (Supabase URL & Anon Key not configured — open Supabase settings to connect)`, 'error');
+        showStatus(`Imported ${result.count} leads locally. (Supabase URL & Anon Key not set)`, 'error');
       } else if (result.supabaseResult?.error) {
         showStatus(`Imported ${result.count} leads locally, but Supabase sync failed: ${result.supabaseResult.error}`, 'error');
       } else {

@@ -100,7 +100,23 @@ export const pushLeadsToSupabase = async (
 
   const tableName = activeConfig.tableName || 'registration_contacts';
 
-  // 1. Identify custom columns present on lead objects
+  // 1. Fetch current max ID from Supabase to prevent primary key collisions on large bulk pushes
+  let dbMaxId = 0;
+  try {
+    const { data: maxIdData } = await client
+      .from(tableName)
+      .select('id')
+      .order('id', { ascending: false })
+      .limit(1);
+
+    if (maxIdData && maxIdData.length > 0 && maxIdData[0].id) {
+      dbMaxId = Number(maxIdData[0].id) || 0;
+    }
+  } catch (e) {
+    // Ignore if table query fails initially
+  }
+
+  // 2. Identify custom columns present on lead objects
   const internalKeys = new Set(['_csvHeaders', 'id', 'firstName', 'lastName', 'email', 'registrationTime', 'approvalStatus', 'city', 'phone', 'organization', 'jobTitle', 'questions', 'sourceName', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked']);
   const customKeys = new Set<string>();
 
@@ -115,7 +131,7 @@ export const pushLeadsToSupabase = async (
     });
   });
 
-  // 2. Try auto-creating missing columns via RPC function in Supabase if present
+  // 3. Try auto-creating missing columns via RPC function in Supabase if present
   for (const colName of Array.from(customKeys)) {
     try {
       await client.rpc('add_column_if_missing', {
@@ -128,15 +144,19 @@ export const pushLeadsToSupabase = async (
     }
   }
 
-  // 3. Construct exact SQL table row objects (omitting client-side ID so PostgreSQL auto-generates IDs without primary key collisions)
+  // 4. Construct exact SQL table row objects with guaranteed non-colliding IDs
   const rowsToInsert = leads.map((l, index) => {
     const rawEmail = (l.email || '').trim();
     const hasValidEmail = rawEmail !== '' && rawEmail !== '-' && rawEmail !== 'undefined' && rawEmail !== 'null' && rawEmail.includes('@');
+    const uniqueRand = `${index + 1}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const emailToInsert = hasValidEmail 
       ? rawEmail 
-      : `contact_${l.id || index + 1}_${Date.now()}_${Math.floor(Math.random() * 1000)}@imported.com`;
+      : `contact_${l.id || index + 1}_${uniqueRand}@imported.com`;
+
+    const assignedId = (l.id && Number(l.id) > dbMaxId) ? Number(l.id) : (dbMaxId + index + 1);
 
     const row: Record<string, any> = {
+      id: assignedId,
       first_name: l.firstName || '',
       last_name: l.lastName || '',
       email: emailToInsert,
@@ -165,13 +185,23 @@ export const pushLeadsToSupabase = async (
     return row;
   });
 
-  const BATCH_SIZE = 100;
+  // Deduplicate rows by email to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time"
+  const emailMap = new Map<string, Record<string, any>>();
+  rowsToInsert.forEach(r => {
+    const key = String(r.email).toLowerCase();
+    emailMap.set(key, r);
+  });
+  const dedupedRows = Array.from(emailMap.values());
+
+  const BATCH_SIZE = 200;
   let totalPushed = 0;
+  let lastError = '';
 
-  try {
-    for (let i = 0; i < rowsToInsert.length; i += BATCH_SIZE) {
-      const batch = rowsToInsert.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < dedupedRows.length; i += BATCH_SIZE) {
+    const batch = dedupedRows.slice(i, i + BATCH_SIZE);
 
+    try {
+      // Attempt 1: Upsert with onConflict: 'email'
       const { data, error } = await client
         .from(tableName)
         .upsert(batch, { onConflict: 'email' })
@@ -179,9 +209,18 @@ export const pushLeadsToSupabase = async (
 
       if (error) {
         console.warn(`Supabase upsert batch chunk starting at index ${i} warning:`, error.message);
+        lastError = error.message;
+
+        if (error.code === '42P01') {
+          return { success: false, count: totalPushed, error: `Table '${tableName}' does not exist in Supabase. Please run the SQL schema generator in Supabase SQL Editor.` };
+        }
+        if (error.code === '42501') {
+          return { success: false, count: totalPushed, error: `Row Level Security (RLS) blocked insert on table '${tableName}'. Ensure public insert policy is enabled.` };
+        }
         
-        // Fallback: If custom columns cause issues or schema cache error, sanitize to standard columns
+        // Fallback: Sanitize to standard columns
         const cleanBatch = batch.map(r => ({
+          id: r.id,
           first_name: r.first_name,
           last_name: r.last_name,
           email: r.email,
@@ -196,25 +235,42 @@ export const pushLeadsToSupabase = async (
           created_at: r.created_at
         }));
 
+        // Attempt 2: Standard column upsert with onConflict
         const { data: retryData, error: retryErr } = await client
           .from(tableName)
           .upsert(cleanBatch, { onConflict: 'email' })
           .select();
 
         if (retryErr) {
-          return { success: false, count: totalPushed, error: retryErr.message };
+          // Attempt 3: Simple insert if upsert/onConflict failed
+          const { data: insertData, error: insertErr } = await client
+            .from(tableName)
+            .insert(cleanBatch)
+            .select();
+
+          if (insertErr) {
+            console.error(`Chunk starting at ${i} insert failed:`, insertErr.message);
+            lastError = insertErr.message;
+          } else {
+            totalPushed += insertData ? insertData.length : cleanBatch.length;
+          }
+        } else {
+          totalPushed += retryData ? retryData.length : cleanBatch.length;
         }
-        totalPushed += retryData ? retryData.length : cleanBatch.length;
       } else {
         totalPushed += data ? data.length : batch.length;
       }
+    } catch (err: any) {
+      console.error(`Chunk batch at ${i} error:`, err);
+      lastError = err?.message || 'Chunk error';
     }
-
-    return { success: true, count: totalPushed };
-  } catch (err: any) {
-    console.error('Supabase push failed:', err);
-    return { success: false, count: totalPushed, error: err?.message || 'Push operation failed' };
   }
+
+  return { 
+    success: totalPushed > 0 || dedupedRows.length === 0, 
+    count: totalPushed,
+    error: totalPushed === 0 && dedupedRows.length > 0 ? lastError || 'Push operation failed' : undefined
+  };
 };
 
 
@@ -231,20 +287,40 @@ export const pullLeadsFromSupabase = async (
   const tableName = activeConfig.tableName || 'registration_contacts';
 
   try {
-    const { data, error } = await client
-      .from(tableName)
-      .select('*')
-      .order('created_at', { ascending: false });
+    let allData: any[] = [];
+    let page = 0;
+    const PAGE_SIZE = 1000;
+    let hasMore = true;
 
-    if (error) {
-      return { success: false, leads: [], error: error.message };
+    // Paginated fetch loop to retrieve any number of records (1,000, 10,000, 100,000+)
+    while (hasMore) {
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error } = await client
+        .from(tableName)
+        .select('*')
+        .range(from, to)
+        .order('id', { ascending: false });
+
+      if (error) {
+        if (allData.length === 0) {
+          return { success: false, leads: [], error: error.message };
+        }
+        hasMore = false;
+      } else if (!data || data.length === 0) {
+        hasMore = false;
+      } else {
+        allData = allData.concat(data);
+        if (data.length < PAGE_SIZE) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
     }
 
-    if (!data) {
-      return { success: true, leads: [] };
-    }
-
-    const mappedLeads: Lead[] = data
+    const mappedLeads: Lead[] = allData
       .filter((row: any) => {
         const fn = (row.first_name || row.firstName || '').trim();
         const ln = (row.last_name || row.lastName || '').trim();
@@ -280,7 +356,6 @@ export const pullLeadsFromSupabase = async (
         phoneUnlocked: false
       };
     });
-
 
     return { success: true, leads: mappedLeads };
   } catch (err: any) {

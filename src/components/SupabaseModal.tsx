@@ -72,6 +72,10 @@ export default function SupabaseModal({
     const result = await testSupabaseConnection(config);
     setStatusMessage(result);
     setTesting(false);
+
+    if (result.success && leads.length > 0) {
+      handlePushToSupabase();
+    }
   };
 
   const handleSaveConfig = () => {
