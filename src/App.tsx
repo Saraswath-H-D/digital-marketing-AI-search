@@ -47,6 +47,7 @@ import {
   Lock,
   Bookmark,
   Users,
+  Tag,
   ChevronLeft,
   ChevronRight,
   MoreVertical,
@@ -125,6 +126,8 @@ export default function App() {
   // General States
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false);
+  const [tagSearchInput, setTagSearchInput] = useState('');
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   // Sync Auth State
@@ -1011,43 +1014,125 @@ export default function App() {
           <div className="p-4 border-b border-gray-200 flex flex-col space-y-3 shrink-0 bg-gray-50/20">
             
             {/* Top row controls */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
               
-              {/* Search Bar */}
-              <form onSubmit={handleSearchSubmit} className="flex items-center max-w-md w-full relative">
-                <div className="relative w-full">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
-                    <Search className="w-4 h-4" />
-                  </span>
-                  <input
-                    type="text"
-                    value={searchInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSearchInput(val);
-                      setFilters(prev => ({ ...prev, search: val }));
-                      setPage(1);
-                    }}
-                    placeholder="Search contacts,"
-                    className="w-full pl-9 pr-8 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-white font-medium text-gray-900 placeholder-gray-500"
-                  />
-                  {searchInput && (
-                    <button
-                      type="button"
-                      onClick={handleClearSearch}
-                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+              {/* Dual Search Bar Container: Main Contact Search + CSV Tag Search */}
+              <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2.5 flex-1">
+                {/* 1. Main Search Bar */}
+                <form onSubmit={handleSearchSubmit} className="flex items-center flex-1 w-full relative">
+                  <div className="relative w-full">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                      <Search className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={searchInput}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSearchInput(val);
+                        setFilters(prev => ({ ...prev, search: val }));
+                        setPage(1);
+                      }}
+                      placeholder="Search contacts,"
+                      className="w-full pl-9 pr-8 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white font-medium text-gray-900 placeholder-gray-500 shadow-2xs"
+                    />
+                    {searchInput && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="submit"
+                    className="ml-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    Search
+                  </button>
+                </form>
+
+                {/* 2. CSV Tag Search Bar (Beside Search Bar) */}
+                <div className="relative w-full sm:w-64 shrink-0">
+                  <div className="relative w-full">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-purple-600">
+                      <Tag className="w-3.5 h-3.5" />
+                    </span>
+                    <input
+                      type="text"
+                      value={tagSearchInput}
+                      onFocus={() => setTagDropdownOpen(true)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTagSearchInput(val);
+                        setFilters(prev => ({
+                          ...prev,
+                          sources: val.trim() ? [val.trim()] : []
+                        }));
+                        setPage(1);
+                      }}
+                      placeholder="Search CSV Tag (e.g. Q3-Marketing)..."
+                      className="w-full pl-8.5 pr-8 py-2 text-xs font-bold border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all bg-purple-50/30 text-purple-950 placeholder-purple-400 shadow-2xs"
+                    />
+                    {tagSearchInput && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTagSearchInput('');
+                          setFilters(prev => ({ ...prev, sources: [] }));
+                          setPage(1);
+                        }}
+                        className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-purple-400 hover:text-purple-700"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* CSV Tag Autocomplete Suggestions Dropdown */}
+                  {tagDropdownOpen && filterOptions.sources.length > 0 && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setTagDropdownOpen(false)}
+                      />
+                      <div className="absolute left-0 right-0 mt-1 bg-white border border-purple-150 rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
+                        <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-purple-600 border-b border-purple-100 mb-1 flex items-center justify-between">
+                          <span>Uploaded CSV Tags</span>
+                          <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-bold">{filterOptions.sources.length} active</span>
+                        </div>
+                        {filterOptions.sources
+                          .filter(s => s.toLowerCase().includes(tagSearchInput.toLowerCase()))
+                          .map((tag) => {
+                            const isSelected = filters.sources.includes(tag);
+                            return (
+                              <button
+                                key={tag}
+                                onClick={() => {
+                                  setTagSearchInput(tag);
+                                  setFilters(prev => ({ ...prev, sources: [tag] }));
+                                  setPage(1);
+                                  setTagDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-purple-50 transition-colors cursor-pointer ${
+                                  isSelected ? 'text-purple-700 bg-purple-50 font-extrabold' : 'text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2 truncate">
+                                  <Tag className="w-3 h-3 text-purple-500 shrink-0" />
+                                  <span className="truncate">#{tag}</span>
+                                </div>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </>
                   )}
                 </div>
-                <button
-                  type="submit"
-                  className="ml-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer shrink-0"
-                >
-                  Search
-                </button>
-              </form>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex items-center space-x-2">
