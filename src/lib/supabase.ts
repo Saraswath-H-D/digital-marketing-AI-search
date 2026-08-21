@@ -431,6 +431,7 @@ export const bulkDeleteLeadsFromSupabase = async (
 
 export const deleteLeadsByTagFromSupabase = async (
   tag: string,
+  targetLeads?: Lead[],
   config?: SupabaseConfig
 ): Promise<{ success: boolean; count: number; error?: string }> => {
   const activeConfig = config || getSupabaseConfig();
@@ -441,24 +442,45 @@ export const deleteLeadsByTagFromSupabase = async (
   }
 
   const tableName = activeConfig.tableName || 'registration_contacts';
-  const cleanTag = tag.trim().replace(/\s+/g, '-');
+  const rawTag = tag.trim();
+  const cleanTagHyphen = rawTag.replace(/\s+/g, '-');
+  const cleanTagSpace = rawTag.replace(/-/g, ' ');
 
   try {
+    let deletedCount = 0;
+
+    // Tier 1: Delete by IDs & Emails of matching leads if provided
+    if (targetLeads && targetLeads.length > 0) {
+      const ids = targetLeads.map(l => l.id).filter(id => id && Number(id) > 0);
+      const emails = targetLeads
+        .map(l => (l.email || '').trim())
+        .filter(e => e && e !== '-' && e !== 'undefined' && e !== 'null');
+
+      if (ids.length > 0) {
+        const { data } = await client.from(tableName).delete().in('id', ids).select();
+        if (data) deletedCount += data.length;
+      }
+      if (emails.length > 0) {
+        const { data } = await client.from(tableName).delete().in('email', emails).select();
+        if (data) deletedCount += data.length;
+      }
+    }
+
+    // Tier 2: Flexible case-insensitive query on source_name column in Supabase
+    const filterQuery = `source_name.ilike.${cleanTagHyphen},source_name.ilike.${cleanTagSpace},source_name.ilike.${rawTag}`;
     const { data, error } = await client
       .from(tableName)
       .delete()
-      .eq('source_name', cleanTag)
+      .or(filterQuery)
       .select();
 
-    if (error) {
-      console.warn(`Delete by tag '${cleanTag}' warning:`, error.message);
-      return { success: false, count: 0, error: error.message };
+    if (!error && data) {
+      deletedCount += data.length;
     }
 
-    const count = data ? data.length : 0;
-    return { success: true, count };
+    return { success: true, count: deletedCount };
   } catch (err: any) {
-    console.error(`Delete by tag '${cleanTag}' failed:`, err);
+    console.error(`Delete by tag '${rawTag}' failed:`, err);
     return { success: false, count: 0, error: err?.message || 'Delete operation failed' };
   }
 };

@@ -570,9 +570,16 @@ export const deleteLeadsByTag = async (tag: string): Promise<number> => {
   if (targetLeads.length > 0) {
     addLeadsToTrash(targetLeads);
     try {
-      await deleteLeadsByTagFromSupabase(tag);
+      await deleteLeadsByTagFromSupabase(tag, targetLeads);
     } catch (err) {
       console.error(`Delete leads by tag '${tag}' from Supabase failed:`, err);
+    }
+  } else {
+    // If no local leads match, attempt SQL tag wipe directly on Supabase
+    try {
+      await deleteLeadsByTagFromSupabase(tag);
+    } catch (err) {
+      console.error(`Direct Supabase tag wipe for '${tag}' failed:`, err);
     }
   }
 
