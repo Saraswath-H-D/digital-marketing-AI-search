@@ -221,12 +221,12 @@ export default function LeadsTable({
     if (isRevealed) {
       return (
         <div className="flex items-center space-x-1.5 group animate-fadeIn">
-          <div className="w-5 h-5 rounded bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+          <div className="w-5 h-5 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-110 transition-transform">
             <Mail className="w-3 h-3" />
           </div>
           <a
             href={`mailto:${lead.email}`}
-            className="text-gray-800 hover:text-indigo-600 font-semibold truncate max-w-[130px]"
+            className="text-gray-800 hover:text-indigo-600 font-semibold truncate max-w-[130px] transition-colors"
             title={lead.email}
           >
             {lead.email}
@@ -234,10 +234,10 @@ export default function LeadsTable({
           <button
             onClick={(e) => copyToClipboard(e, lead.email, lead.id, 'email')}
             title="Copy email address"
-            className="p-1 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+            className="p-1 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 active:scale-90 active:ring-2 active:ring-indigo-300 opacity-0 group-hover:opacity-100 transition-all duration-150 cursor-pointer shrink-0"
           >
             {copiedStatus?.id === lead.id && copiedStatus?.field === 'email' ? (
-              <Check className="w-3 h-3 text-indigo-600" />
+              <Check className="w-3 h-3 text-indigo-600 animate-bounce" />
             ) : (
               <Copy className="w-3 h-3" />
             )}
@@ -248,10 +248,10 @@ export default function LeadsTable({
     return (
       <button
         onClick={(e) => handleAccessEmail(e, lead)}
-        className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-2xs font-bold text-indigo-700 bg-indigo-50/90 hover:bg-indigo-600 hover:text-white border border-indigo-200/80 rounded-lg shadow-2xs transition-all hover:scale-102 active:scale-98 cursor-pointer group"
+        className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-2xs font-extrabold text-indigo-700 bg-indigo-50/90 hover:bg-indigo-600 hover:text-white border border-indigo-200/80 rounded-xl shadow-2xs transition-all duration-200 hover:scale-105 active:scale-95 active:ring-2 active:ring-indigo-400 cursor-pointer group hover:shadow-glow-indigo"
         title="Click to access and send email"
       >
-        <Lock className="w-3 h-3 text-indigo-500 group-hover:text-white transition-colors" />
+        <Lock className="w-3 h-3 text-indigo-500 group-hover:text-white group-hover:rotate-12 transition-transform" />
         <span>Access Email</span>
       </button>
     );
@@ -265,12 +265,12 @@ export default function LeadsTable({
     if (isRevealed) {
       return (
         <div className="flex items-center space-x-1.5 group animate-fadeIn">
-          <div className="w-5 h-5 rounded bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+          <div className="w-5 h-5 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-110 transition-transform">
             <Phone className="w-3 h-3" />
           </div>
           <a
             href={`tel:${lead.phone}`}
-            className="text-gray-800 hover:text-emerald-600 font-semibold truncate max-w-[130px]"
+            className="text-gray-800 hover:text-emerald-600 font-semibold truncate max-w-[130px] transition-colors"
             title={lead.phone}
           >
             {lead.phone}
@@ -278,10 +278,10 @@ export default function LeadsTable({
           <button
             onClick={(e) => copyToClipboard(e, lead.phone, lead.id, 'phone')}
             title="Copy phone number"
-            className="p-1 rounded-md text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 opacity-0 group-hover:opacity-100 transition-all cursor-pointer shrink-0"
+            className="p-1 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 active:scale-90 active:ring-2 active:ring-emerald-300 opacity-0 group-hover:opacity-100 transition-all duration-150 cursor-pointer shrink-0"
           >
             {copiedStatus?.id === lead.id && copiedStatus?.field === 'phone' ? (
-              <Check className="w-3 h-3 text-emerald-600" />
+              <Check className="w-3 h-3 text-emerald-600 animate-bounce" />
             ) : (
               <Copy className="w-3 h-3" />
             )}
@@ -292,10 +292,10 @@ export default function LeadsTable({
     return (
       <button
         onClick={(e) => handleAccessPhone(e, lead)}
-        className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-2xs font-bold text-emerald-700 bg-emerald-50/90 hover:bg-emerald-600 hover:text-white border border-emerald-200/80 rounded-lg shadow-2xs transition-all hover:scale-102 active:scale-98 cursor-pointer group"
+        className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-2xs font-extrabold text-emerald-700 bg-emerald-50/90 hover:bg-emerald-600 hover:text-white border border-emerald-200/80 rounded-xl shadow-2xs transition-all duration-200 hover:scale-105 active:scale-95 active:ring-2 active:ring-emerald-400 cursor-pointer group hover:shadow-glow-emerald"
         title="Click to access and call number"
       >
-        <Lock className="w-3 h-3 text-emerald-500 group-hover:text-white transition-colors" />
+        <Lock className="w-3 h-3 text-emerald-500 group-hover:text-white group-hover:rotate-12 transition-transform" />
         <span>Access Mobile</span>
       </button>
     );
@@ -332,24 +332,70 @@ export default function LeadsTable({
             {csvHeaders ? (
               // Dynamic headers directly from uploaded CSV
               csvHeaders.map((header) => (
-                <th key={header} className="py-3 px-4 min-w-[160px] text-indigo-900 bg-indigo-50/80 border-b border-indigo-200 font-bold uppercase tracking-wider">
-                  {header}
+                <th key={header} className="py-3.5 px-4 min-w-[160px] text-indigo-950 bg-indigo-50/90 hover:bg-indigo-100/90 border-b border-indigo-200 font-extrabold uppercase tracking-wider transition-colors cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <span>{header}</span>
+                    <ChevronDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-700 transition-colors" />
+                  </div>
                 </th>
               ))
             ) : (
               // Standard Layout headers
               <>
-                <th className="py-3 px-4 min-w-[200px]">Contact Name</th>
-                <th className="py-3 px-4 min-w-[200px]">Designation</th>
-                <th className="py-3 px-4 min-w-[180px]">Organization</th>
-                <th className="py-3 px-4 min-w-[185px]">Email Address</th>
-                <th className="py-3 px-4 min-w-[160px]">Phone Number</th>
-                <th className="py-3 px-4 min-w-[140px]">Location</th>
-                <th className="py-3 px-4 w-28">Status</th>
-                <th className="py-3 px-4 min-w-[120px]">Lead Source</th>
+                <th className="py-3.5 px-4 min-w-[200px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <span>Contact Name</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 min-w-[200px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <span>Designation</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 min-w-[180px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <span>Organization</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 min-w-[185px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <span>Email Address</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 min-w-[160px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <span>Phone Number</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 min-w-[140px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <span>Location</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 w-28 hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <span>Status</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                  </div>
+                </th>
+                <th className="py-3.5 px-4 min-w-[120px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                  <div className="flex items-center justify-between">
+                    <span>Lead Source</span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                  </div>
+                </th>
                 {extraKeys.map((customHeader) => (
-                  <th key={customHeader} className="py-3 px-4 min-w-[140px] text-indigo-700 bg-indigo-50/50">
-                    {customHeader.replace(/_/g, ' ')}
+                  <th key={customHeader} className="py-3.5 px-4 min-w-[140px] text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100/70 transition-colors cursor-pointer group">
+                    <div className="flex items-center justify-between">
+                      <span>{customHeader.replace(/_/g, ' ')}</span>
+                      <ChevronDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 transition-colors" />
+                    </div>
                   </th>
                 ))}
               </>
@@ -530,26 +576,26 @@ export default function LeadsTable({
                     <td className="py-3.5 px-4 text-right">
 
 
-                      <div className="flex items-center justify-end space-x-1">
+                      <div className="flex items-center justify-end space-x-1.5">
                         {/* Bookmark/Save Lead */}
                         {isAuthenticated && (
                           <button
                             onClick={() => onSaveToggle(lead)}
                             title={lead.isSaved ? 'Remove from saved leads' : 'Save lead'}
-                            className={`p-1.5 rounded-lg border transition-all ${
+                            className={`p-1.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-3xs ${
                               lead.isSaved
-                                ? 'text-amber-500 bg-amber-50 border-amber-200 hover:bg-amber-100'
-                                : 'text-gray-400 bg-white border-gray-200 hover:bg-gray-50 hover:text-gray-600'
+                                ? 'text-amber-600 bg-amber-50 border-amber-300 shadow-2xs hover:scale-110 active:scale-95 ring-2 ring-amber-400/40 animate-pulseSlow'
+                                : 'text-gray-400 bg-white border-gray-200/90 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 hover:scale-110 active:scale-90 active:ring-2 active:ring-amber-300'
                             }`}
                           >
-                            {lead.isSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                            {lead.isSaved ? <BookmarkCheck className="w-4 h-4 text-amber-500" /> : <Bookmark className="w-4 h-4" />}
                           </button>
                         )}
                         {/* Edit lead */}
                         <button
                           onClick={() => onEdit(lead)}
                           title="Edit Lead"
-                          className="p-1.5 rounded-lg border text-gray-400 bg-white border-gray-200 hover:bg-gray-50 hover:text-indigo-600 transition-all"
+                          className="p-1.5 rounded-xl border text-gray-400 bg-white border-gray-200/90 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 hover:scale-110 active:scale-90 active:ring-2 active:ring-indigo-300 transition-all duration-200 cursor-pointer shadow-3xs"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
@@ -557,21 +603,21 @@ export default function LeadsTable({
                         <button
                           onClick={() => onDelete(lead)}
                           title="Delete Lead"
-                          className="p-1.5 rounded-lg border text-gray-400 bg-white border-gray-200 hover:bg-gray-50 hover:text-red-600 transition-all"
+                          className="p-1.5 rounded-xl border text-gray-400 bg-white border-gray-200/90 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-300 hover:scale-110 active:scale-90 active:ring-2 active:ring-rose-300 transition-all duration-200 cursor-pointer shadow-3xs"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                         {/* Expand details */}
                         <button
                           onClick={() => toggleRowExpanded(lead.id)}
-                          title="Show questions"
-                          className={`p-1.5 rounded-lg border transition-all ${
+                          title="Show questions & details"
+                          className={`p-1.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-3xs ${
                             isExpanded
-                              ? 'text-indigo-600 bg-indigo-50 border-indigo-200'
-                              : 'text-gray-400 bg-white border-gray-200 hover:bg-gray-50'
+                              ? 'text-indigo-600 bg-indigo-50 border-indigo-300 ring-2 ring-indigo-200 scale-105'
+                              : 'text-gray-400 bg-white border-gray-200/90 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 hover:scale-110 active:scale-90'
                           }`}
                         >
-                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          {isExpanded ? <ChevronUp className="w-4 h-4 transition-transform duration-300" /> : <ChevronDown className="w-4 h-4 transition-transform duration-300" />}
                         </button>
                       </div>
                     </td>

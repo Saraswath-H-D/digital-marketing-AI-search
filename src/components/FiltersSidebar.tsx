@@ -340,6 +340,20 @@ export default function FiltersSidebar({
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
+  const sectionColors: Record<string, { bg: string; text: string; icon: string; border: string }> = {
+    persona: { bg: 'bg-purple-50', text: 'text-purple-700', icon: 'text-purple-600', border: 'border-purple-200' },
+    emailStatus: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: 'text-emerald-600', border: 'border-emerald-200' },
+    jobTitles: { bg: 'bg-sky-50', text: 'text-sky-700', icon: 'text-sky-600', border: 'border-sky-200' },
+    peopleLookalikes: { bg: 'bg-violet-50', text: 'text-violet-700', icon: 'text-violet-600', border: 'border-violet-200' },
+    companies: { bg: 'bg-amber-50', text: 'text-amber-700', icon: 'text-amber-600', border: 'border-amber-200' },
+    companyLookalikes: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'text-orange-600', border: 'border-orange-200' },
+    education: { bg: 'bg-rose-50', text: 'text-rose-700', icon: 'text-rose-600', border: 'border-rose-200' },
+    cities: { bg: 'bg-teal-50', text: 'text-teal-700', icon: 'text-teal-600', border: 'border-teal-200' },
+    enrichmentType: { bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', icon: 'text-fuchsia-600', border: 'border-fuchsia-200' },
+    sources: { bg: 'bg-indigo-50', text: 'text-indigo-700', icon: 'text-indigo-600', border: 'border-indigo-200' },
+    statuses: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: 'text-emerald-600', border: 'border-emerald-200' },
+  };
+
   const renderSectionHeader = (
     sectionKey: keyof typeof openSections,
     title: string,
@@ -349,40 +363,43 @@ export default function FiltersSidebar({
     onClearSection: (e: React.MouseEvent) => void
   ) => {
     const isOpen = isSectionOpen(sectionKey);
+    const theme = sectionColors[String(sectionKey)] || { bg: 'bg-indigo-50', text: 'text-indigo-700', icon: 'text-indigo-600', border: 'border-indigo-200' };
+
     return (
       <button
         onClick={() => toggleSection(sectionKey)}
-        className="w-full flex items-center justify-between py-3 px-3 hover:bg-gray-50/50 border-b border-gray-100 transition-colors text-left cursor-pointer group"
+        className={`w-full flex items-center justify-between py-2.5 px-3 rounded-xl border transition-all text-left cursor-pointer group mb-1 ${
+          isActive 
+            ? `${theme.bg} ${theme.border} shadow-2xs` 
+            : 'bg-white hover:bg-slate-50 border-slate-200/80 hover:border-slate-300'
+        }`}
       >
-        <div className="flex items-center space-x-2">
-          {/* Active indicator blue dot */}
-          {isActive && (
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse shrink-0" />
-          )}
-          <IconComponent className={`w-4 h-4 transition-colors ${isActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-650'}`} />
-          <span className={`text-xs font-semibold tracking-tight ${isActive ? 'text-gray-800 font-bold' : 'text-gray-700 font-medium'}`}>
+        <div className="flex items-center space-x-2.5">
+          <div className={`w-6 h-6 rounded-lg ${theme.bg} ${theme.icon} flex items-center justify-center shrink-0 border ${theme.border} group-hover:scale-110 transition-transform`}>
+            <IconComponent className="w-3.5 h-3.5" />
+          </div>
+          <span className={`text-xs font-extrabold tracking-tight ${isActive ? theme.text : 'text-slate-800 font-bold'}`}>
             {title}
           </span>
         </div>
         
         <div className="flex items-center space-x-1.5">
-          {/* Pill with X count to clear */}
           {isActive && (
             <span 
               onClick={(e) => {
                 e.stopPropagation();
                 onClearSection(e);
               }}
-              className="inline-flex items-center space-x-1 border border-gray-200 bg-white hover:bg-gray-100 hover:border-gray-300 px-2 py-0.5 rounded-full text-[10px] font-semibold text-gray-500 hover:text-indigo-600 transition-all cursor-pointer"
+              className={`inline-flex items-center space-x-1 ${theme.bg} ${theme.border} ${theme.text} px-2 py-0.5 rounded-full text-[10px] font-extrabold hover:scale-105 transition-transform cursor-pointer border`}
             >
               <span>✕</span>
               <span>{activeCount}</span>
             </span>
           )}
           {isOpen ? (
-            <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-650 transition-colors" />
+            <ChevronDown className={`w-3.5 h-3.5 ${isActive ? theme.icon : 'text-slate-400 group-hover:text-slate-600'} transition-colors`} />
           ) : (
-            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-650 transition-colors" />
+            <ChevronRight className={`w-3.5 h-3.5 ${isActive ? theme.icon : 'text-slate-400 group-hover:text-slate-600'} transition-colors`} />
           )}
         </div>
       </button>
