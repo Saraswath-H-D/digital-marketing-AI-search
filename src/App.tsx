@@ -685,21 +685,21 @@ export default function App() {
           />
         )}
 
-        {/* Right Side Content Pane */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-white">
+        {/* Right Side Content Pane - Light Professional Pink Surface */}
+        <main className="flex-1 flex flex-col overflow-hidden bg-[#FDF2F8]">
           
           {/* Executive Top Command Header */}
           <div className="px-6 py-3.5 bg-[#0f172a] text-white flex items-center justify-between shrink-0 shadow-md border-b border-slate-800">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-emerald-400 p-0.5 flex items-center justify-center shadow-md">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 via-pink-500 to-rose-400 p-0.5 flex items-center justify-center shadow-md">
                 <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+                  <Sparkles className="w-4 h-4 text-pink-400 animate-pulse" />
                 </div>
               </div>
               <div>
                 <div className="flex items-center space-x-2">
                   <h1 className="text-sm font-extrabold tracking-tight text-white font-display">APOLLO ENTERPRISE AI</h1>
-                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full">
+                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/30 rounded-full">
                     PRO PLATFORM v10.4
                   </span>
                 </div>
@@ -731,15 +731,15 @@ export default function App() {
             </div>
           </div>
 
-          {/* Executive KPI Overview Cards Bar */}
-          <div className="px-6 py-4 bg-slate-50/70 border-b border-slate-200/80 shrink-0">
+          {/* Executive KPI Overview Cards Bar - Soft Pink Tinted Surface */}
+          <div className="px-6 py-4 bg-[#FCE7F3]/40 border-b border-pink-200/60 shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               
               {/* Card 1: Total Contacts */}
-              <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+              <div className="p-4 bg-white/90 border border-pink-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Contacts</span>
-                  <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <div className="w-8 h-8 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Users className="w-4 h-4" />
                   </div>
                 </div>
@@ -753,7 +753,7 @@ export default function App() {
               </div>
 
               {/* Card 2: Supabase Storage */}
-              <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+              <div className="p-4 bg-white/90 border border-pink-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">PostgreSQL Cloud DB</span>
                   <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -770,10 +770,10 @@ export default function App() {
               </div>
 
               {/* Card 3: Apollo AI Copilot */}
-              <div className="p-4 bg-gradient-to-br from-indigo-900 to-slate-900 border border-indigo-800 text-white rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+              <div className="p-4 bg-gradient-to-br from-purple-950 via-pink-950 to-slate-900 border border-pink-800/80 text-white rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">AI Outreach Copilot</span>
-                  <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <span className="text-xs font-bold uppercase tracking-wider text-pink-300">AI Outreach Copilot</span>
+                  <div className="w-8 h-8 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-400/30 flex items-center justify-center group-hover:scale-110 transition-transform">
                     <Sparkles className="w-4 h-4 text-emerald-400" />
                   </div>
                 </div>
@@ -786,14 +786,14 @@ export default function App() {
                     Open AI Chat
                   </button>
                 </div>
-                <p className="text-[11px] text-indigo-200/80 mt-1 font-medium">Generate emails & smart filters</p>
+                <p className="text-[11px] text-pink-200/80 mt-1 font-medium">Generate emails & smart filters</p>
               </div>
 
             </div>
           </div>
 
-          {/* Sub-toolbar Controls Row */}
-          <div className="px-6 pt-3.5 pb-3 bg-white flex flex-col space-y-2 shrink-0 border-b border-gray-100">
+          {/* Sub-toolbar Controls Row - Soft Light Pink */}
+          <div className="px-6 pt-3.5 pb-3 bg-[#FFF5F8] flex flex-col space-y-2 shrink-0 border-b border-pink-200/60">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-black tracking-tight text-neutral-900 font-display">Contact Directory</h2>
               <span className="text-xs text-slate-500 font-semibold">

@@ -313,11 +313,11 @@ export default function LeadsTable({
   };
 
   return (
-    <div id="leads-table-container" className="flex-1 overflow-x-auto bg-white select-none">
+    <div id="leads-table-container" className="flex-1 overflow-x-auto bg-[#FFF5F8] select-none">
       <table className="w-full text-left border-collapse min-w-[1000px]">
-        {/* Table Header */}
-        <thead className="bg-gray-55/70 border-b border-gray-200 sticky top-0 z-10">
-          <tr className="text-2xs font-bold text-gray-500 uppercase tracking-wider">
+        {/* Table Header - Soft Light Pink Tint */}
+        <thead className="bg-[#FCE7F3]/80 border-b border-pink-200 sticky top-0 z-10">
+          <tr className="text-2xs font-extrabold text-slate-800 uppercase tracking-wider">
             {/* Checkbox */}
             <th className="py-3 px-4 w-12 text-center">
               <input
