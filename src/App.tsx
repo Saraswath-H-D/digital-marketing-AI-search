@@ -794,11 +794,58 @@ export default function App() {
 
           {/* Sub-toolbar Controls Row - Soft Light Pink */}
           <div className="px-6 pt-3.5 pb-3 bg-[#FFF5F8] flex flex-col space-y-2 shrink-0 border-b border-pink-200/60">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-lg font-black tracking-tight text-neutral-900 font-display">Contact Directory</h2>
-              <span className="text-xs text-slate-500 font-semibold">
-                Showing {pageStartCount}–{pageEndCount} of {totalLeads} contacts
-              </span>
+              
+              {/* TOP TABLE PAGINATION CONTROLS & "25 per page" DROPDOWN */}
+              <div className="flex items-center space-x-3">
+                <span className="text-xs text-slate-600 font-extrabold hidden sm:inline">
+                  Showing <strong className="text-purple-950 font-black">{pageStartCount}-{pageEndCount}</strong> of <strong className="text-purple-950 font-black">{totalLeads}</strong>
+                </span>
+
+                {/* Prev / Next Buttons */}
+                <div className="flex items-center space-x-1">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    className="p-1.5 rounded-xl bg-white border border-purple-200 text-purple-900 hover:bg-purple-50 disabled:opacity-40 super-3d-white-btn cursor-pointer"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  <span className="px-2.5 py-1 text-xs font-black text-purple-950 bg-purple-100 border border-purple-200 rounded-xl shadow-2xs">
+                    {page}
+                  </span>
+
+                  <button
+                    disabled={totalLeadsCount === 0 || pageEndCount >= totalLeadsCount}
+                    onClick={() => setPage(p => p + 1)}
+                    className="p-1.5 rounded-xl bg-white border border-purple-200 text-purple-900 hover:bg-purple-50 disabled:opacity-40 super-3d-white-btn cursor-pointer"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* 25 per page dropdown */}
+                <div className="relative flex items-center text-xs font-bold text-purple-950 bg-white border border-purple-200 rounded-xl px-3 py-1.5 super-3d-white-btn">
+                  <label htmlFor="top-rows-per-page-select" className="sr-only">Rows per page</label>
+                  <select
+                    id="top-rows-per-page-select"
+                    value={limit}
+                    onChange={(e) => {
+                      setLimit(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="bg-transparent pr-2 focus:outline-none cursor-pointer text-xs font-black text-purple-950"
+                  >
+                    <option value={25}>25 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                  </select>
+                </div>
+              </div>
             </div>
             
             {/* Apollo Sub-toolbar row with high fidelity to Apollo's controls (Screenshot 1) */}
