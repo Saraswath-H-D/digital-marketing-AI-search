@@ -185,10 +185,11 @@ export const pushLeadsToSupabase = async (
       created_at: l.createdAt || new Date().toISOString()
     };
 
-    // Attach custom column values matching column names
+    // Attach custom column values matching column names (protect source_name from breaking into split tags)
     Object.keys(l).forEach(k => {
       if (!internalKeys.has(k) && !k.startsWith('_')) {
         const sqlCol = k.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        if (sqlCol === 'source_name' || sqlCol === 'source' || sqlCol === 'lead_source') return;
         const val = (l as any)[k];
         if (sqlCol && val !== undefined && val !== null) {
           row[sqlCol] = String(val);
