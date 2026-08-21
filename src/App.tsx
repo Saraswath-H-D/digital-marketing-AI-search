@@ -745,9 +745,6 @@ export default function App() {
                 </div>
                 <div className="flex items-baseline justify-between">
                   <span className="text-2xl font-black text-slate-900 font-display tracking-tight">{totalLeads}</span>
-                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full flex items-center gap-1 shadow-2xs">
-                    +14.2% <TrendingUp className="w-2.5 h-2.5" />
-                  </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1 font-medium">Verified leads in system</p>
               </div>
