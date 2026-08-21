@@ -303,15 +303,11 @@ export default function LeadsTable({
   };
 
   const renderDynamicCell = (lead: Lead, header: string) => {
-    const cleanH = header.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-    if (cleanH.includes('email') || cleanH.includes('mail') || cleanH.includes('gmail')) {
-      return renderEmailCell(lead);
-    }
-    if (cleanH.includes('phone') || cleanH.includes('mobile') || cleanH.includes('tel') || cleanH.includes('contactnumber')) {
-      return renderPhoneCell(lead);
-    }
     const val = getCellValueByHeader(lead, header);
-    return val || '-';
+    if (!val || val === 'undefined' || val === 'null' || val === '-') {
+      return <span className="text-gray-400 font-normal">-</span>;
+    }
+    return <span className="text-slate-800 font-medium">{val}</span>;
   };
 
   return (
