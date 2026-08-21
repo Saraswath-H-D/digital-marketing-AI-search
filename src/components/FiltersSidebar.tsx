@@ -645,23 +645,23 @@ export default function FiltersSidebar({
       </div>
 
       {/* Global Filter Search */}
-      <div className="p-3 border-b border-slate-100 bg-slate-50/50">
+      <div className="p-3 border-b border-indigo-100/70 bg-gradient-to-r from-indigo-50/60 via-purple-50/40 to-slate-50/60">
         <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-            <Search className="w-3.5 h-3.5" />
+          <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-indigo-500">
+            <Search className="w-4 h-4" />
           </span>
           <input
             type="text"
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
             placeholder="Search all targeting filters..."
-            className="w-full pl-8.5 pr-8 py-2 text-xs border border-slate-200 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all bg-white placeholder-slate-400 font-medium shadow-2xs"
+            className="w-full pl-9.5 pr-8 py-2 text-xs border border-indigo-200/80 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/25 transition-all bg-white/90 placeholder-slate-400 font-semibold text-slate-800 shadow-2xs"
           />
           {globalSearch && (
             <button
               type="button"
               onClick={() => setGlobalSearch('')}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 active:scale-90"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-indigo-600 active:scale-90"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1075,35 +1075,39 @@ export default function FiltersSidebar({
         )}
 
         {/* Lists Accordion Section (Requested Custom UI) */}
-        <div className="p-2.5 border border-gray-200 rounded-xl bg-white shadow-3xs mb-2">
+        <div className="p-3.5 border border-indigo-200/80 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-purple-50/30 to-slate-50/80 shadow-2xs hover:shadow-md transition-all duration-200 mb-2.5">
           <button
             onClick={() => setListsOpen(!listsOpen)}
-            className="w-full flex items-center justify-between py-1 px-1 text-xs font-semibold text-gray-700 select-none cursor-pointer"
+            className="w-full flex items-center justify-between py-1 px-1 text-xs font-bold text-slate-800 select-none cursor-pointer group"
           >
-            <div className="flex items-center space-x-2">
-              <List className="w-4 h-4 text-indigo-600" />
-              <span className="text-sm font-semibold tracking-tight text-gray-800">Lists</span>
+            <div className="flex items-center space-x-2.5">
+              <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 border border-indigo-200 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+                <List className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-sm font-black tracking-tight text-indigo-950 font-display">Lists</span>
             </div>
-            {listsOpen ? (
-              <ChevronUp className="w-4 h-4 text-gray-400" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            )}
+            <div className="w-6 h-6 rounded-full bg-white/80 border border-indigo-100 flex items-center justify-center">
+              {listsOpen ? (
+                <ChevronUp className="w-3.5 h-3.5 text-indigo-600" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-indigo-600" />
+              )}
+            </div>
           </button>
 
           {listsOpen && (
-            <div className="mt-2.5 space-y-3.5 animate-fadeIn">
+            <div className="mt-3 space-y-3.5 animate-fadeIn">
               {/* Tabs: Contacts / Organizations */}
-              <div className="flex border-b border-gray-200">
+              <div className="flex p-1 bg-white/80 rounded-full border border-indigo-100 shadow-3xs">
                 <button
                   onClick={() => {
                     setActiveTab('people');
                     setListDropdownOpen(false);
                   }}
-                  className={`flex-1 pb-2 text-xs font-semibold flex items-center justify-center space-x-1.5 border-b-2 transition-all cursor-pointer ${
+                  className={`flex-1 py-1.5 px-3 text-xs font-extrabold flex items-center justify-center space-x-1.5 rounded-full transition-all cursor-pointer ${
                     activeTab === 'people'
-                      ? 'border-indigo-600 text-indigo-600'
-                      : 'border-transparent text-gray-400 hover:text-gray-650'
+                      ? 'bg-indigo-600 text-white shadow-2xs scale-[1.02]'
+                      : 'text-slate-600 hover:text-indigo-600'
                   }`}
                 >
                   <User className="w-3.5 h-3.5" />
@@ -1114,10 +1118,10 @@ export default function FiltersSidebar({
                     setActiveTab('companies');
                     setListDropdownOpen(false);
                   }}
-                  className={`flex-1 pb-2 text-xs font-semibold flex items-center justify-center space-x-1.5 border-b-2 transition-all cursor-pointer ${
+                  className={`flex-1 py-1.5 px-3 text-xs font-extrabold flex items-center justify-center space-x-1.5 rounded-full transition-all cursor-pointer ${
                     activeTab === 'companies'
-                      ? 'border-indigo-600 text-indigo-600'
-                      : 'border-transparent text-gray-400 hover:text-gray-650'
+                      ? 'bg-indigo-600 text-white shadow-2xs scale-[1.02]'
+                      : 'text-slate-600 hover:text-indigo-600'
                   }`}
                 >
                   <Building className="w-3.5 h-3.5" />
@@ -1126,13 +1130,13 @@ export default function FiltersSidebar({
               </div>
 
               {/* Action labels: Include lists and Most Recent */}
-              <div className="flex items-center justify-between px-1 text-xs font-medium text-gray-600 select-none">
-                <div className="flex items-center space-x-1.5">
-                  <Settings className="w-3.5 h-3.5 text-gray-500" />
+              <div className="flex items-center justify-between px-1 text-xs font-bold text-slate-600 select-none">
+                <div className="flex items-center space-x-1.5 text-slate-700">
+                  <Settings className="w-3.5 h-3.5 text-indigo-500" />
                   <span>Include lists</span>
                 </div>
-                <div className="flex items-center space-x-1 hover:text-indigo-600 transition-colors cursor-pointer">
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
+                <div className="flex items-center space-x-1 text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-500" />
                   <span>Most Recent</span>
                 </div>
               </div>
@@ -1142,12 +1146,12 @@ export default function FiltersSidebar({
                 <div className="relative w-full">
                   <button
                     onClick={() => setListDropdownOpen(!listDropdownOpen)}
-                    className="w-full flex items-center justify-between pl-3 pr-9 py-2 text-xs font-medium border border-gray-200 rounded-lg bg-white shadow-3xs hover:bg-gray-50/50 hover:border-gray-300 transition-all text-left cursor-pointer"
+                    className="w-full flex items-center justify-between pl-3.5 pr-9 py-2 text-xs font-semibold border border-indigo-200/90 rounded-2xl bg-white/90 shadow-2xs hover:bg-white hover:border-indigo-400 transition-all text-left cursor-pointer"
                   >
-                    <span className={filters.selectedList ? 'text-indigo-600 font-semibold truncate max-w-[190px]' : 'text-gray-400'}>
+                    <span className={filters.selectedList ? 'text-indigo-600 font-bold truncate max-w-[190px]' : 'text-slate-400 font-medium'}>
                       {filters.selectedList || 'Select lists...'}
                     </span>
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${listDropdownOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 text-indigo-500 transition-transform duration-200 ${listDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {filters.selectedList && (
                     <button
@@ -1165,7 +1169,7 @@ export default function FiltersSidebar({
                           statuses: [],
                         }));
                       }}
-                      className="absolute right-7 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-indigo-600 transition-colors cursor-pointer z-10"
+                      className="absolute right-7 top-1/2 -translate-y-1/2 p-1 hover:bg-indigo-50 rounded-full text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer z-10"
                       title="Clear selection"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1213,7 +1217,7 @@ export default function FiltersSidebar({
               <div className="px-1">
                 <button
                   onClick={() => setAdvancedSettingsOpen(!advancedSettingsOpen)}
-                  className="inline-flex items-center space-x-1 text-2xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+                  className="inline-flex items-center space-x-1.5 text-2xs font-extrabold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
                 >
                   <span>Advanced settings</span>
                   <ChevronDown className={`w-3.5 h-3.5 text-indigo-500 transition-transform duration-200 ${advancedSettingsOpen ? 'rotate-180' : ''}`} />
@@ -1263,16 +1267,18 @@ export default function FiltersSidebar({
 
         {/* Saved Leads Filter Toggle */}
         <div className="p-2">
-          <label className="flex items-center space-x-3 py-2.5 px-4 rounded-full bg-slate-50/80 hover:bg-indigo-50/50 border border-slate-200/90 hover:border-indigo-300 shadow-2xs hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer transition-all duration-200 group">
+          <label className="flex items-center space-x-3 py-2.5 px-4 rounded-full bg-gradient-to-r from-amber-50/90 via-orange-50/50 to-amber-50/80 hover:from-amber-100/90 hover:to-amber-100/80 border border-amber-200/90 shadow-2xs hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer transition-all duration-200 group">
             <input
               type="checkbox"
               checked={filters.savedOnly}
               onChange={(e) => setFilters(prev => ({ ...prev, savedOnly: e.target.checked }))}
-              className="w-4 h-4 rounded-md text-indigo-600 border-slate-300 focus:ring-indigo-500 transition-colors cursor-pointer"
+              className="w-4 h-4 rounded-md text-amber-600 border-amber-300 focus:ring-amber-500 transition-colors cursor-pointer"
             />
             <div className="flex items-center space-x-2">
-              <Bookmark className={`w-4 h-4 transition-colors ${filters.savedOnly ? 'text-amber-500 animate-bounce' : 'text-slate-400 group-hover:text-indigo-600'}`} />
-              <span className={`text-xs font-black tracking-tight ${filters.savedOnly ? 'text-indigo-700' : 'text-slate-800 font-extrabold'}`}>Saved Contacts Only</span>
+              <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0">
+                <Bookmark className={`w-3.5 h-3.5 transition-colors ${filters.savedOnly ? 'text-amber-600 fill-amber-500 animate-bounce' : 'text-amber-600'}`} />
+              </div>
+              <span className={`text-xs font-black tracking-tight ${filters.savedOnly ? 'text-amber-900 font-black' : 'text-slate-900 font-extrabold'}`}>Saved Contacts Only</span>
             </div>
           </label>
         </div>
