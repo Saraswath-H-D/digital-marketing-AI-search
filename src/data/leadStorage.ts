@@ -83,9 +83,23 @@ export const getActiveHeaders = (): string[] | null => {
   return null;
 };
 
-export const setActiveHeaders = (headers: string[]): void => {
+export const replaceActiveHeaders = (headers: string[]): void => {
   try {
-    const current = getActiveHeaders() || [];
+    const clean = Array.from(new Set(headers.map(h => h.trim()).filter(Boolean)));
+    localStorage.setItem(HEADERS_KEY, JSON.stringify(clean));
+  } catch (err) {
+    console.error('Error replacing active headers:', err);
+  }
+};
+
+export const setActiveHeaders = (headers: string[], forceReplace: boolean = false): void => {
+  try {
+    const current = getActiveHeaders();
+    if (forceReplace || !current || current.length === 0) {
+      replaceActiveHeaders(headers);
+      return;
+    }
+
     const mergedSet = new Set<string>();
     
     // Preserve existing headers first
