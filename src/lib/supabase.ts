@@ -185,18 +185,6 @@ export const pushLeadsToSupabase = async (
       created_at: l.createdAt || new Date().toISOString()
     };
 
-    // Attach custom column values matching column names (protect source_name from breaking into split tags)
-    Object.keys(l).forEach(k => {
-      if (!internalKeys.has(k) && !k.startsWith('_')) {
-        const sqlCol = k.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-        if (sqlCol === 'source_name' || sqlCol === 'source' || sqlCol === 'lead_source') return;
-        const val = (l as any)[k];
-        if (sqlCol && val !== undefined && val !== null) {
-          row[sqlCol] = String(val);
-        }
-      }
-    });
-
     return row;
   });
 
@@ -217,36 +205,12 @@ export const pushLeadsToSupabase = async (
         console.warn(`Supabase upsert chunk at index ${i} warning:`, error.message);
         lastError = error.message;
 
-        // Fallback Tier 2: Standard column batch insert
-        const cleanBatch = batch.map(r => ({
-          id: r.id,
-          first_name: r.first_name,
-          last_name: r.last_name,
-          email: r.email,
-          registration_time: r.registration_time,
-          approval_status: r.approval_status,
-          city: r.city,
-          phone: r.phone,
-          organization: r.organization,
-          job_title: r.job_title,
-          questions: r.questions,
-          source_name: r.source_name,
-          created_at: r.created_at
-        }));
-
-        const { error: retryErr } = await client
-          .from(tableName)
-          .insert(cleanBatch);
-
-        if (retryErr) {
-          console.warn(`Chunk insert failed, attempting row-by-row fallback:`, retryErr.message);
-          // Fallback Tier 3: Row-by-row insert so valid rows succeed regardless
-          for (const singleRow of cleanBatch) {
-            const { error: rowErr } = await client.from(tableName).insert([singleRow]);
-            if (!rowErr) totalPushed += 1;
-          }
-        } else {
-          totalPushed += cleanBatch.length;
+        // Fallback Tier 2: Row-by-row upsert so valid rows succeed regardless
+        for (const singleRow of batch) {
+          const { error: rowErr } = await client
+            .from(tableName)
+            .upsert([singleRow], { onConflict: 'id' });
+          if (!rowErr) totalPushed += 1;
         }
       } else {
         totalPushed += batch.length;
