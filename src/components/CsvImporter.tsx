@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { motion, AnimatePresence } from 'motion/react';
 import { Upload, X, Check, AlertCircle, FileSpreadsheet, Eye, ArrowRight, Table, Tag } from 'lucide-react';
-import { setActiveHeaders, getStoredLeads } from '../data/leadStorage.ts';
+import { replaceActiveHeaders, getStoredLeads } from '../data/leadStorage.ts';
 
 interface CsvImporterProps {
   isOpen: boolean;
@@ -57,9 +57,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
 
         const rawHeaders = (results.meta.fields || (data[0] ? Object.keys(data[0]) : [])).map(h => h.trim()).filter(Boolean);
         if (rawHeaders.length > 0) {
-          const existingLeads = getStoredLeads();
-          const shouldReplace = existingLeads.length === 0;
-          setActiveHeaders(rawHeaders, shouldReplace);
+          replaceActiveHeaders(rawHeaders);
         }
 
 

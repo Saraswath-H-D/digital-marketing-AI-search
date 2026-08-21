@@ -764,7 +764,7 @@ export const bulkImportLeads = async (
   });
 
   if (newLeadsList.length > 0 && (newLeadsList[0] as any)._csvHeaders) {
-    setActiveHeaders((newLeadsList[0] as any)._csvHeaders);
+    replaceActiveHeaders((newLeadsList[0] as any)._csvHeaders);
   }
 
   saveStoredLeads([...createdLeads, ...allLeads]);
