@@ -2127,67 +2127,95 @@ export default function FiltersSidebar({
             )}
           </div>
 
-          {/* Dynamic CSV Custom Filters Accordions */}
-
-          {filterOptions.customFilters && Object.entries(filterOptions.customFilters).map(([columnName, options]) => {
-            const selectedCustomValues = (filters.customFilters && filters.customFilters[columnName]) || [];
-            const isOpen = !!openCustomSections[columnName];
-            return (
-              <div key={columnName} className="border-b border-gray-100">
-                <div 
-                  onClick={() => setOpenCustomSections(prev => ({ ...prev, [columnName]: !prev[columnName] }))}
-                  className="w-full flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50/60 transition-colors"
-                >
-                  <div className="flex items-center space-x-2.5">
-                    <SlidersHorizontal className="w-4 h-4 text-indigo-500" />
-                    <span className="text-xs font-bold text-gray-800 capitalize">{columnName}</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5">
-                    {selectedCustomValues.length > 0 && (
-                      <span className="px-1.5 py-0.5 text-2xs font-bold bg-indigo-100 text-indigo-700 rounded-full">
-                        {selectedCustomValues.length}
-                      </span>
-                    )}
-                    {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
-                  </div>
+          {/* Dynamic CSV Custom Column Filters Header & Accordions */}
+          {filterOptions.customFilters && Object.keys(filterOptions.customFilters).length > 0 && (
+            <div className="pt-3 border-t border-purple-200/80 my-2">
+              <div className="flex items-center justify-between px-2 mb-2.5">
+                <div className="flex items-center space-x-2 text-purple-950 font-black text-xs uppercase tracking-widest">
+                  <Tag className="w-3.5 h-3.5 text-purple-600" />
+                  <span>CSV File Column Filters</span>
                 </div>
-
-                {isOpen && (
-                  <div className="p-3 bg-gray-50/20 space-y-1.5 max-h-48 overflow-y-auto scrollbar-thin">
-                    {options.map(val => {
-                      const isChecked = selectedCustomValues.includes(val);
-                      return (
-                        <label key={val} className="flex items-center space-x-2.5 py-1 px-1.5 rounded-md hover:bg-gray-100 cursor-pointer text-xs text-gray-700">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              setFilters(prev => {
-                                const currentCustom = prev.customFilters || {};
-                                const currentColVals = currentCustom[columnName] || [];
-                                const newColVals = isChecked 
-                                  ? currentColVals.filter(v => v !== val)
-                                  : [...currentColVals, val];
-                                return {
-                                  ...prev,
-                                  customFilters: {
-                                    ...currentCustom,
-                                    [columnName]: newColVals
-                                  }
-                                };
-                              });
-                            }}
-                            className="w-3.5 h-3.5 rounded-sm text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
-                          />
-                          <span className={isChecked ? 'font-semibold text-indigo-600' : ''}>{val}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
+                <span className="px-2 py-0.5 text-[9px] font-black text-purple-900 bg-purple-100 border border-purple-200 rounded-full shadow-2xs">
+                  {Object.keys(filterOptions.customFilters).length} Columns
+                </span>
               </div>
-            );
-          })}
+
+              {Object.entries(filterOptions.customFilters).map(([columnName, options]) => {
+                const selectedCustomValues = (filters.customFilters && filters.customFilters[columnName]) || [];
+                const isOpen = !!openCustomSections[columnName];
+                const cleanTitle = columnName.replace(/_/g, ' ');
+                const isActive = selectedCustomValues.length > 0;
+
+                return (
+                  <div key={columnName} className="mb-2">
+                    <button
+                      onClick={() => setOpenCustomSections(prev => ({ ...prev, [columnName]: !prev[columnName] }))}
+                      className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-full border transition-all duration-200 text-left cursor-pointer group super-3d-card ${
+                        isActive 
+                          ? 'bg-purple-100/90 border-purple-300 text-purple-950 shadow-sm font-black' 
+                          : 'bg-white hover:bg-pink-50/50 border-pink-200/90 text-slate-900'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <div className="w-7 h-7 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center shrink-0 border border-purple-200">
+                          <SlidersHorizontal className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="text-xs font-black tracking-tight capitalize truncate max-w-[140px]">{cleanTitle}</span>
+                      </div>
+                      <div className="flex items-center space-x-1.5 shrink-0">
+                        {selectedCustomValues.length > 0 && (
+                          <span className="px-2 py-0.5 text-[9px] font-black bg-purple-600 text-white rounded-full shadow-2xs">
+                            {selectedCustomValues.length}
+                          </span>
+                        )}
+                        <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
+                          {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-purple-700" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-700" />}
+                        </div>
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="p-3 bg-white/90 rounded-2xl border border-purple-200 shadow-2xs space-y-1.5 mt-1 max-h-48 overflow-y-auto scrollbar-thin animate-fadeIn">
+                        {options.length === 0 ? (
+                          <p className="text-xs text-gray-400 italic py-1">No options available</p>
+                        ) : (
+                          options.map(val => {
+                            const isChecked = selectedCustomValues.includes(val);
+                            return (
+                              <label key={val} className="flex items-center space-x-2.5 py-1.5 px-2 rounded-xl hover:bg-purple-50 cursor-pointer text-xs text-slate-800 transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setFilters(prev => {
+                                      const currentCustom = prev.customFilters || {};
+                                      const currentColVals = currentCustom[columnName] || [];
+                                      const newColVals = isChecked 
+                                        ? currentColVals.filter(v => v !== val)
+                                        : [...currentColVals, val];
+                                      return {
+                                        ...prev,
+                                        customFilters: {
+                                          ...currentCustom,
+                                          [columnName]: newColVals
+                                        }
+                                      };
+                                    });
+                                  }}
+                                  className="w-3.5 h-3.5 rounded-sm text-purple-600 border-purple-300 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                                />
+                                <span className={isChecked ? 'font-black text-purple-900' : 'font-semibold text-slate-700'}>{val}</span>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
 
         </div>

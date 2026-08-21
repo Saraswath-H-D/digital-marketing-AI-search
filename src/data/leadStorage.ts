@@ -299,25 +299,23 @@ export const getFilterOptions = (): FilterOptions => {
   const activeHeaders = getActiveHeaders();
   const customFilterMap: Record<string, string[]> = {};
 
-  if (activeHeaders && activeHeaders.length > 0) {
-    activeHeaders.forEach(col => {
-      const cleanCol = col.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const isStandardAlias = ['jobtitle', 'title', 'role', 'designation', 'organization', 'company', 'employer', 'city', 'location', 'town', 'country', 'sourcename', 'source', 'approvalstatus', 'status', 'email', 'name', 'phone', 'firstname', 'lastname'].some(a => cleanCol.includes(a));
-      
-      if (!isStandardAlias) {
-        const valSet = new Set<string>();
-        leads.forEach(l => {
-          const val = (l as any)[col];
-          if (val !== undefined && val !== null && String(val).trim() !== '') {
-            valSet.add(String(val).trim());
-          }
-        });
-        if (valSet.size > 0 && valSet.size <= 50) {
-          customFilterMap[col] = Array.from(valSet).sort();
-        }
+  // Gather all columns from uploaded CSV headers OR stored lead keys
+  const allCsvColumns = (activeHeaders && activeHeaders.length > 0)
+    ? activeHeaders
+    : (leads.length > 0 ? Object.keys(leads[0]).filter(k => !['id', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked', '_csvHeaders'].includes(k)) : []);
+
+  allCsvColumns.forEach(col => {
+    const valSet = new Set<string>();
+    leads.forEach(l => {
+      const val = (l as any)[col];
+      if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim() !== '-') {
+        valSet.add(String(val).trim());
       }
     });
-  }
+    if (valSet.size > 0 && valSet.size <= 250) {
+      customFilterMap[col] = Array.from(valSet).sort();
+    }
+  });
 
   return {
     jobTitles: getUniqueForAliases(['jobtitle', 'title', 'role', 'designation', 'position', 'occupation']),
