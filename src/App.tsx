@@ -231,36 +231,19 @@ export default function App() {
     fetchLeads();
   }, [filters, page, limit]);
 
-  // Auto-sync live database records from Supabase on app startup
+  // Auto-sync live database records from Supabase on app startup (Single Master Source of Truth)
   useEffect(() => {
     const syncLiveDatabase = async () => {
       try {
-        const localLeads = getStoredLeads();
         const res = await pullLeadsFromSupabase();
-
         if (res.success) {
           if (res.leads.length > 0) {
-            // Guarantee zero lead drops: If Supabase has equal or more leads, use Supabase records
-            if (res.leads.length >= localLeads.length) {
-              saveStoredLeads(res.leads);
-            } else {
-              // Supabase returned fewer records than local -> preserve all local leads and push missing ones
-              const existingKeys = new Set(res.leads.map(l => `${l.firstName}_${l.lastName}_${l.email}_${l.organization}`.toLowerCase()));
-              const unsynced = localLeads.filter(l => {
-                const k = `${l.firstName}_${l.lastName}_${l.email}_${l.organization}`.toLowerCase();
-                return !existingKeys.has(k);
-              });
-
-              const merged = [...res.leads, ...unsynced];
-              saveStoredLeads(merged);
-
-              if (unsynced.length > 0) {
-                await pushLeadsToSupabase(unsynced);
-              }
+            saveStoredLeads(res.leads);
+          } else {
+            const localLeads = getStoredLeads();
+            if (localLeads.length > 0) {
+              await pushLeadsToSupabase(localLeads);
             }
-          } else if (localLeads.length > 0) {
-            // Supabase table is empty but local storage has uploaded leads -> auto-push to Supabase!
-            await pushLeadsToSupabase(localLeads);
           }
           fetchLeads();
           fetchFilterOptions();
