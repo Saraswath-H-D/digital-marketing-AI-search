@@ -733,7 +733,7 @@ export default function App() {
 
           {/* Executive KPI Overview Cards Bar */}
           <div className="px-6 py-4 bg-slate-50/70 border-b border-slate-200/80 shrink-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               
               {/* Card 1: Total Contacts */}
               <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
@@ -769,24 +769,7 @@ export default function App() {
                 <p className="text-[11px] text-slate-400 mt-1 font-medium">Table: <code className="text-emerald-700 font-mono font-bold">registration_contacts</code></p>
               </div>
 
-              {/* Card 3: Data Accuracy Rate */}
-              <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Data Accuracy Rate</span>
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <ShieldCheck className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-black text-slate-900 font-display tracking-tight">98.6%</span>
-                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 rounded-full">
-                    Verified
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1 font-medium">Verified email & phone records</p>
-              </div>
-
-              {/* Card 4: Apollo AI Copilot */}
+              {/* Card 3: Apollo AI Copilot */}
               <div className="p-4 bg-gradient-to-br from-indigo-900 to-slate-900 border border-indigo-800 text-white rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">AI Outreach Copilot</span>
