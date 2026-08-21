@@ -361,11 +361,18 @@ export const deleteLeadFromSupabase = async (
 
   const tableName = activeConfig.tableName || 'registration_contacts';
   const cleanEmail = (identifier.email || '').trim();
+  const leadId = identifier.id;
 
   try {
+    // 1. Delete by Primary Key ID in Supabase
+    if (leadId && Number(leadId) > 0) {
+      const { error: idErr } = await client.from(tableName).delete().eq('id', Number(leadId));
+      if (idErr) console.warn('Supabase delete by ID warn:', idErr);
+    }
+    // 2. Also delete by email if valid
     if (cleanEmail && cleanEmail !== '-' && cleanEmail !== 'undefined' && cleanEmail !== 'null') {
-      const { error } = await client.from(tableName).delete().eq('email', cleanEmail);
-      if (error) return { success: false, error: error.message };
+      const { error: emailErr } = await client.from(tableName).delete().eq('email', cleanEmail);
+      if (emailErr) console.warn('Supabase delete by email warn:', emailErr);
     }
     return { success: true };
   } catch (err: any) {

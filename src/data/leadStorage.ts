@@ -159,7 +159,7 @@ let memoryLeadCache: Lead[] | null = null;
 
 // Get leads from memory cache / localStorage & purge any blank (- - -) junk rows
 export const getStoredLeads = (): Lead[] => {
-  if (memoryLeadCache && memoryLeadCache.length > 0) {
+  if (memoryLeadCache !== null) {
     return memoryLeadCache;
   }
   try {
