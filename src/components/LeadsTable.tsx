@@ -315,85 +315,85 @@ export default function LeadsTable({
   return (
     <div id="leads-table-container" className="flex-1 overflow-x-auto bg-[#FFF5F8] select-none">
       <table className="w-full text-left border-collapse min-w-[1000px]">
-        {/* Table Header - Soft Light Pink Tint */}
-        <thead className="bg-[#FCE7F3]/80 border-b border-pink-200 sticky top-0 z-10">
-          <tr className="text-2xs font-extrabold text-slate-800 uppercase tracking-wider">
+        {/* Table Header - Attractive Gradient with High Contrast Typography */}
+        <thead className="bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 text-white border-b-2 border-purple-400/80 sticky top-0 z-10 shadow-md">
+          <tr className="text-2xs font-black uppercase tracking-widest text-white">
             {/* Checkbox */}
-            <th className="py-3 px-4 w-12 text-center">
+            <th className="py-3.5 px-4 w-12 text-center bg-purple-700/60 border-r border-purple-500/40">
               <input
                 type="checkbox"
                 checked={isAllSelected}
                 onChange={handleSelectAll}
-                className="w-4 h-4 rounded-md text-indigo-600 border-gray-300 focus:ring-indigo-500 transition-colors cursor-pointer"
+                className="w-4 h-4 rounded-md text-pink-500 border-purple-300 focus:ring-pink-400 transition-colors cursor-pointer accent-pink-500"
               />
             </th>
 
             {csvHeaders ? (
               // Dynamic headers directly from uploaded CSV
               csvHeaders.map((header) => (
-                <th key={header} className="py-3.5 px-4 min-w-[160px] text-indigo-950 bg-indigo-50/90 hover:bg-indigo-100/90 border-b border-indigo-200 font-extrabold uppercase tracking-wider transition-colors cursor-pointer group">
+                <th key={header} className="py-3.5 px-4 min-w-[160px] text-white hover:bg-white/10 border-r border-purple-500/30 font-black uppercase tracking-widest transition-colors cursor-pointer group">
                   <div className="flex items-center justify-between">
-                    <span>{header}</span>
-                    <ChevronDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-700 transition-colors" />
+                    <span className="drop-shadow-xs">{header}</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                   </div>
                 </th>
               ))
             ) : (
               // Standard Layout headers
               <>
-                <th className="py-3.5 px-4 min-w-[200px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                <th className="py-3.5 px-4 min-w-[200px] hover:bg-white/10 border-r border-purple-500/30 transition-colors cursor-pointer group">
                   <div className="flex items-center justify-between">
-                    <span>Contact Name</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                    <span className="drop-shadow-xs">Contact Name</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 min-w-[200px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                <th className="py-3.5 px-4 min-w-[200px] hover:bg-white/10 border-r border-purple-500/30 transition-colors cursor-pointer group">
                   <div className="flex items-center justify-between">
-                    <span>Designation</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                    <span className="drop-shadow-xs">Designation</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 min-w-[180px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                <th className="py-3.5 px-4 min-w-[180px] hover:bg-white/10 border-r border-purple-500/30 transition-colors cursor-pointer group">
                   <div className="flex items-center justify-between">
-                    <span>Organization</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                    <span className="drop-shadow-xs">Organization</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 min-w-[185px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                <th className="py-3.5 px-4 min-w-[185px] hover:bg-white/10 border-r border-purple-500/30 transition-colors cursor-pointer group">
                   <div className="flex items-center justify-between">
-                    <span>Email Address</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                    <span className="drop-shadow-xs">Email Address</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 min-w-[160px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                <th className="py-3.5 px-4 min-w-[160px] hover:bg-white/10 border-r border-purple-500/30 transition-colors cursor-pointer group">
                   <div className="flex items-center justify-between">
-                    <span>Phone Number</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                    <span className="drop-shadow-xs">Phone Number</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 min-w-[140px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                <th className="py-3.5 px-4 min-w-[140px] hover:bg-white/10 border-r border-purple-500/30 transition-colors cursor-pointer group">
                   <div className="flex items-center justify-between">
-                    <span>Location</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                    <span className="drop-shadow-xs">Location</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 w-28 hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                <th className="py-3.5 px-4 w-28 hover:bg-white/10 border-r border-purple-500/30 transition-colors cursor-pointer group">
                   <div className="flex items-center justify-between">
-                    <span>Status</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                    <span className="drop-shadow-xs">Status</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                   </div>
                 </th>
-                <th className="py-3.5 px-4 min-w-[120px] hover:bg-slate-100/80 active:bg-slate-200 transition-colors cursor-pointer group">
+                <th className="py-3.5 px-4 min-w-[120px] hover:bg-white/10 border-r border-purple-500/30 transition-colors cursor-pointer group">
                   <div className="flex items-center justify-between">
-                    <span>Lead Source</span>
-                    <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                    <span className="drop-shadow-xs">Lead Source</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                   </div>
                 </th>
                 {extraKeys.map((customHeader) => (
-                  <th key={customHeader} className="py-3.5 px-4 min-w-[140px] text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100/70 transition-colors cursor-pointer group">
+                  <th key={customHeader} className="py-3.5 px-4 min-w-[140px] hover:bg-white/10 border-r border-purple-500/30 transition-colors cursor-pointer group">
                     <div className="flex items-center justify-between">
-                      <span>{customHeader.replace(/_/g, ' ')}</span>
-                      <ChevronDown className="w-3 h-3 text-indigo-400 group-hover:text-indigo-600 transition-colors" />
+                      <span className="drop-shadow-xs">{customHeader.replace(/_/g, ' ')}</span>
+                      <ChevronDown className="w-3.5 h-3.5 text-purple-200 group-hover:text-white transition-colors" />
                     </div>
                   </th>
                 ))}
@@ -401,7 +401,7 @@ export default function LeadsTable({
             )}
 
             {/* Actions */}
-            <th className="py-3 px-4 w-32 text-right">Actions</th>
+            <th className="py-3.5 px-4 w-32 text-right bg-pink-700/60 font-black">Actions</th>
           </tr>
         </thead>
 
