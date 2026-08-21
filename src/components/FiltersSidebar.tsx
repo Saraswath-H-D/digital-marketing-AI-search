@@ -22,8 +22,10 @@ import {
   Users,
   GraduationCap,
   Sparkles,
-  Bookmark
+  Bookmark,
+  Trash2
 } from 'lucide-react';
+import { getStoredCsvTags, deleteLeadsByTag } from '../data/leadStorage.ts';
 
 interface FiltersSidebarProps {
   filters: Filters;
@@ -1930,7 +1932,7 @@ export default function FiltersSidebar({
             )}
           </div>
 
-          {/* 10. Lead Source Accordion */}
+          {/* 10. Lead Source / CSV Tag Search Accordion */}
           <div className="border-b border-gray-100">
             {renderSectionHeader(
               'sources', 
@@ -1942,49 +1944,124 @@ export default function FiltersSidebar({
             )}
             
             {isSectionOpen('sources') && (
-              <div className="p-3 bg-gray-50/20 space-y-2 animate-fadeIn">
-                {/* Inline Search */}
-                <div className="relative">
-                  <span className="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none text-gray-400">
-                    <Search className="w-3 h-3" />
+              <div className="p-3 bg-purple-50/20 space-y-2.5 animate-fadeIn border-t border-purple-100/50">
+                <p className="text-[10px] text-purple-700 font-bold uppercase tracking-wider">Search CSV Upload Tags:</p>
+                
+                {/* CSV Tag Search Input Bar */}
+                <div className="relative w-full">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-purple-600">
+                    <Tag className="w-3.5 h-3.5" />
                   </span>
                   <input
                     type="text"
                     value={sourceSearch}
-                    onChange={(e) => setSourceSearch(e.target.value)}
-                    placeholder="Filter origins..."
-                    className="w-full pl-6.5 pr-6 py-1 text-xs border border-gray-200 rounded-md focus:outline-hidden focus:border-indigo-400 bg-white"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSourceSearch(val);
+                      setFilters(prev => ({
+                        ...prev,
+                        sources: val.trim() ? [val.trim()] : []
+                      }));
+                    }}
+                    placeholder="Search CSV Tag (e.g. Q3-Marketing)..."
+                    className="w-full pl-8 pr-7 py-1.5 text-xs font-bold border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 bg-white text-purple-950 placeholder-purple-400 shadow-2xs"
                   />
                   {sourceSearch && (
                     <button
                       type="button"
-                      onClick={() => setSourceSearch('')}
-                      className="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-gray-650"
+                      onClick={() => {
+                        setSourceSearch('');
+                        setFilters(prev => ({ ...prev, sources: [] }));
+                      }}
+                      className="absolute inset-y-0 right-0 flex items-center pr-2 text-purple-400 hover:text-purple-700"
                     >
-                      <X className="w-2.5 h-2.5" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
 
-                <div className="max-h-40 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
-                  {filteredSources.length === 0 ? (
-                    <p className="text-xs text-gray-400 py-1.5 italic">No origins match</p>
-                  ) : (
-                    filteredSources.map((source) => (
-                      <label
-                        key={source}
-                        className="flex items-center space-x-2.5 py-1 px-1.5 rounded-md hover:bg-gray-150/40 cursor-pointer text-xs text-gray-650 transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={filters.sources.includes(source)}
-                          onChange={() => handleCheckboxChange('sources', source)}
-                          className="w-3.5 h-3.5 rounded-sm text-indigo-600 border-gray-300 focus:ring-indigo-500 transition-colors cursor-pointer"
-                        />
-                        <span className="truncate">{source}</span>
-                      </label>
-                    ))
-                  )}
+                {/* Red Delete Tagged CSV Button at Bottom of Tag Search Bar */}
+                <button
+                  type="button"
+                  disabled={!sourceSearch.trim()}
+                  onClick={async () => {
+                    const tagToDelete = sourceSearch.trim();
+                    if (!tagToDelete) return;
+
+                    const confirmDelete = window.confirm(
+                      `⚠️ Are you sure you want to PERMANENTLY DELETE all contact data tagged with "${tagToDelete}" from your local directory and Supabase database?`
+                    );
+
+                    if (confirmDelete) {
+                      await deleteLeadsByTag(tagToDelete);
+                      setSourceSearch('');
+                      setFilters(prev => ({ ...prev, sources: [] }));
+                      if (onClear) onClear();
+                      window.location.reload();
+                    }
+                  }}
+                  title={
+                    sourceSearch.trim() 
+                      ? `Delete all contacts tagged with "${sourceSearch.trim()}"` 
+                      : "Type or select a CSV tag above to enable deletion"
+                  }
+                  className={`w-full inline-flex items-center justify-center space-x-1.5 px-3 py-1.5 text-2xs font-extrabold rounded-xl transition-all shadow-2xs cursor-pointer ${
+                    sourceSearch.trim()
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200 active:scale-95'
+                      : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-70'
+                  }`}
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Delete Tagged CSV Data</span>
+                </button>
+
+                {/* Filtered Tag Checkbox List */}
+                <div className="max-h-44 overflow-y-auto space-y-1 pr-1 scrollbar-thin pt-1">
+                  {(() => {
+                    const storedTags = getStoredCsvTags();
+                    const mockSourcesToIgnore = new Set([
+                      'facebook ads', 'old registrants email campaign', 'whatsapp invitation',
+                      'registration-report', 'registration report', 'manual-entry', 
+                      'contacts', 'leads', 'export', 'data', 'file', 'sheet', 'supabase', 'null', 'undefined'
+                    ]);
+
+                    const csvTags = Array.from(new Set([
+                      ...storedTags,
+                      ...filterOptions.sources.filter(s => s && s !== '-' && !mockSourcesToIgnore.has(s.toLowerCase()))
+                    ])).filter(t => t && t !== '-' && !mockSourcesToIgnore.has(t.toLowerCase()));
+
+                    const matchingTags = csvTags.filter(t => t.toLowerCase().includes(sourceSearch.toLowerCase()));
+
+                    if (matchingTags.length === 0) {
+                      return <p className="text-xs text-purple-400 py-1.5 italic text-center">No uploaded CSV tags found</p>;
+                    }
+
+                    return matchingTags.map((source) => {
+                      const isChecked = filters.sources.includes(source);
+                      return (
+                        <label
+                          key={source}
+                          className={`flex items-center space-x-2.5 py-1.5 px-2 rounded-lg cursor-pointer text-xs transition-colors ${
+                            isChecked ? 'bg-purple-100/70 text-purple-900 font-extrabold' : 'hover:bg-purple-50 text-slate-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              handleCheckboxChange('sources', source);
+                              if (!isChecked) {
+                                setSourceSearch(source);
+                              }
+                            }}
+                            className="w-3.5 h-3.5 rounded-sm text-purple-600 border-purple-300 focus:ring-purple-500 transition-colors cursor-pointer"
+                          />
+                          <Tag className="w-3 h-3 text-purple-500 shrink-0" />
+                          <span className="truncate font-semibold">#{source}</span>
+                        </label>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}
