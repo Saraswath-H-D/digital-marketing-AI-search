@@ -185,29 +185,45 @@ export default function LeadsTable({
   }, [leads]);
 
   const getCellValueByHeader = (lead: any, header: string) => {
-    if (lead[header] !== undefined && lead[header] !== null && String(lead[header]).trim() !== '') {
-      return String(lead[header]).trim();
+    // 1. Direct match on exact header string key
+    if (lead[header] !== undefined && lead[header] !== null) {
+      const val = String(lead[header]).trim();
+      if (val !== '' && val !== 'undefined' && val !== 'null') {
+        return val;
+      }
     }
+
+    // 2. Case-insensitive / trimmed match on keys
     const lower = header.toLowerCase().trim();
     const cleanLower = lower.replace(/[^a-z0-9]/g, '');
 
     const foundKey = Object.keys(lead).find(k => k.toLowerCase().trim().replace(/[^a-z0-9]/g, '') === cleanLower);
-    if (foundKey && lead[foundKey] !== undefined && lead[foundKey] !== null && String(lead[foundKey]).trim() !== '') {
-      return String(lead[foundKey]).trim();
+    if (foundKey && lead[foundKey] !== undefined && lead[foundKey] !== null) {
+      const val = String(lead[foundKey]).trim();
+      if (val !== '' && val !== 'undefined' && val !== 'null') {
+        return val;
+      }
     }
 
-    if (cleanLower.includes('source')) return lead.sourceName || '';
-    if (cleanLower.includes('firstname') || cleanLower === 'fname' || cleanLower === 'first') return lead.firstName || '';
+    // 3. Precise alias mapping
+    if (cleanLower.includes('source')) return (lead.sourceName && lead.sourceName !== '-') ? lead.sourceName : '';
+    if (cleanLower.includes('firstname') || cleanLower === 'fname' || cleanLower === 'first') return (lead.firstName && lead.firstName !== '-') ? lead.firstName : '';
     if (cleanLower.includes('lastname') || cleanLower === 'lname' || cleanLower === 'last' || cleanLower === 'surname') return lead.lastName || '';
     if (cleanLower === 'name' || cleanLower === 'fullname' || cleanLower === 'contactname' || cleanLower === 'contacts' || cleanLower === 'contact' || cleanLower === 'attendee' || cleanLower.includes('attendeename')) {
-      return `${lead.firstName || ''} ${lead.lastName && lead.lastName !== '-' ? lead.lastName : ''}`.trim();
+      const fn = (lead.firstName && lead.firstName !== 'Contact' && lead.firstName !== '-') ? lead.firstName : '';
+      const ln = (lead.lastName && lead.lastName !== '-') ? lead.lastName : '';
+      const combined = `${fn} ${ln}`.trim();
+      if (combined) return combined;
+      if (lead.organization) return lead.organization;
+      if (lead.email) return lead.email;
+      return '';
     }
-    if (cleanLower.includes('email') || cleanLower.includes('mail') || cleanLower.includes('gmail')) return lead.email || '';
-    if (cleanLower.includes('company') || cleanLower.includes('organization') || cleanLower.includes('organisation') || cleanLower.includes('oranisation') || cleanLower.includes('org') || cleanLower.includes('firm')) return lead.organization || '';
-    if (cleanLower.includes('title') || cleanLower.includes('role') || cleanLower.includes('designation') || cleanLower.includes('job')) return lead.jobTitle || '';
-    if (cleanLower.includes('city') || cleanLower.includes('location') || cleanLower.includes('town')) return lead.city || '';
-    if (cleanLower.includes('phone') || cleanLower.includes('mobile') || cleanLower.includes('tel')) return lead.phone || '';
-    if (cleanLower.includes('status')) return lead.approvalStatus || '';
+    if (cleanLower.includes('email') || cleanLower.includes('mail') || cleanLower.includes('gmail')) return (lead.email && lead.email !== '-') ? lead.email : '';
+    if (cleanLower.includes('company') || cleanLower.includes('organization') || cleanLower.includes('organisation') || cleanLower.includes('oranisation') || cleanLower.includes('org') || cleanLower.includes('firm')) return (lead.organization && lead.organization !== '-') ? lead.organization : '';
+    if (cleanLower.includes('title') || cleanLower.includes('role') || cleanLower.includes('designation') || cleanLower.includes('job')) return (lead.jobTitle && lead.jobTitle !== '-') ? lead.jobTitle : '';
+    if (cleanLower.includes('city') || cleanLower.includes('location') || cleanLower.includes('town')) return (lead.city && lead.city !== '-') ? lead.city : '';
+    if (cleanLower.includes('phone') || cleanLower.includes('mobile') || cleanLower.includes('tel')) return (lead.phone && lead.phone !== '-') ? lead.phone : '';
+    if (cleanLower.includes('status')) return (lead.approvalStatus && lead.approvalStatus !== '-') ? lead.approvalStatus : '';
 
     return '';
   };
@@ -304,10 +320,13 @@ export default function LeadsTable({
 
   const renderDynamicCell = (lead: Lead, header: string) => {
     const val = getCellValueByHeader(lead, header);
-    if (!val || val === 'undefined' || val === 'null' || val === '-') {
-      return <span className="text-gray-400 font-normal">-</span>;
+    const isBlank = !val || val === '' || val === '-' || val === 'undefined' || val === 'null' || val === 'Contact';
+    
+    if (isBlank) {
+      return <span className="text-gray-400 font-bold text-xs select-none">-</span>;
     }
-    return <span className="text-slate-800 font-medium">{val}</span>;
+    
+    return <span className="text-slate-800 font-medium text-xs truncate max-w-[280px] inline-block">{val}</span>;
   };
 
   return (
