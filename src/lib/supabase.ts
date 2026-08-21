@@ -88,10 +88,30 @@ export const testSupabaseConnection = async (config: SupabaseConfig): Promise<{ 
   }
 };
 
+const safeBtoa = (str: string): string => {
+  try {
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+  } catch (e) {
+    return '';
+  }
+};
+
+const safeAtob = (b64: string): string => {
+  try {
+    return decodeURIComponent(Array.prototype.map.call(atob(b64.trim()), (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+  } catch (e) {
+    return '';
+  }
+};
+
 export const pushLeadsToSupabase = async (
   leads: Lead[],
   config?: SupabaseConfig
 ): Promise<{ success: boolean; count: number; error?: string }> => {
+  if (!leads || leads.length === 0) {
+    return { success: true, count: 0 };
+  }
+
   const activeConfig = config || getSupabaseConfig();
   const client = getSupabaseClient(activeConfig);
   
@@ -119,33 +139,8 @@ export const pushLeadsToSupabase = async (
 
   // 2. Identify custom columns present on lead objects
   const internalKeys = new Set(['_csvHeaders', 'id', 'firstName', 'lastName', 'email', 'registrationTime', 'approvalStatus', 'city', 'phone', 'organization', 'jobTitle', 'questions', 'sourceName', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked']);
-  const customKeys = new Set<string>();
 
-  leads.forEach(l => {
-    Object.keys(l).forEach(k => {
-      if (!internalKeys.has(k) && !k.startsWith('_')) {
-        const sqlCol = k.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-        if (sqlCol && !['first_name', 'last_name', 'email', 'registration_time', 'approval_status', 'city', 'phone', 'organization', 'job_title', 'questions', 'source_name', 'created_at'].includes(sqlCol)) {
-          customKeys.add(sqlCol);
-        }
-      }
-    });
-  });
-
-  // 3. Try auto-creating missing columns via RPC function in Supabase if present
-  for (const colName of Array.from(customKeys)) {
-    try {
-      await client.rpc('add_column_if_missing', {
-        table_name: tableName,
-        column_name: colName,
-        column_type: 'text'
-      });
-    } catch (e) {
-      // Ignore if RPC function not created
-    }
-  }
-
-  // 4. Construct exact SQL table row objects with fresh non-colliding IDs (strictly > dbMaxId)
+  // 3. Construct exact SQL table row objects with fresh non-colliding IDs (strictly > dbMaxId)
   const seenEmails = new Map<string, number>();
 
   const rowsToInsert = leads.map((l, index) => {
@@ -183,17 +178,23 @@ export const pushLeadsToSupabase = async (
 
     let finalQuestions = l.questions || '';
     if (Object.keys(customMeta).length > 0) {
-      const metaTag = `__META__:${JSON.stringify(customMeta)}`;
-      if (!finalQuestions.includes('__META__:')) {
-        finalQuestions = finalQuestions ? `${metaTag}\n${finalQuestions}` : metaTag;
+      const b64Meta = safeBtoa(JSON.stringify(customMeta));
+      if (b64Meta) {
+        const metaTag = `__META_B64__:${b64Meta}`;
+        if (!finalQuestions.includes('__META_B64__:')) {
+          finalQuestions = finalQuestions ? `${metaTag}\n${finalQuestions}` : metaTag;
+        }
       }
     }
 
     const allActiveHeaders = getActiveHeaders() || ((l as any)._csvHeaders && Array.isArray((l as any)._csvHeaders) ? (l as any)._csvHeaders : null);
     if (allActiveHeaders && allActiveHeaders.length > 0) {
-      const headerMeta = `__HEADERS__:${JSON.stringify(allActiveHeaders)}`;
-      if (!finalQuestions.includes('__HEADERS__:')) {
-        finalQuestions = finalQuestions ? `${headerMeta}\n${finalQuestions}` : headerMeta;
+      const b64Headers = safeBtoa(JSON.stringify(allActiveHeaders));
+      if (b64Headers) {
+        const headerMeta = `__HEADERS_B64__:${b64Headers}`;
+        if (!finalQuestions.includes('__HEADERS_B64__:')) {
+          finalQuestions = finalQuestions ? `${headerMeta}\n${finalQuestions}` : headerMeta;
+        }
       }
     }
 
@@ -302,7 +303,16 @@ export const pullLeadsFromSupabase = async (
     const allExtractedHeadersSet = new Set<string>();
     allData.forEach((row: any) => {
       const q = row.questions || '';
-      if (q.includes('__HEADERS__:')) {
+
+      if (q.includes('__HEADERS_B64__:')) {
+        const match = q.match(/__HEADERS_B64__:([A-Za-z0-9+/=]+)/);
+        if (match) {
+          try {
+            const parsed = JSON.parse(safeAtob(match[1]));
+            if (Array.isArray(parsed)) parsed.forEach((h: string) => allExtractedHeadersSet.add(h));
+          } catch (e) {}
+        }
+      } else if (q.includes('__HEADERS__:')) {
         const match = q.match(/__HEADERS__:(.+?)(\n|$)/);
         if (match) {
           try {
@@ -311,7 +321,16 @@ export const pullLeadsFromSupabase = async (
           } catch (e) {}
         }
       }
-      if (q.includes('__META__:')) {
+
+      if (q.includes('__META_B64__:')) {
+        const metaMatch = q.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
+        if (metaMatch) {
+          try {
+            const metaObj = JSON.parse(safeAtob(metaMatch[1]));
+            Object.keys(metaObj).forEach(k => allExtractedHeadersSet.add(k));
+          } catch (e) {}
+        }
+      } else if (q.includes('__META__:')) {
         const metaMatch = q.match(/__META__:(.+?)(\n|$)/);
         if (metaMatch) {
           try {
@@ -343,17 +362,27 @@ export const pullLeadsFromSupabase = async (
       let cleanQuestions = row.questions || '';
       let restoredCustomMeta: Record<string, any> = {};
 
-      if (cleanQuestions.includes('__META__:')) {
+      if (cleanQuestions.includes('__META_B64__:')) {
+        const metaMatch = cleanQuestions.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
+        if (metaMatch) {
+          try {
+            restoredCustomMeta = JSON.parse(safeAtob(metaMatch[1]));
+          } catch (e) {}
+        }
+        cleanQuestions = cleanQuestions.replace(/__META_B64__:[A-Za-z0-9+/=]+(\n|$)/g, '').trim();
+      } else if (cleanQuestions.includes('__META__:')) {
         const metaMatch = cleanQuestions.match(/__META__:(.+?)(\n|$)/);
         if (metaMatch) {
           try {
             restoredCustomMeta = JSON.parse(metaMatch[1]);
           } catch (e) {}
         }
-        cleanQuestions = cleanQuestions.replace(/__META__:.+?(\n|$)/, '').trim();
+        cleanQuestions = cleanQuestions.replace(/__META__:.+?(\n|$)/g, '').trim();
       }
 
-      if (cleanQuestions.includes('__HEADERS__:')) {
+      if (cleanQuestions.includes('__HEADERS_B64__:')) {
+        cleanQuestions = cleanQuestions.replace(/__HEADERS_B64__:[A-Za-z0-9+/=]+(\n|$)/g, '').trim();
+      } else if (cleanQuestions.includes('__HEADERS__:')) {
         cleanQuestions = cleanQuestions.replace(/__HEADERS__:.+?(\n|$)/, '').trim();
       }
 
