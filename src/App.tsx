@@ -1408,67 +1408,9 @@ export default function App() {
               </div>
             </div>
 
-            {/* Bottom Row Metric Cards & Bulk Actions */}
-            <div className="flex items-center justify-between pt-2">
-              
-              {/* Metric Cards */}
-              <div className="flex items-center space-x-4">
-                
-                {/* TOTAL Card */}
-                <button
-                  onClick={() => {
-                    setFilters(prev => ({ ...prev, savedOnly: false, netNewOnly: false }));
-                    setPage(1);
-                  }}
-                  className={`w-52 h-20 rounded-2xl p-3.5 border transition-all text-left flex flex-col justify-between relative overflow-hidden cursor-pointer ${
-                    !filters.savedOnly && !filters.netNewOnly
-                      ? 'bg-blue-50/80 border-blue-200 shadow-3xs'
-                      : 'bg-white border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="text-xs font-semibold text-blue-900">All Contacts</span>
-                  <span className="text-xl font-bold text-gray-900 leading-none">{stats.total}</span>
-                  <Users className="w-12 h-12 text-blue-200/50 absolute right-2 bottom-1 pointer-events-none" />
-                </button>
-
-                {/* NET NEW Card */}
-                <button
-                  onClick={() => {
-                    setFilters(prev => ({ ...prev, savedOnly: false, netNewOnly: true }));
-                    setPage(1);
-                  }}
-                  className={`w-52 h-20 rounded-2xl p-3.5 border transition-all text-left flex flex-col justify-between relative overflow-hidden cursor-pointer ${
-                    filters.netNewOnly
-                      ? 'bg-blue-50/80 border-blue-200 shadow-3xs'
-                      : 'bg-white border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="text-xs font-semibold text-gray-600">New Contacts</span>
-                  <span className="text-xl font-bold text-gray-900 leading-none">{stats.netNew}</span>
-                  <User className="w-12 h-12 text-gray-200/50 absolute right-2 bottom-1 pointer-events-none" />
-                </button>
-
-                {/* SAVED Card */}
-                <button
-                  onClick={() => {
-                    setFilters(prev => ({ ...prev, savedOnly: true, netNewOnly: false }));
-                    setPage(1);
-                  }}
-                  className={`w-52 h-20 rounded-2xl p-3.5 border transition-all text-left flex flex-col justify-between relative overflow-hidden cursor-pointer ${
-                    filters.savedOnly
-                      ? 'bg-blue-50/80 border-blue-200 shadow-3xs'
-                      : 'bg-white border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="text-xs font-semibold text-gray-600">Bookmarked</span>
-                  <span className="text-xl font-bold text-gray-900 leading-none">{stats.saved}</span>
-                  <Bookmark className="w-12 h-12 text-gray-200/50 absolute right-2 bottom-1 pointer-events-none" />
-                </button>
-
-              </div>
-
-              {/* Bulk actions area */}
-              {selectedIds.length > 0 && (
+            {/* Bulk actions area when contacts are selected */}
+            {selectedIds.length > 0 && (
+              <div className="flex items-center justify-end pt-2">
                 <div className="flex items-center space-x-2 animate-fadeIn">
                   <span className="text-2xs text-gray-500 font-bold uppercase tracking-wider">
                     {selectedIds.length} selected
@@ -1520,9 +1462,8 @@ export default function App() {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-              )}
-
-            </div>
+              </div>
+            )}
           </div>
 
           {/* View Content Routing */}
