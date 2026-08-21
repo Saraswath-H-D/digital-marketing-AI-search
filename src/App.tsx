@@ -688,22 +688,22 @@ export default function App() {
         {/* Right Side Content Pane - Light Professional Pink Surface */}
         <main className="flex-1 flex flex-col overflow-hidden bg-[#FDF2F8]">
           
-          {/* Executive Top Command Header */}
-          <div className="px-6 py-3.5 bg-[#0f172a] text-white flex items-center justify-between shrink-0 shadow-md border-b border-slate-800">
+          {/* Executive Top Command Header - Professional Deep Purple */}
+          <div className="px-6 py-3.5 bg-[#240a34] text-white flex items-center justify-between shrink-0 shadow-md border-b border-purple-900/60">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 via-pink-500 to-rose-400 p-0.5 flex items-center justify-center shadow-md">
-                <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center">
+                <div className="w-full h-full bg-purple-950 rounded-[10px] flex items-center justify-center">
                   <Sparkles className="w-4 h-4 text-pink-400 animate-pulse" />
                 </div>
               </div>
               <div>
                 <div className="flex items-center space-x-2">
                   <h1 className="text-sm font-extrabold tracking-tight text-white font-display">APOLLO ENTERPRISE AI</h1>
-                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-pink-500/20 text-pink-300 border border-pink-500/30 rounded-full">
+                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-500/30 text-purple-200 border border-purple-400/30 rounded-full">
                     PRO PLATFORM v10.4
                   </span>
                 </div>
-                <p className="text-xs text-slate-400">Real-time Lead Intelligence & Supabase Database Sync</p>
+                <p className="text-xs text-purple-200/80">Real-time Lead Intelligence & Supabase Database Sync</p>
               </div>
             </div>
 
@@ -712,7 +712,7 @@ export default function App() {
               {/* Supabase Live Status Pill */}
               <button
                 onClick={() => setIsSupabaseOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 text-slate-200 flex items-center space-x-2 transition-all hover:scale-102 cursor-pointer shadow-xs"
+                className="px-3 py-1.5 rounded-xl bg-purple-900/70 hover:bg-purple-900 border border-purple-700/80 text-purple-100 flex items-center space-x-2 transition-all hover:scale-102 cursor-pointer shadow-xs"
                 title="Supabase PostgreSQL Database Connected"
               >
                 <span className="relative flex h-2 w-2">
@@ -724,8 +724,8 @@ export default function App() {
               </button>
 
               {/* Apollo Credit Balance */}
-              <div className="px-3 py-1.5 rounded-xl bg-indigo-950/60 border border-indigo-800/60 text-indigo-200 flex items-center space-x-2 shadow-xs">
-                <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
+              <div className="px-3 py-1.5 rounded-xl bg-purple-950/80 border border-purple-800/80 text-purple-200 flex items-center space-x-2 shadow-xs">
+                <TrendingUp className="w-3.5 h-3.5 text-purple-300" />
                 <span>Credits: <strong className="text-white font-mono">{creditBalance}</strong></span>
               </div>
             </div>

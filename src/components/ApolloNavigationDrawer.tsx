@@ -131,34 +131,34 @@ export default function ApolloNavigationDrawer({
   return (
     <aside 
       id="apollo-navigation-drawer"
-      className={`border-r border-slate-800/90 bg-[#0f172a] text-slate-300 flex flex-col h-full shrink-0 select-none transition-all duration-300 ${
+      className={`border-r border-purple-900/60 bg-[#240a34] text-purple-100 flex flex-col h-full shrink-0 select-none transition-all duration-300 ${
         isCollapsed ? 'w-16' : 'w-60'
       }`}
     >
-      {/* Brand & Toggle Header */}
-      <div className="h-16 px-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/40">
+      {/* Brand & Toggle Header - Professional Deep Purple */}
+      <div className="h-16 px-4 border-b border-purple-900/60 flex items-center justify-between bg-purple-950/70">
         {!isCollapsed && (
           <div className="flex items-center space-x-2.5 min-w-0">
             {/* Bright Gradient Brand Icon */}
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-900/50 ring-2 ring-purple-400/30">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 via-indigo-500 to-pink-400 text-white flex items-center justify-center shrink-0 shadow-lg shadow-purple-950/80 ring-2 ring-purple-400/30">
               <Grid className="w-4 h-4" />
             </div>
             <div className="flex flex-col min-w-0">
               <span className="font-black text-sm text-white tracking-widest leading-none font-display">APOLLO</span>
-              <span className="text-[9px] text-purple-400 font-extrabold uppercase tracking-wider mt-1">Lead Intelligence Platform</span>
+              <span className="text-[9px] text-purple-300 font-extrabold uppercase tracking-wider mt-1">Lead Intelligence Platform</span>
             </div>
           </div>
         )}
         
         {isCollapsed && (
-          <div className="mx-auto w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-900/50">
+          <div className="mx-auto w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 via-indigo-500 to-pink-400 text-white flex items-center justify-center shrink-0 shadow-lg shadow-purple-950/80">
             <Grid className="w-4 h-4" />
           </div>
         )}
 
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`p-1.5 rounded-lg border border-slate-800 hover:bg-slate-800/80 text-slate-400 hover:text-white cursor-pointer ${
+          className={`p-1.5 rounded-lg border border-purple-800/60 hover:bg-purple-900/60 text-purple-300 hover:text-white cursor-pointer ${
             isCollapsed ? 'mx-auto mt-0' : 'ml-2'
           }`}
           title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
