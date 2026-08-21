@@ -58,7 +58,8 @@ import {
   Table,
   Filter,
   RefreshCw,
-  SlidersHorizontal
+  SlidersHorizontal,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function App() {
@@ -687,10 +688,134 @@ export default function App() {
         {/* Right Side Content Pane */}
         <main className="flex-1 flex flex-col overflow-hidden bg-white">
           
-          {/* Find People Heading Section (Screenshot 1) */}
-          <div className="px-6 pt-5 pb-3 bg-white flex flex-col space-y-2 shrink-0 border-b border-gray-100">
+          {/* Executive Top Command Header */}
+          <div className="px-6 py-3.5 bg-[#0f172a] text-white flex items-center justify-between shrink-0 shadow-md border-b border-slate-800">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-emerald-400 p-0.5 flex items-center justify-center shadow-md">
+                <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-sm font-extrabold tracking-tight text-white font-display">APOLLO ENTERPRISE AI</h1>
+                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full">
+                    PRO PLATFORM v10.4
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">Real-time Lead Intelligence & Supabase Database Sync</p>
+              </div>
+            </div>
+
+            {/* Live Database & Credits Indicators */}
+            <div className="flex items-center space-x-3 text-xs font-semibold">
+              {/* Supabase Live Status Pill */}
+              <button
+                onClick={() => setIsSupabaseOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 text-slate-200 flex items-center space-x-2 transition-all hover:scale-102 cursor-pointer shadow-xs"
+                title="Supabase PostgreSQL Database Connected"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <Database className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="font-mono text-emerald-300 text-xs">Supabase Connected</span>
+              </button>
+
+              {/* Apollo Credit Balance */}
+              <div className="px-3 py-1.5 rounded-xl bg-indigo-950/60 border border-indigo-800/60 text-indigo-200 flex items-center space-x-2 shadow-xs">
+                <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Credits: <strong className="text-white font-mono">{creditBalance}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {/* Executive KPI Overview Cards Bar */}
+          <div className="px-6 py-4 bg-slate-50/70 border-b border-slate-200/80 shrink-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              
+              {/* Card 1: Total Contacts */}
+              <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Contacts</span>
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Users className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-2xl font-black text-slate-900 font-display tracking-tight">{totalLeads}</span>
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full flex items-center gap-1">
+                    +14.2% <TrendingUp className="w-2.5 h-2.5" />
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 font-medium">Verified leads in system</p>
+              </div>
+
+              {/* Card 2: Supabase Storage */}
+              <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">PostgreSQL Cloud DB</span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Database className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-2xl font-black text-slate-900 font-display tracking-tight">Active</span>
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">
+                    Auto-Sync
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 font-medium">Table: <code className="text-emerald-700 font-mono font-bold">registration_contacts</code></p>
+              </div>
+
+              {/* Card 3: Data Accuracy Rate */}
+              <div className="p-4 bg-white border border-slate-200/80 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Data Accuracy Rate</span>
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-2xl font-black text-slate-900 font-display tracking-tight">98.6%</span>
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200 rounded-full">
+                    Verified
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1 font-medium">Verified email & phone records</p>
+              </div>
+
+              {/* Card 4: Apollo AI Copilot */}
+              <div className="p-4 bg-gradient-to-br from-indigo-900 to-slate-900 border border-indigo-800 text-white rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">AI Outreach Copilot</span>
+                  <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                  </div>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xl font-extrabold text-white font-display tracking-tight">AI Assistant</span>
+                  <button
+                    onClick={() => setShowAICopilot(true)}
+                    className="px-2.5 py-1 text-[10px] font-extrabold bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-full transition-all cursor-pointer shadow-xs"
+                  >
+                    Open AI Chat
+                  </button>
+                </div>
+                <p className="text-[11px] text-indigo-200/80 mt-1 font-medium">Generate emails & smart filters</p>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Sub-toolbar Controls Row */}
+          <div className="px-6 pt-3.5 pb-3 bg-white flex flex-col space-y-2 shrink-0 border-b border-gray-100">
             <div className="flex items-center justify-between">
-              <h1 className="text-xl font-black tracking-tight text-neutral-950 font-display">Find Contacts</h1>
+              <h2 className="text-lg font-black tracking-tight text-neutral-900 font-display">Contact Directory</h2>
+              <span className="text-xs text-slate-500 font-semibold">
+                Showing {pageStartCount}–{pageEndCount} of {totalLeads} contacts
+              </span>
             </div>
             
             {/* Apollo Sub-toolbar row with high fidelity to Apollo's controls (Screenshot 1) */}
