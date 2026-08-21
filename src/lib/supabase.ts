@@ -274,20 +274,7 @@ export const pullLeadsFromSupabase = async (
       }
     }
 
-    const mappedLeads: Lead[] = allData
-      .filter((row: any) => {
-        const fn = (row.first_name || row.firstName || '').trim();
-        const ln = (row.last_name || row.lastName || '').trim();
-        const em = (row.email || '').trim();
-        const org = (row.organization || row.company || '').trim();
-        const jt = (row.job_title || row.jobTitle || '').trim();
-        const phone = (row.phone || '').trim();
-        const city = (row.city || '').trim();
-        
-        const isClean = (v: string) => v !== '' && v !== '-';
-        return isClean(fn) || isClean(ln) || isClean(em) || isClean(org) || isClean(jt) || isClean(phone) || isClean(city);
-      })
-      .map((row: any, index: number) => {
+    const mappedLeads: Lead[] = allData.map((row: any, index: number) => {
       const rawSrc = row.source_name || row.sourceName || '';
       let srcName = rawSrc ? String(rawSrc).trim().replace(/\s+/g, '-') : '-';
       if (!srcName || /^supabase|^contacts$|^export$|^leads$|^data$/i.test(srcName)) {
