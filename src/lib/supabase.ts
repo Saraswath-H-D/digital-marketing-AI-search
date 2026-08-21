@@ -189,13 +189,11 @@ export const pushLeadsToSupabase = async (
       }
     }
 
-    if (index === 0) {
-      const allActiveHeaders = getActiveHeaders() || ((l as any)._csvHeaders && Array.isArray((l as any)._csvHeaders) ? (l as any)._csvHeaders : null);
-      if (allActiveHeaders && allActiveHeaders.length > 0) {
-        const headerMeta = `__HEADERS__:${JSON.stringify(allActiveHeaders)}`;
-        if (!finalQuestions.includes('__HEADERS__:')) {
-          finalQuestions = finalQuestions ? `${headerMeta}\n${finalQuestions}` : headerMeta;
-        }
+    const allActiveHeaders = getActiveHeaders() || ((l as any)._csvHeaders && Array.isArray((l as any)._csvHeaders) ? (l as any)._csvHeaders : null);
+    if (allActiveHeaders && allActiveHeaders.length > 0) {
+      const headerMeta = `__HEADERS__:${JSON.stringify(allActiveHeaders)}`;
+      if (!finalQuestions.includes('__HEADERS__:')) {
+        finalQuestions = finalQuestions ? `${headerMeta}\n${finalQuestions}` : headerMeta;
       }
     }
 
@@ -214,16 +212,6 @@ export const pushLeadsToSupabase = async (
       source_name: l.sourceName || '-',
       created_at: l.createdAt || new Date().toISOString()
     };
-
-    // Attach all custom/extra CSV columns onto row for complete zero-data-loss Supabase sync
-    Object.keys(l).forEach(k => {
-      if (!internalKeys.has(k) && !k.startsWith('_')) {
-        const sqlCol = k.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-        if (sqlCol && !['id', 'first_name', 'last_name', 'email', 'registration_time', 'approval_status', 'city', 'phone', 'organization', 'job_title', 'questions', 'source_name', 'created_at'].includes(sqlCol)) {
-          row[sqlCol] = l[k] !== undefined && l[k] !== null ? String(l[k]).trim() : '';
-        }
-      }
-    });
 
     return row;
   });
@@ -263,7 +251,6 @@ export const pushLeadsToSupabase = async (
 
   return { success: totalPushed > 0, count: totalPushed, error: totalPushed === 0 ? lastError : undefined };
 };
-
 
 export const pullLeadsFromSupabase = async (
   config?: SupabaseConfig
@@ -311,21 +298,32 @@ export const pullLeadsFromSupabase = async (
       }
     }
 
-    let extractedHeaders: string[] | null = null;
+    // Collect ALL unique headers & custom keys across ALL rows pulled from Supabase
+    const allExtractedHeadersSet = new Set<string>();
     allData.forEach((row: any) => {
       const q = row.questions || '';
-      if (!extractedHeaders && q.includes('__HEADERS__:')) {
+      if (q.includes('__HEADERS__:')) {
         const match = q.match(/__HEADERS__:(.+?)(\n|$)/);
         if (match) {
           try {
-            extractedHeaders = JSON.parse(match[1]);
+            const parsed = JSON.parse(match[1]);
+            if (Array.isArray(parsed)) parsed.forEach((h: string) => allExtractedHeadersSet.add(h));
+          } catch (e) {}
+        }
+      }
+      if (q.includes('__META__:')) {
+        const metaMatch = q.match(/__META__:(.+?)(\n|$)/);
+        if (metaMatch) {
+          try {
+            const metaObj = JSON.parse(metaMatch[1]);
+            Object.keys(metaObj).forEach(k => allExtractedHeadersSet.add(k));
           } catch (e) {}
         }
       }
     });
 
-    if (extractedHeaders && Array.isArray(extractedHeaders) && extractedHeaders.length > 0) {
-      setActiveHeaders(extractedHeaders);
+    if (allExtractedHeadersSet.size > 0) {
+      setActiveHeaders(Array.from(allExtractedHeadersSet));
     }
 
     const mappedLeads: Lead[] = allData.map((row: any, index: number) => {
@@ -362,7 +360,7 @@ export const pullLeadsFromSupabase = async (
       return {
         ...row,
         ...restoredCustomMeta, // Restore all custom flexible CSV key-values onto lead object!
-        _csvHeaders: extractedHeaders || row._csvHeaders,
+        _csvHeaders: Array.from(allExtractedHeadersSet),
         id: index + 1, // Always assign clean sequential ID starting from 1
         firstName: row.first_name || row.firstName || '-',
         lastName: row.last_name || row.lastName || '',
