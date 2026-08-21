@@ -80,14 +80,14 @@ export default function ApolloNavigationDrawer({
           onClick={() => handleItemClick(name)}
           className={`w-10 h-10 mx-auto my-1 flex items-center justify-center rounded-xl transition-all relative group cursor-pointer ${
             isActive 
-              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-indigo-900/50 font-bold border-l-4 border-indigo-400' 
+              ? 'bg-purple-400/35 text-purple-100 shadow-md font-bold border-l-4 border-purple-400 ring-1 ring-purple-400/40' 
               : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-100'
           }`}
           title={name}
         >
           {icon}
           {badge && (
-            <span className="absolute top-1 right-1 px-1 py-0.2 text-[8px] font-extrabold bg-purple-500 text-white rounded-full">
+            <span className="absolute top-1 right-1 px-1 py-0.2 text-[8px] font-extrabold bg-purple-400 text-slate-950 rounded-full">
               {badge}
             </span>
           )}
@@ -103,21 +103,23 @@ export default function ApolloNavigationDrawer({
       <button
         key={name}
         onClick={() => handleItemClick(name)}
-        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-all cursor-pointer ${
+        className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-all cursor-pointer ${
           isActive 
-            ? 'bg-gradient-to-r from-purple-600/90 to-indigo-600/90 text-white font-extrabold shadow-md border-l-4 border-purple-400 shadow-indigo-950/60' 
+            ? 'bg-purple-400/35 text-purple-100 font-black shadow-md border-l-4 border-purple-400 ring-1 ring-purple-400/40' 
             : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
         }`}
       >
         <div className="flex items-center space-x-2.5 min-w-0">
-          <span className={isActive ? 'text-white drop-shadow-xs' : 'text-slate-400'}>{icon}</span>
+          <span className={isActive ? 'text-purple-300 drop-shadow-xs font-bold' : 'text-slate-400'}>{icon}</span>
           <span className="truncate">{name}</span>
         </div>
         {badge && (
           <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded-full leading-none shrink-0 ${
             badge === 'NEW' 
-              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-2xs' 
-              : 'bg-indigo-900/80 text-indigo-200 border border-indigo-700/60'
+              ? 'bg-purple-400 text-slate-950 font-black shadow-2xs' 
+              : isActive 
+                ? 'bg-purple-300/40 text-purple-100 border border-purple-300/50' 
+                : 'bg-indigo-900/80 text-indigo-200 border border-indigo-700/60'
           }`}>
             {badge}
           </span>
