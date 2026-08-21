@@ -657,7 +657,7 @@ export default function FiltersSidebar({
             value={globalSearch}
             onChange={(e) => setGlobalSearch(e.target.value)}
             placeholder="Search all targeting filters..."
-            className="w-full pl-9.5 pr-8 py-2 text-xs border border-pink-200 rounded-2xl focus:outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 transition-all bg-white/95 placeholder-slate-400 font-semibold text-slate-800 shadow-2xs"
+            className="w-full pl-9.5 pr-8 py-2 text-xs border border-pink-200 rounded-2xl focus:outline-none focus:border-pink-500 transition-all bg-white/95 placeholder-slate-400 font-semibold text-slate-800 super-3d-input"
           />
           {globalSearch && (
             <button

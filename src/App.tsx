@@ -688,10 +688,10 @@ export default function App() {
         {/* Right Side Content Pane - Light Professional Pink Surface */}
         <main className="flex-1 flex flex-col overflow-hidden bg-[#FDF2F8]">
           
-          {/* Executive Top Command Header - Light Purple Theme */}
-          <div className="px-6 py-3.5 bg-[#F0E6FA] text-purple-950 flex items-center justify-between shrink-0 shadow-2xs border-b border-purple-200">
+          {/* Executive Top Command Header - Super 3D Header */}
+          <div className="px-6 py-3.5 bg-[#F0E6FA] text-purple-950 flex items-center justify-between shrink-0 super-3d-header border-b-2 border-purple-300 relative z-20">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-pink-500 p-0.5 flex items-center justify-center shadow-2xs">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-pink-500 p-0.5 flex items-center justify-center super-3d-button">
                 <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
                   <Sparkles className="w-4 h-4 text-purple-600 animate-pulse" />
                 </div>
@@ -699,7 +699,7 @@ export default function App() {
               <div>
                 <div className="flex items-center space-x-2">
                   <h1 className="text-sm font-black tracking-tight text-purple-950 font-display">APOLLO ENTERPRISE AI</h1>
-                  <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider bg-purple-200 text-purple-900 border border-purple-300 rounded-full">
+                  <span className="px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider bg-purple-200 text-purple-950 border border-purple-300 rounded-full shadow-2xs">
                     PRO PLATFORM v10.4
                   </span>
                 </div>
@@ -712,7 +712,7 @@ export default function App() {
               {/* Supabase Live Status Pill */}
               <button
                 onClick={() => setIsSupabaseOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-white hover:bg-purple-50 border border-purple-200 text-purple-900 flex items-center space-x-2 transition-all hover:scale-102 cursor-pointer shadow-2xs"
+                className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-purple-50 border border-purple-200 text-purple-900 flex items-center space-x-2 transition-all cursor-pointer super-3d-white-btn"
                 title="Supabase PostgreSQL Database Connected"
               >
                 <span className="relative flex h-2 w-2">
@@ -724,19 +724,19 @@ export default function App() {
               </button>
 
               {/* Apollo Credit Balance */}
-              <div className="px-3 py-1.5 rounded-xl bg-white border border-purple-200 text-purple-900 flex items-center space-x-2 shadow-2xs">
+              <div className="px-3.5 py-1.5 rounded-xl bg-white border border-purple-200 text-purple-900 flex items-center space-x-2 super-3d-white-btn">
                 <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
                 <span>Credits: <strong className="text-purple-950 font-mono font-bold">{creditBalance}</strong></span>
               </div>
             </div>
           </div>
 
-          {/* Executive KPI Overview Cards Bar - Soft Pink & Light Purple Tinted Surface */}
+          {/* Executive KPI Overview Cards Bar - Super 3D Cards */}
           <div className="px-6 py-4 bg-[#FCE7F3]/40 border-b border-pink-200/60 shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               
-              {/* Card 1: Total Contacts - 3D Lift Elevation */}
-              <div className="p-4 bg-white/95 border border-pink-200/90 rounded-2xl shadow-3d-card hover:shadow-3d-lg transition-all duration-200 hover:-translate-y-1 group">
+              {/* Card 1: Total Contacts - Super 3D Card */}
+              <div className="p-4 bg-white/95 border border-pink-200/90 rounded-2xl super-3d-card group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Contacts</span>
                   <div className="w-8 h-8 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
@@ -752,8 +752,8 @@ export default function App() {
                 <p className="text-[11px] text-slate-400 mt-1 font-medium">Verified leads in system</p>
               </div>
 
-              {/* Card 2: Supabase Storage - 3D Lift Elevation */}
-              <div className="p-4 bg-white/95 border border-pink-200/90 rounded-2xl shadow-3d-card hover:shadow-3d-lg transition-all duration-200 hover:-translate-y-1 group">
+              {/* Card 2: Supabase Storage - Super 3D Card */}
+              <div className="p-4 bg-white/95 border border-pink-200/90 rounded-2xl super-3d-card group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-500">PostgreSQL Cloud DB</span>
                   <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
@@ -769,8 +769,8 @@ export default function App() {
                 <p className="text-[11px] text-slate-400 mt-1 font-medium">Table: <code className="text-emerald-700 font-mono font-bold">registration_contacts</code></p>
               </div>
 
-              {/* Card 3: Apollo AI Copilot - 3D Lift Elevation */}
-              <div className="p-4 bg-gradient-to-br from-purple-100 via-pink-100 to-purple-50 border border-purple-200/90 text-purple-950 rounded-2xl shadow-3d-card hover:shadow-3d-lg transition-all duration-200 hover:-translate-y-1 group">
+              {/* Card 3: Apollo AI Copilot - Super 3D Card */}
+              <div className="p-4 bg-gradient-to-br from-purple-100 via-pink-100 to-purple-50 border border-purple-200/90 text-purple-950 rounded-2xl super-3d-card group">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-purple-800">AI Outreach Copilot</span>
                   <div className="w-8 h-8 rounded-xl bg-purple-200/60 text-purple-700 border border-purple-300/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
@@ -781,7 +781,7 @@ export default function App() {
                   <span className="text-xl font-extrabold text-purple-950 font-display tracking-tight">AI Assistant</span>
                   <button
                     onClick={() => setShowAICopilot(true)}
-                    className="px-3 py-1.5 text-[10px] font-black text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-full btn-3d-primary cursor-pointer active:scale-95"
+                    className="px-3 py-1.5 text-[10px] font-black text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-full super-3d-button cursor-pointer active:scale-95"
                   >
                     Open AI Chat
                   </button>
@@ -1374,32 +1374,32 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center space-x-2">
+              {/* Super 3D Action Buttons */}
+              <div className="flex items-center space-x-2.5">
                 
                 {/* Export CSV */}
                 <button
                   onClick={handleExportCsv}
                   title="Export contacts to CSV"
-                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-all shadow-3xs cursor-pointer"
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-black text-slate-800 bg-white rounded-xl cursor-pointer super-3d-white-btn"
                 >
-                  <Download className="w-3.5 h-3.5 text-gray-500" />
+                  <Download className="w-3.5 h-3.5 text-purple-600" />
                   <span>Download CSV</span>
                 </button>
 
                 {/* Import CSV */}
                 <button
                   onClick={() => setIsImportOpen(true)}
-                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-all shadow-3xs cursor-pointer"
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-black text-slate-800 bg-white rounded-xl cursor-pointer super-3d-white-btn"
                 >
-                  <Upload className="w-3.5 h-3.5 text-gray-500" />
+                  <Upload className="w-3.5 h-3.5 text-purple-600" />
                   <span>Upload CSV</span>
                 </button>
 
                 {/* Add Contact button */}
                 <button
                   onClick={() => setIsAddOpen(true)}
-                  className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all shadow-xs cursor-pointer"
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 rounded-xl cursor-pointer super-3d-button"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Contact</span>
