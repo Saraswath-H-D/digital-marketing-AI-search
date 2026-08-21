@@ -1096,45 +1096,55 @@ export default function App() {
                   </div>
 
                   {/* CSV Tag Autocomplete Suggestions Dropdown */}
-                  {tagDropdownOpen && filterOptions.sources.length > 0 && (
-                    <>
-                      <div 
-                        className="fixed inset-0 z-40" 
-                        onClick={() => setTagDropdownOpen(false)}
-                      />
-                      <div className="absolute left-0 right-0 mt-1 bg-white border border-purple-150 rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
-                        <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-purple-600 border-b border-purple-100 mb-1 flex items-center justify-between">
-                          <span>Uploaded CSV Tags</span>
-                          <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-bold">{filterOptions.sources.length} active</span>
+                  {tagDropdownOpen && (() => {
+                    const csvImportTags = filterOptions.sources.filter(s => {
+                      if (!s || s === '-' || s.trim() === '') return false;
+                      const clean = s.trim().toLowerCase();
+                      return !['registration-report', 'registration report', 'manual-entry', 'contacts', 'leads', 'export', 'data', 'file', 'sheet', 'supabase', 'null', 'undefined'].includes(clean);
+                    });
+
+                    if (csvImportTags.length === 0) return null;
+
+                    return (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setTagDropdownOpen(false)}
+                        />
+                        <div className="absolute left-0 right-0 mt-1 bg-white border border-purple-150 rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
+                          <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-purple-600 border-b border-purple-100 mb-1 flex items-center justify-between">
+                            <span>Uploaded CSV Tags</span>
+                            <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-bold">{csvImportTags.length} active</span>
+                          </div>
+                          {csvImportTags
+                            .filter(s => s.toLowerCase().includes(tagSearchInput.toLowerCase()))
+                            .map((tag) => {
+                              const isSelected = filters.sources.includes(tag);
+                              return (
+                                <button
+                                  key={tag}
+                                  onClick={() => {
+                                    setTagSearchInput(tag);
+                                    setFilters(prev => ({ ...prev, sources: [tag] }));
+                                    setPage(1);
+                                    setTagDropdownOpen(false);
+                                  }}
+                                  className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-purple-50 transition-colors cursor-pointer ${
+                                    isSelected ? 'text-purple-700 bg-purple-50 font-extrabold' : 'text-slate-700'
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-2 truncate">
+                                    <Tag className="w-3 h-3 text-purple-500 shrink-0" />
+                                    <span className="truncate font-bold">#{tag}</span>
+                                  </div>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
+                                </button>
+                              );
+                            })}
                         </div>
-                        {filterOptions.sources
-                          .filter(s => s.toLowerCase().includes(tagSearchInput.toLowerCase()))
-                          .map((tag) => {
-                            const isSelected = filters.sources.includes(tag);
-                            return (
-                              <button
-                                key={tag}
-                                onClick={() => {
-                                  setTagSearchInput(tag);
-                                  setFilters(prev => ({ ...prev, sources: [tag] }));
-                                  setPage(1);
-                                  setTagDropdownOpen(false);
-                                }}
-                                className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-purple-50 transition-colors cursor-pointer ${
-                                  isSelected ? 'text-purple-700 bg-purple-50 font-extrabold' : 'text-slate-700'
-                                }`}
-                              >
-                                <div className="flex items-center space-x-2 truncate">
-                                  <Tag className="w-3 h-3 text-purple-500 shrink-0" />
-                                  <span className="truncate">#{tag}</span>
-                                </div>
-                                {isSelected && <Check className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
-                              </button>
-                            );
-                          })}
-                      </div>
-                    </>
-                  )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 

@@ -206,17 +206,14 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     if (parsedData.length === 0) return;
     setIsUploading(true);
     
-    // Attach custom import tag to each lead if specified
-    const finalData = parsedData.map(item => {
-      let src = item.sourceName;
-      if (importTag && importTag.trim()) {
-        src = importTag.trim().replace(/\s+/g, '-');
-      }
-      return {
-        ...item,
-        sourceName: src || 'Registration-Report'
-      };
-    });
+    // Attach custom import tag or file name to each lead
+    const fileNameTag = file ? file.name.replace(/\.csv$/i, '').trim().replace(/\s+/g, '-') : 'CSV-Import';
+    const finalTag = (importTag && importTag.trim()) ? importTag.trim().replace(/\s+/g, '-') : fileNameTag;
+
+    const finalData = parsedData.map(item => ({
+      ...item,
+      sourceName: finalTag
+    }));
 
     const success = await onImport(finalData);
     
