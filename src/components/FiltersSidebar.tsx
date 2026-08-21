@@ -21,7 +21,8 @@ import {
   Mail,
   Users,
   GraduationCap,
-  Sparkles
+  Sparkles,
+  Bookmark
 } from 'lucide-react';
 
 interface FiltersSidebarProps {
@@ -368,17 +369,17 @@ export default function FiltersSidebar({
     return (
       <button
         onClick={() => toggleSection(sectionKey)}
-        className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-2xl border transition-all duration-200 text-left cursor-pointer group mb-1.5 shadow-2xs hover:scale-[1.01] ${
+        className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-full border transition-all duration-200 text-left cursor-pointer group mb-2 shadow-2xs hover:shadow-md hover:-translate-y-0.5 hover:scale-[1.01] active:scale-[0.98] ${
           isActive 
             ? `${theme.bg} ${theme.border} shadow-xs` 
             : 'bg-white hover:bg-slate-50 border-slate-200/90 hover:border-slate-300'
         }`}
       >
         <div className="flex items-center space-x-3">
-          <div className={`w-7 h-7 rounded-xl ${theme.bg} ${theme.icon} flex items-center justify-center shrink-0 border ${theme.border} group-hover:scale-110 transition-transform shadow-2xs`}>
+          <div className={`w-8 h-8 rounded-full ${theme.bg} ${theme.icon} flex items-center justify-center shrink-0 border ${theme.border} group-hover:scale-110 transition-transform duration-200 shadow-2xs`}>
             <IconComponent className="w-4 h-4" />
           </div>
-          <span className={`text-xs font-extrabold tracking-tight ${isActive ? theme.text : 'text-slate-800 font-bold'}`}>
+          <span className={`text-xs font-black tracking-tight ${isActive ? theme.text : 'text-slate-900 font-extrabold'}`}>
             {title}
           </span>
         </div>
@@ -396,11 +397,11 @@ export default function FiltersSidebar({
               <span>{activeCount}</span>
             </span>
           )}
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isActive ? theme.bg : 'bg-slate-100/80 group-hover:bg-slate-200'} transition-colors`}>
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center border border-slate-200/60 ${isActive ? `${theme.bg} ${theme.border}` : 'bg-slate-100/80 group-hover:bg-slate-200'} transition-colors duration-200`}>
             {isOpen ? (
-              <ChevronDown className={`w-3.5 h-3.5 ${isActive ? theme.icon : 'text-slate-500'} transition-colors`} />
+              <ChevronDown className={`w-3.5 h-3.5 ${isActive ? theme.icon : 'text-slate-500'} transition-transform duration-200`} />
             ) : (
-              <ChevronRight className={`w-3.5 h-3.5 ${isActive ? theme.icon : 'text-slate-500'} transition-colors`} />
+              <ChevronRight className={`w-3.5 h-3.5 ${isActive ? theme.icon : 'text-slate-500'} transition-transform duration-200`} />
             )}
           </div>
         </div>
@@ -1262,14 +1263,17 @@ export default function FiltersSidebar({
 
         {/* Saved Leads Filter Toggle */}
         <div className="p-2">
-          <label className="flex items-center space-x-2.5 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+          <label className="flex items-center space-x-3 py-2.5 px-4 rounded-full bg-slate-50/80 hover:bg-indigo-50/50 border border-slate-200/90 hover:border-indigo-300 shadow-2xs hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer transition-all duration-200 group">
             <input
               type="checkbox"
               checked={filters.savedOnly}
               onChange={(e) => setFilters(prev => ({ ...prev, savedOnly: e.target.checked }))}
-              className="w-4 h-4 rounded-md text-indigo-600 border-gray-300 focus:ring-indigo-500 transition-colors cursor-pointer"
+              className="w-4 h-4 rounded-md text-indigo-600 border-slate-300 focus:ring-indigo-500 transition-colors cursor-pointer"
             />
-            <span className="text-sm font-medium text-gray-700">Saved Contacts Only</span>
+            <div className="flex items-center space-x-2">
+              <Bookmark className={`w-4 h-4 transition-colors ${filters.savedOnly ? 'text-amber-500 animate-bounce' : 'text-slate-400 group-hover:text-indigo-600'}`} />
+              <span className={`text-xs font-black tracking-tight ${filters.savedOnly ? 'text-indigo-700' : 'text-slate-800 font-extrabold'}`}>Saved Contacts Only</span>
+            </div>
           </label>
         </div>
 
