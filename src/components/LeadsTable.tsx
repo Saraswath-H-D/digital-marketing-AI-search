@@ -122,22 +122,25 @@ export default function LeadsTable({
     const s = (status || 'pending').toLowerCase();
     if (s === 'approved') {
       return (
-        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-          <CheckCircle2 className="w-3 h-3" />
+        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-2xs font-extrabold bg-emerald-50/90 text-emerald-800 border border-emerald-200/90 shadow-3xs">
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
           <span className="capitalize">Approved</span>
         </span>
       );
-    } else if (s === 'denied') {
+    } else if (s === 'denied' || s === 'rejected') {
       return (
-        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-rose-50 text-rose-700 border border-rose-100">
-          <XCircle className="w-3 h-3" />
+        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-2xs font-extrabold bg-rose-50/90 text-rose-800 border border-rose-200/90 shadow-3xs">
+          <XCircle className="w-3 h-3 text-rose-500 shrink-0" />
           <span className="capitalize">Denied</span>
         </span>
       );
     } else {
       return (
-        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-amber-50 text-amber-700 border border-amber-100 animate-pulse">
-          <Clock className="w-3 h-3" />
+        <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-2xs font-extrabold bg-amber-50/90 text-amber-800 border border-amber-200/90 shadow-3xs">
+          <Clock className="w-3 h-3 text-amber-500 shrink-0 animate-spin" />
           <span className="capitalize">Pending</span>
         </span>
       );

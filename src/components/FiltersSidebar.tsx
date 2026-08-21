@@ -596,23 +596,30 @@ export default function FiltersSidebar({
   return (
     <aside id="filters-sidebar" className="w-80 border-r border-gray-200 bg-white flex flex-col h-full overflow-hidden select-none shrink-0">
       {/* Sidebar Header */}
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50/50">
-        <div className="flex items-center space-x-2 text-gray-800">
-          <Filter className="w-4 h-4 text-gray-500" />
-          <span className="font-semibold text-sm tracking-tight text-gray-700">Filters</span>
-          {hasActiveFilters && (
-            <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-2xs font-bold leading-none text-indigo-600 bg-indigo-50 rounded-full">
-              {filters.jobTitles.length + filters.companies.length + filters.cities.length + filters.sources.length + filters.statuses.length + (filters.savedOnly ? 1 : 0)}
-            </span>
-          )}
+      <div className="p-4 bg-[#0f172a] text-white flex items-center justify-between shadow-xs border-b border-slate-800 shrink-0">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-400" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-1.5">
+              <span className="font-extrabold text-xs tracking-wider uppercase text-white font-display">Targeting Filters</span>
+              {hasActiveFilters && (
+                <span className="inline-flex items-center justify-center px-1.5 py-0.2 text-[9px] font-extrabold text-emerald-300 bg-emerald-950/60 border border-emerald-700/60 rounded-full">
+                  {filters.jobTitles.length + filters.companies.length + filters.cities.length + filters.sources.length + filters.statuses.length + (filters.savedOnly ? 1 : 0)} Active
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium">Refine lead directory & personas</p>
+          </div>
         </div>
         {hasActiveFiltersOrSearches && (
           <button
             onClick={handleClearAll}
-            className="text-2xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center space-x-1 p-1 hover:bg-gray-100 rounded-lg transition-all cursor-pointer"
+            className="text-2xs font-bold text-slate-300 hover:text-white flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all cursor-pointer shadow-2xs"
           >
-            <X className="w-3 h-3" />
-            <span>Clear all</span>
+            <X className="w-3 h-3 text-rose-400" />
+            <span>Reset All</span>
           </button>
         )}
       </div>
