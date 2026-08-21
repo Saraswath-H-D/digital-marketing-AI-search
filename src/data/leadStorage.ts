@@ -6,6 +6,49 @@ const STORAGE_KEY = 'apollo_leads_v9';
 const HEADERS_KEY = 'apollo_active_headers';
 const TRASH_KEY = 'apollo_deleted_trash_v1';
 const DELETED_HISTORY_KEY = 'apollo_deleted_history_v1';
+const CSV_TAGS_KEY = 'apollo_csv_upload_tags_v2';
+
+// Independent CSV Upload Tag Storage Registry
+export const getStoredCsvTags = (): string[] => {
+  try {
+    const data = localStorage.getItem(CSV_TAGS_KEY);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(t => t && t !== '-' && t.trim() !== '');
+      }
+    }
+  } catch (err) {
+    console.error('Error reading CSV upload tags:', err);
+  }
+  return [];
+};
+
+export const addCsvTag = (tag: string): void => {
+  if (!tag || !tag.trim() || tag.trim() === '-') return;
+  const clean = tag.trim().replace(/\s+/g, '-');
+  const current = getStoredCsvTags();
+  if (!current.some(t => t.toLowerCase() === clean.toLowerCase())) {
+    const updated = [clean, ...current];
+    try {
+      localStorage.setItem(CSV_TAGS_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Error writing CSV tag:', e);
+    }
+  }
+};
+
+export const removeCsvTag = (tag: string): void => {
+  if (!tag || !tag.trim()) return;
+  const clean = tag.trim().replace(/\s+/g, '-').toLowerCase();
+  const current = getStoredCsvTags();
+  const updated = current.filter(t => t.toLowerCase() !== clean);
+  try {
+    localStorage.setItem(CSV_TAGS_KEY, JSON.stringify(updated));
+  } catch (e) {
+    console.warn('Error removing CSV tag:', e);
+  }
+};
 
 // Immediate cleanup of any legacy blank lead rows from localStorage
 (() => {
@@ -566,6 +609,7 @@ export const deleteLeadsByTag = async (tag: string): Promise<number> => {
   });
 
   saveStoredLeads(updatedLeads);
+  removeCsvTag(tag);
 
   if (targetLeads.length > 0) {
     addLeadsToTrash(targetLeads);
@@ -662,6 +706,10 @@ export const bulkImportLeads = async (
 
   const createdLeads: Lead[] = newLeadsList.map(item => {
     maxId += 1;
+    const tagVal = item.sourceName && String(item.sourceName).trim() ? String(item.sourceName).trim().replace(/\s+/g, '-') : '-';
+    if (tagVal !== '-') {
+      addCsvTag(tagVal);
+    }
     return {
       ...item,
       id: maxId,
@@ -675,7 +723,7 @@ export const bulkImportLeads = async (
       organization: cleanVal(item.organization),
       jobTitle: cleanVal(item.jobTitle),
       questions: cleanVal(item.questions),
-      sourceName: item.sourceName && String(item.sourceName).trim() ? String(item.sourceName).trim().replace(/\s+/g, '-') : '-',
+      sourceName: tagVal,
       createdAt: new Date().toISOString(),
       isSaved: false,
       emailUnlocked: true,
