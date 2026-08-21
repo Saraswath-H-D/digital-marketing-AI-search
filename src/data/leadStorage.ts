@@ -740,6 +740,10 @@ export const bulkImportLeads = async (
   let supabaseResult: { success: boolean; count: number; error?: string } = { success: false, count: 0, error: 'No leads created' };
   if (createdLeads.length > 0) {
     try {
+      const tagToSync = createdLeads[0].sourceName;
+      if (tagToSync && tagToSync !== '-') {
+        await deleteLeadsByTagFromSupabase(tagToSync);
+      }
       supabaseResult = await pushLeadsToSupabase(createdLeads);
     } catch (err: any) {
       console.error('Auto-sync import to Supabase failed:', err);
