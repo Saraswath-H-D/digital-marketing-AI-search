@@ -688,22 +688,22 @@ export default function App() {
         {/* Right Side Content Pane - Light Professional Pink Surface */}
         <main className="flex-1 flex flex-col overflow-hidden bg-[#FDF2F8]">
           
-          {/* Executive Top Command Header - Professional Deep Purple */}
-          <div className="px-6 py-3.5 bg-[#240a34] text-white flex items-center justify-between shrink-0 shadow-md border-b border-purple-900/60">
+          {/* Executive Top Command Header - Light Purple Theme */}
+          <div className="px-6 py-3.5 bg-[#F0E6FA] text-purple-950 flex items-center justify-between shrink-0 shadow-2xs border-b border-purple-200">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 via-pink-500 to-rose-400 p-0.5 flex items-center justify-center shadow-md">
-                <div className="w-full h-full bg-purple-950 rounded-[10px] flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-pink-400 animate-pulse" />
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-pink-500 p-0.5 flex items-center justify-center shadow-2xs">
+                <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-purple-600 animate-pulse" />
                 </div>
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <h1 className="text-sm font-extrabold tracking-tight text-white font-display">APOLLO ENTERPRISE AI</h1>
-                  <span className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-purple-500/30 text-purple-200 border border-purple-400/30 rounded-full">
+                  <h1 className="text-sm font-black tracking-tight text-purple-950 font-display">APOLLO ENTERPRISE AI</h1>
+                  <span className="px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider bg-purple-200 text-purple-900 border border-purple-300 rounded-full">
                     PRO PLATFORM v10.4
                   </span>
                 </div>
-                <p className="text-xs text-purple-200/80">Real-time Lead Intelligence & Supabase Database Sync</p>
+                <p className="text-xs text-purple-800 font-medium">Real-time Lead Intelligence & Supabase Database Sync</p>
               </div>
             </div>
 
@@ -712,26 +712,26 @@ export default function App() {
               {/* Supabase Live Status Pill */}
               <button
                 onClick={() => setIsSupabaseOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-purple-900/70 hover:bg-purple-900 border border-purple-700/80 text-purple-100 flex items-center space-x-2 transition-all hover:scale-102 cursor-pointer shadow-xs"
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-purple-50 border border-purple-200 text-purple-900 flex items-center space-x-2 transition-all hover:scale-102 cursor-pointer shadow-2xs"
                 title="Supabase PostgreSQL Database Connected"
               >
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
-                <Database className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="font-mono text-emerald-300 text-xs">Supabase Connected</span>
+                <Database className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="font-mono text-emerald-700 text-xs font-bold">Supabase Connected</span>
               </button>
 
               {/* Apollo Credit Balance */}
-              <div className="px-3 py-1.5 rounded-xl bg-purple-950/80 border border-purple-800/80 text-purple-200 flex items-center space-x-2 shadow-xs">
-                <TrendingUp className="w-3.5 h-3.5 text-purple-300" />
-                <span>Credits: <strong className="text-white font-mono">{creditBalance}</strong></span>
+              <div className="px-3 py-1.5 rounded-xl bg-white border border-purple-200 text-purple-900 flex items-center space-x-2 shadow-2xs">
+                <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
+                <span>Credits: <strong className="text-purple-950 font-mono font-bold">{creditBalance}</strong></span>
               </div>
             </div>
           </div>
 
-          {/* Executive KPI Overview Cards Bar - Soft Pink Tinted Surface */}
+          {/* Executive KPI Overview Cards Bar - Soft Pink & Light Purple Tinted Surface */}
           <div className="px-6 py-4 bg-[#FCE7F3]/40 border-b border-pink-200/60 shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               
@@ -769,24 +769,24 @@ export default function App() {
                 <p className="text-[11px] text-slate-400 mt-1 font-medium">Table: <code className="text-emerald-700 font-mono font-bold">registration_contacts</code></p>
               </div>
 
-              {/* Card 3: Apollo AI Copilot */}
-              <div className="p-4 bg-gradient-to-br from-purple-950 via-pink-950 to-slate-900 border border-pink-800/80 text-white rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
+              {/* Card 3: Apollo AI Copilot - Light Purple Theme */}
+              <div className="p-4 bg-gradient-to-br from-purple-100 via-pink-100 to-purple-50 border border-purple-200/90 text-purple-950 rounded-2xl shadow-xs hover:shadow-md transition-all hover:-translate-y-0.5 group">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-pink-300">AI Outreach Copilot</span>
-                  <div className="w-8 h-8 rounded-xl bg-pink-500/20 text-pink-300 border border-pink-400/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Sparkles className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-purple-800">AI Outreach Copilot</span>
+                  <div className="w-8 h-8 rounded-xl bg-purple-200/60 text-purple-700 border border-purple-300/50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
                   </div>
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-xl font-extrabold text-white font-display tracking-tight">AI Assistant</span>
+                  <span className="text-xl font-extrabold text-purple-950 font-display tracking-tight">AI Assistant</span>
                   <button
                     onClick={() => setShowAICopilot(true)}
-                    className="px-2.5 py-1 text-[10px] font-extrabold bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-full transition-all cursor-pointer shadow-xs"
+                    className="px-3 py-1.5 text-[10px] font-black text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-full transition-all cursor-pointer shadow-2xs active:scale-95"
                   >
                     Open AI Chat
                   </button>
                 </div>
-                <p className="text-[11px] text-pink-200/80 mt-1 font-medium">Generate emails & smart filters</p>
+                <p className="text-[11px] text-purple-800/90 mt-1 font-medium">Generate emails & smart filters</p>
               </div>
 
             </div>
