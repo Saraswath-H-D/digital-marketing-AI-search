@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Lead } from '../types.ts';
+import { setActiveHeaders } from '../data/leadStorage.ts';
 
 const SUPABASE_CONFIG_KEY = 'apollo_supabase_config_v1';
 
@@ -169,6 +170,14 @@ export const pushLeadsToSupabase = async (
     // Deleted lead IDs are NEVER considered for primary key allocation!
     const assignedId = dbMaxId + index + 1;
 
+    let finalQuestions = l.questions || '';
+    if (index === 0 && (l as any)._csvHeaders && Array.isArray((l as any)._csvHeaders) && (l as any)._csvHeaders.length > 0) {
+      const headerMeta = `__HEADERS__:${JSON.stringify((l as any)._csvHeaders)}`;
+      if (!finalQuestions.includes('__HEADERS__:')) {
+        finalQuestions = finalQuestions ? `${headerMeta}\n${finalQuestions}` : headerMeta;
+      }
+    }
+
     const row: Record<string, any> = {
       id: assignedId,
       first_name: l.firstName || '',
@@ -180,7 +189,7 @@ export const pushLeadsToSupabase = async (
       phone: l.phone || '',
       organization: l.organization || '',
       job_title: l.jobTitle || '',
-      questions: l.questions || '',
+      questions: finalQuestions,
       source_name: l.sourceName || '-',
       created_at: l.createdAt || new Date().toISOString()
     };
@@ -275,6 +284,23 @@ export const pullLeadsFromSupabase = async (
       }
     }
 
+    let extractedHeaders: string[] | null = null;
+    allData.forEach((row: any) => {
+      const q = row.questions || '';
+      if (!extractedHeaders && q.includes('__HEADERS__:')) {
+        const match = q.match(/__HEADERS__:(.+?)(\n|$)/);
+        if (match) {
+          try {
+            extractedHeaders = JSON.parse(match[1]);
+          } catch (e) {}
+        }
+      }
+    });
+
+    if (extractedHeaders && Array.isArray(extractedHeaders) && extractedHeaders.length > 0) {
+      setActiveHeaders(extractedHeaders);
+    }
+
     const mappedLeads: Lead[] = allData.map((row: any, index: number) => {
       const rawSrc = row.source_name || row.sourceName || '';
       let srcName = rawSrc ? String(rawSrc).trim().replace(/\s+/g, '-') : '-';
@@ -289,8 +315,14 @@ export const pullLeadsFromSupabase = async (
         cleanEmail = '-';
       }
 
+      let cleanQuestions = row.questions || '';
+      if (cleanQuestions.includes('__HEADERS__:')) {
+        cleanQuestions = cleanQuestions.replace(/__HEADERS__:.+?(\n|$)/, '').trim();
+      }
+
       return {
         ...row, // Preserve any custom database columns!
+        _csvHeaders: extractedHeaders || row._csvHeaders,
         id: index + 1, // Always assign clean sequential ID starting from 1
         firstName: row.first_name || row.firstName || 'Unknown',
         lastName: row.last_name || row.lastName || '',
@@ -301,7 +333,7 @@ export const pullLeadsFromSupabase = async (
         phone: row.phone || '',
         organization: row.organization || '',
         jobTitle: row.job_title || row.jobTitle || '',
-        questions: row.questions || '',
+        questions: cleanQuestions,
         sourceName: srcName,
         createdAt: row.created_at || row.createdAt || new Date().toISOString(),
         isSaved: false,
