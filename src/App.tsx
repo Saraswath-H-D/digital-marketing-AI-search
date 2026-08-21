@@ -32,6 +32,11 @@ import CsvImporter from './components/CsvImporter.tsx';
 import ApolloNavigationDrawer from './components/ApolloNavigationDrawer.tsx';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal.tsx';
 import { AICopilotDrawer } from './components/AICopilotDrawer.tsx';
+import ContactProfileDrawer from './components/ContactProfileDrawer.tsx';
+import TeammatesModal from './components/TeammatesModal.tsx';
+import AnalyticsView from './components/AnalyticsView.tsx';
+import OutreachView from './components/OutreachView.tsx';
+import SavedSearchesModal from './components/SavedSearchesModal.tsx';
 
 import { 
   Search, 
@@ -86,7 +91,11 @@ export default function App() {
   const [showFiltersSidebar, setShowFiltersSidebar] = useState(true);
   const [stats, setStats] = useState({ total: 0, netNew: 0, saved: 0 });
 
-  // AI Copilot States
+  // AI Copilot & Navigation States
+  const [activeView, setActiveView] = useState('Contacts');
+  const [selectedLeadForDrawer, setSelectedLeadForDrawer] = useState<Lead | null>(null);
+  const [showTeammatesModal, setShowTeammatesModal] = useState(false);
+  const [showSavedSearchesModal, setShowSavedSearchesModal] = useState(false);
   const [showAICopilot, setShowAICopilot] = useState(false);
   const [aiFilteredLeadIds, setAiFilteredLeadIds] = useState<number[] | null>(null);
 
@@ -658,8 +667,10 @@ export default function App() {
         
         {/* Apollo Left-most Collapsible Navigation Drawer */}
         <ApolloNavigationDrawer 
+          activeView={activeView}
+          setActiveView={setActiveView}
           onShowMessage={showStatus} 
-          onAddLeadClick={() => setIsAddOpen(true)}
+          onAddTeammateClick={() => setShowTeammatesModal(true)}
           onOpenSupabase={() => setIsSupabaseOpen(true)}
         />
 
@@ -1514,50 +1525,63 @@ export default function App() {
             </div>
           </div>
 
-          {/* Core Table View */}
+          {/* View Content Routing */}
           <div className="flex-1 overflow-hidden flex flex-col relative">
             
-            {isLoadingLeads && (
-              <div className="absolute inset-0 z-20 bg-white/70 backdrop-blur-3xs flex items-center justify-center">
-                <div className="flex flex-col items-center space-y-3">
-                  <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-xs font-semibold text-gray-500 tracking-wide">Syncing Apollo lead directory...</span>
-                </div>
+            {activeView === 'Deliverability' || activeView === 'Settings' ? (
+              <div className="flex-1 overflow-y-auto">
+                <AnalyticsView leads={leads} />
               </div>
-            )}
-
-            {aiFilteredLeadIds !== null && (
-              <div className="bg-gradient-to-r from-indigo-50/70 to-violet-50/70 border-b border-indigo-100 px-6 py-2.5 flex items-center justify-between text-xs animate-fadeIn select-none shrink-0">
-                <div className="flex items-center space-x-2 text-indigo-900 font-semibold">
-                  <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
-                  <span>AI Recommendation Filter Active</span>
-                  <span className="bg-indigo-100 text-indigo-800 text-4xs font-extrabold uppercase px-2 py-0.5 rounded-full border border-indigo-200">
-                    Showing {displayedLeads.length} Matches
-                  </span>
-                </div>
-                <button
-                  onClick={() => setAiFilteredLeadIds(null)}
-                  className="text-indigo-600 hover:text-indigo-800 font-extrabold hover:underline text-3xs uppercase tracking-wider"
-                >
-                  Clear AI Filter
-                </button>
+            ) : activeView === 'Campaigns' || activeView === 'Messages' || activeView === 'Phone Calls' || activeView === 'Action Items' ? (
+              <div className="flex-1 overflow-y-auto">
+                <OutreachView leads={leads} onShowMessage={showStatus} />
               </div>
-            )}
+            ) : (
+              <>
+                {isLoadingLeads && (
+                  <div className="absolute inset-0 z-20 bg-white/70 backdrop-blur-3xs flex items-center justify-center">
+                    <div className="flex flex-col items-center space-y-3">
+                      <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-semibold text-gray-500 tracking-wide">Syncing Apollo lead directory...</span>
+                    </div>
+                  </div>
+                )}
 
-            <LeadsTable
-              leads={displayedLeads}
-              selectedIds={selectedIds}
-              setSelectedIds={setSelectedIds}
-              onSaveToggle={handleSaveToggle}
-              onUnlockEmail={handleUnlockEmail}
-              onUnlockPhone={handleUnlockPhone}
-              onEdit={(lead) => {
-                setEditingLead(lead);
-                setIsEditOpen(true);
-              }}
-              onDelete={handleDeleteLead}
-              isAuthenticated={!!authS.user}
-            />
+                {aiFilteredLeadIds !== null && (
+                  <div className="bg-gradient-to-r from-indigo-50/70 to-violet-50/70 border-b border-indigo-100 px-6 py-2.5 flex items-center justify-between text-xs animate-fadeIn select-none shrink-0">
+                    <div className="flex items-center space-x-2 text-indigo-900 font-semibold">
+                      <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                      <span>AI Recommendation Filter Active</span>
+                      <span className="bg-indigo-100 text-indigo-800 text-4xs font-extrabold uppercase px-2 py-0.5 rounded-full border border-indigo-200">
+                        Showing {displayedLeads.length} Matches
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setAiFilteredLeadIds(null)}
+                      className="text-indigo-600 hover:text-indigo-800 font-extrabold hover:underline text-3xs uppercase tracking-wider"
+                    >
+                      Clear AI Filter
+                    </button>
+                  </div>
+                )}
+
+                <LeadsTable
+                  leads={displayedLeads}
+                  selectedIds={selectedIds}
+                  setSelectedIds={setSelectedIds}
+                  onSaveToggle={handleSaveToggle}
+                  onUnlockEmail={handleUnlockEmail}
+                  onUnlockPhone={handleUnlockPhone}
+                  onEdit={(lead) => {
+                    setEditingLead(lead);
+                    setIsEditOpen(true);
+                  }}
+                  onDelete={handleDeleteLead}
+                  isAuthenticated={!!authS.user}
+                  onSelectLeadForDrawer={setSelectedLeadForDrawer}
+                />
+              </>
+            )}
 
           </div>
 
@@ -1709,6 +1733,37 @@ export default function App() {
             ? `Are you sure you want to permanently delete the lead "${deleteConfirmData.lead.firstName} ${deleteConfirmData.lead.lastName || ''}"? This action cannot be undone.`
             : `Are you sure you want to permanently delete all ${selectedIds.length} selected leads? This action cannot be undone.`
         }
+      />
+      <ContactProfileDrawer
+        lead={selectedLeadForDrawer}
+        onClose={() => setSelectedLeadForDrawer(null)}
+        onToggleSave={(id) => {
+          const target = leads.find(l => l.id === id);
+          if (target) handleSaveToggle(target);
+        }}
+        onEdit={(lead) => {
+          setEditingLead(lead);
+          setIsEditOpen(true);
+        }}
+        onUnlockEmail={handleUnlockEmail}
+        onUnlockPhone={handleUnlockPhone}
+        onAddToCampaign={(lead) => showStatus(`Enrolled ${lead.firstName} into active sequence!`, 'success')}
+      />
+
+      <TeammatesModal
+        isOpen={showTeammatesModal}
+        onClose={() => setShowTeammatesModal(false)}
+        onShowMessage={showStatus}
+      />
+
+      <SavedSearchesModal
+        isOpen={showSavedSearchesModal}
+        onClose={() => setShowSavedSearchesModal(false)}
+        onApplySearch={(f) => {
+          setFilters(f);
+          setPage(1);
+        }}
+        onShowMessage={showStatus}
       />
 
     </div>

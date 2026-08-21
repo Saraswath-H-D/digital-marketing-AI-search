@@ -36,6 +36,7 @@ interface LeadsTableProps {
   onEdit: (lead: Lead) => void;
   onDelete: (lead: Lead) => void;
   isAuthenticated: boolean;
+  onSelectLeadForDrawer?: (lead: Lead) => void;
 }
 
 // Generate premium company icon background colors based on name
@@ -66,6 +67,7 @@ export default function LeadsTable({
   onEdit,
   onDelete,
   isAuthenticated,
+  onSelectLeadForDrawer,
 }: LeadsTableProps) {
   // Expanded rows state for questions/details
   const [expandedRowIds, setExpandedRowIds] = useState<number[]>([]);
@@ -586,6 +588,16 @@ export default function LeadsTable({
                             }`}
                           >
                             {lead.isSaved ? <BookmarkCheck className="w-4 h-4 text-amber-500" /> : <Bookmark className="w-4 h-4" />}
+                          </button>
+                        )}
+                        {/* View Lead Profile Drawer */}
+                        {onSelectLeadForDrawer && (
+                          <button
+                            onClick={() => onSelectLeadForDrawer(lead)}
+                            title="View Full Profile Drawer"
+                            className="p-1.5 rounded-xl border text-purple-600 bg-purple-50 border-purple-200 hover:bg-purple-600 hover:text-white hover:scale-110 active:scale-90 transition-all duration-200 cursor-pointer shadow-3xs"
+                          >
+                            <Eye className="w-4 h-4" />
                           </button>
                         )}
                         {/* Edit lead */}

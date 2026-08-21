@@ -15,6 +15,22 @@ export interface Lead {
   isSaved: boolean;
   emailUnlocked: boolean;
   phoneUnlocked: boolean;
+  // Extended Enterprise Fields
+  seniority?: string;
+  companySize?: string;
+  industry?: string;
+  emailStatus?: 'Verified' | 'Risky' | 'Invalid';
+  intent?: 'High Intent' | 'Medium Intent' | 'Low Intent';
+  technologies?: string[];
+  tags?: string[];
+  notes?: string;
+  linkedinUrl?: string;
+  aiScore?: number;
+  aiValueReasons?: string[];
+  country?: string;
+  department?: string;
+  revenue?: string;
+  funding?: string;
 }
 
 export interface FilterOptions {
@@ -24,6 +40,13 @@ export interface FilterOptions {
   sources: string[];
   statuses: string[];
   customFilters?: Record<string, string[]>;
+  seniorities?: string[];
+  companySizes?: string[];
+  industries?: string[];
+  intents?: string[];
+  emailStatuses?: string[];
+  technologies?: string[];
+  tags?: string[];
 }
 
 export interface Filters {
@@ -37,15 +60,45 @@ export interface Filters {
   savedOnly: boolean;
   netNewOnly?: boolean;
   selectedList?: string | null;
-  // Newly activated sidebar filters
   persona?: string | null;
   emailStatuses?: string[];
   peopleLookalike?: string | null;
   companyLookalike?: string | null;
   educations?: string[];
   enrichmentTypes?: string[];
+  // Extended Enterprise Filters
+  seniorities?: string[];
+  companySizes?: string[];
+  industries?: string[];
+  locations?: string[];
+  intents?: string[];
+  technologies?: string[];
+  tags?: string[];
+  departments?: string[];
+  funding?: string[];
+  revenue?: string[];
 }
 
+export interface SavedSearch {
+  id: string;
+  name: string;
+  count: number;
+  lastUpdated: string;
+  createdDate: string;
+  filters: Filters;
+}
+
+export interface OutreachCampaign {
+  id: string;
+  name: string;
+  status: 'Active' | 'Paused' | 'Completed' | 'Draft';
+  contactsCount: number;
+  emailsSent: number;
+  openRate: number;
+  replyRate: number;
+  bounceRate: number;
+  createdAt: string;
+}
 
 export interface AuthState {
   user: any;
