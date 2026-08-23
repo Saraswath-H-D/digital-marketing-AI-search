@@ -313,18 +313,18 @@ export default function LeadsTable({
   };
 
   return (
-    <div id="leads-table-container" className="flex-1 overflow-x-auto bg-[#FFF5F8] select-none shadow-3d-card rounded-xl m-2 border border-pink-200/80">
+    <div id="leads-table-container" className="flex-1 overflow-x-auto glass-card-static select-none m-2">
       <table className="w-full text-left border-collapse min-w-[1000px]">
-        {/* Table Header - 3D Elevation Soft Lavender Theme */}
-        <thead className="bg-[#F3E8FF] text-purple-950 border-b-2 border-purple-200/90 sticky top-0 z-10 shadow-3d-sm">
-          <tr className="text-2xs font-black uppercase tracking-widest text-purple-950">
+        {/* Table Header */}
+        <thead className="bg-[var(--surface-card-elevated)] border-b border-[var(--border-subtle)] sticky top-0 z-10">
+          <tr className="micro-label py-3">
             {/* Checkbox */}
-            <th className="py-3.5 px-4 w-12 text-center bg-purple-100/80 border-r border-purple-200">
+            <th className="py-3.5 px-4 w-12 text-center border-r border-[var(--border-subtle)]">
               <input
                 type="checkbox"
                 checked={isAllSelected}
                 onChange={handleSelectAll}
-                className="w-4 h-4 rounded-md text-purple-600 border-purple-300 focus:ring-purple-500 transition-colors cursor-pointer accent-purple-600"
+                className="w-4 h-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500 transition-colors cursor-pointer accent-indigo-600"
               />
             </th>
 

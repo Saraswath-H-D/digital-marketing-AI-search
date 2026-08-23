@@ -23,7 +23,7 @@ export const getSupabaseConfig = (): SupabaseConfig => {
         url: parsed.url || envUrl,
         anonKey: parsed.anonKey || envKey,
         tableName: parsed.tableName || 'registration_contacts',
-        autoSync: parsed.autoSync ?? true,
+        autoSync: parsed.autoSync ?? false,
       };
     }
   } catch (e) {
@@ -33,7 +33,7 @@ export const getSupabaseConfig = (): SupabaseConfig => {
     url: envUrl,
     anonKey: envKey,
     tableName: 'registration_contacts',
-    autoSync: true,
+    autoSync: false,
   };
 };
 

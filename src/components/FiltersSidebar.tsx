@@ -67,17 +67,17 @@ export default function FiltersSidebar({
   };
 
   return (
-    <aside id="filters-sidebar" className="w-80 border-r border-pink-200/80 bg-[#FFF5F8] flex flex-col h-full overflow-hidden select-none shrink-0">
+    <aside id="filters-sidebar" className="w-80 border-r border-[var(--border-subtle)] bg-[var(--surface-card)] flex flex-col h-full overflow-hidden select-none shrink-0">
       
-      {/* 3D Sidebar Top Header */}
-      <div className="p-4 bg-[#FCE7F3]/90 text-slate-900 flex items-center justify-between border-b border-pink-200/80 shrink-0 super-3d-header">
+      {/* Sidebar Top Header */}
+      <div className="p-4 bg-[var(--surface-card-elevated)] border-b border-[var(--border-subtle)] shrink-0 flex items-center justify-between">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 border border-purple-200 flex items-center justify-center shadow-2xs">
+          <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600 flex items-center justify-center">
             <Tag className="w-4 h-4 text-purple-600" />
           </div>
           <div>
             <div className="flex items-center space-x-1.5">
-              <span className="font-black text-xs tracking-widest uppercase text-purple-950 font-display">CSV Column Filters</span>
+              <span className="micro-label font-black text-xs tracking-widest uppercase text-[var(--text-primary)]">CSV Column Filters</span>
               {activeCustomFilterCount > 0 && (
                 <span className="px-2 py-0.5 text-[9px] font-black text-white bg-purple-600 rounded-full shadow-2xs">
                   {activeCustomFilterCount} Active

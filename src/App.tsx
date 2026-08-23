@@ -71,10 +71,26 @@ import {
   Filter,
   RefreshCw,
   SlidersHorizontal,
-  ShieldCheck
+  ShieldCheck,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 export default function App() {
+  // Theme State (Design.md specification)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('apollo-theme') as 'light' | 'dark') || 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('apollo-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
   // Authentication State
   const [authS, setAuthS] = useState<AuthState>({
     user: null,
@@ -648,7 +664,8 @@ export default function App() {
     : leads;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900 select-none">
+    <div className="app-outer select-none">
+      <div className="atmosphere" />
       
       {/* Floating Status Notification Toast */}
       {statusMessage && (
@@ -662,8 +679,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Main Container */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Glass Shell Container */}
+      <div className="app-shell glass-panel">
         
         {/* Apollo Left-most Collapsible Navigation Drawer */}
         <ApolloNavigationDrawer 
@@ -672,6 +689,7 @@ export default function App() {
           onShowMessage={showStatus} 
           onAddTeammateClick={() => setShowTeammatesModal(true)}
           onOpenSupabase={() => setIsSupabaseOpen(true)}
+          contactsCount={leads.length}
         />
 
         {/* Left Side Filters Bar */}
@@ -685,34 +703,48 @@ export default function App() {
           />
         )}
 
-        {/* Right Side Content Pane - Light Professional Pink Surface */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-[#FDF2F8]">
+        {/* Right Side Content Pane */}
+        <main className="app-content">
           
-          {/* Executive Top Command Header - Super 3D Header */}
-          <div className="px-6 py-3.5 bg-[#F0E6FA] text-purple-950 flex items-center justify-between shrink-0 super-3d-header border-b-2 border-purple-300 relative z-20">
+          {/* Executive Topbar Command Header */}
+          <div className="topbar">
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-500 to-pink-500 p-0.5 flex items-center justify-center super-3d-button">
-                <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-purple-600 animate-pulse" />
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 p-0.5 flex items-center justify-center shadow-lg">
+                <div className="w-full h-full bg-white dark:bg-slate-900 rounded-[14px] flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 </div>
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <h1 className="text-sm font-black tracking-tight text-purple-950 font-display">APOLLO ENTERPRISE AI</h1>
-                  <span className="px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider bg-purple-200 text-purple-950 border border-purple-300 rounded-full shadow-2xs">
-                    PRO PLATFORM v10.4
+                  <h1 className="text-base font-black tracking-tight font-display text-[var(--text-primary)]">APOLLO ENTERPRISE AI</h1>
+                  <span className="badge badge-priority-high">
+                    SUPER ADMIN
                   </span>
                 </div>
-                <p className="text-xs text-purple-800 font-medium">Real-time Lead Intelligence & Supabase Database Sync</p>
+                <p className="text-xs text-[var(--text-muted)] font-medium">Real-time Lead Intelligence & Supabase Database Sync</p>
               </div>
             </div>
 
-            {/* Live Database & Credits Indicators */}
+            {/* Topbar Right Controls & Indicators */}
             <div className="flex items-center space-x-3 text-xs font-semibold">
+              
+              {/* Dark / Light Theme Toggle Button */}
+              <button
+                onClick={toggleTheme}
+                className="w-11 h-11 rounded-full pill-control justify-center cursor-pointer hover:scale-105 transition-transform"
+                title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
+              >
+                {theme === 'light' ? (
+                  <Moon className="w-5 h-5 text-indigo-600" />
+                ) : (
+                  <Sun className="w-5 h-5 text-amber-400" />
+                )}
+              </button>
+
               {/* Supabase Live Status Pill */}
               <button
                 onClick={() => setIsSupabaseOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-purple-50 border border-purple-200 text-purple-900 flex items-center space-x-2 transition-all cursor-pointer super-3d-white-btn"
+                className="pill-control cursor-pointer space-x-2 text-[var(--text-primary)]"
                 title="Supabase PostgreSQL Database Connected"
               >
                 <span className="relative flex h-2 w-2">
@@ -720,77 +752,81 @@ export default function App() {
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
                 <Database className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="font-mono text-emerald-700 text-xs font-bold">Supabase Connected</span>
+                <span className="font-mono text-emerald-700 dark:text-emerald-400 text-xs font-bold">Supabase Connected</span>
               </button>
 
               {/* Apollo Credit Balance */}
-              <div className="px-3.5 py-1.5 rounded-xl bg-white border border-purple-200 text-purple-900 flex items-center space-x-2 super-3d-white-btn">
-                <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
-                <span>Credits: <strong className="text-purple-950 font-mono font-bold">{creditBalance}</strong></span>
+              <div className="pill-control space-x-2 text-[var(--text-primary)]">
+                <TrendingUp className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Credits: <strong className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">{creditBalance}</strong></span>
               </div>
             </div>
           </div>
 
-          {/* Executive KPI Overview Cards Bar - Super 3D Cards */}
-          <div className="px-6 py-4 bg-[#FCE7F3]/40 border-b border-pink-200/60 shrink-0">
+          {/* Executive KPI Overview Cards Bar */}
+          <div className="px-6 py-4 border-b border-[var(--border-subtle)] shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               
-              {/* Card 1: Total Contacts - Super 3D Card */}
-              <div className="p-4 bg-white/95 border border-pink-200/90 rounded-2xl super-3d-card group">
+              {/* Card 1: Total Contacts */}
+              <div className="p-4 glass-card relative overflow-hidden group">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-600" />
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Contacts</span>
-                  <div className="w-8 h-8 rounded-xl bg-pink-50 text-pink-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
+                  <span className="micro-label">Total Contacts</span>
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
                     <Users className="w-4 h-4" />
                   </div>
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-black text-slate-900 font-display tracking-tight">{totalLeads}</span>
+                  <span className="text-2xl font-extrabold font-serif-kpi text-[var(--text-primary)] tracking-tight">{totalLeads}</span>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1 font-medium">Verified leads in system</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Verified leads in system</p>
               </div>
 
-              {/* Card 2: Supabase Storage - Super 3D Card */}
-              <div className="p-4 bg-white/95 border border-pink-200/90 rounded-2xl super-3d-card group">
+              {/* Card 2: Supabase Storage */}
+              <div className="p-4 glass-card relative overflow-hidden group">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">PostgreSQL Cloud DB</span>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
+                  <span className="micro-label">PostgreSQL Cloud DB</span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                     <Database className="w-4 h-4" />
                   </div>
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-black text-slate-900 font-display tracking-tight">Active</span>
-                  <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full shadow-2xs">
+                  <span className="text-2xl font-extrabold font-serif-kpi text-[var(--text-primary)] tracking-tight">Active</span>
+                  <span className="badge badge-completed">
                     Auto-Sync
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1 font-medium">Table: <code className="text-emerald-700 font-mono font-bold">registration_contacts</code></p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Table: <code className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">registration_contacts</code></p>
               </div>
 
-              {/* Card 3: Apollo AI Copilot - Super 3D Card */}
-              <div className="p-4 bg-gradient-to-br from-purple-100 via-pink-100 to-purple-50 border border-purple-200/90 text-purple-950 rounded-2xl super-3d-card group">
+              {/* Card 3: Apollo AI Copilot */}
+              <div className="p-4 glass-card relative overflow-hidden group">
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-600" />
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-purple-800">AI Outreach Copilot</span>
-                  <div className="w-8 h-8 rounded-xl bg-purple-200/60 text-purple-700 border border-purple-300/50 flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs">
-                    <Sparkles className="w-4 h-4 text-purple-600" />
+                  <span className="micro-label">AI Outreach Copilot</span>
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4" />
                   </div>
                 </div>
                 <div className="flex items-baseline justify-between">
-                  <span className="text-xl font-extrabold text-purple-950 font-display tracking-tight">AI Assistant</span>
+                  <span className="text-xl font-extrabold font-serif-kpi text-[var(--text-primary)] tracking-tight">AI Assistant</span>
                   <button
                     onClick={() => setShowAICopilot(true)}
-                    className="px-3 py-1.5 text-[10px] font-black text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-full super-3d-button cursor-pointer active:scale-95"
+                    className="btn-brand-gradient text-xs py-1 px-3"
                   >
                     Open AI Chat
                   </button>
                 </div>
-                <p className="text-[11px] text-purple-800/90 mt-1 font-medium">Generate emails & smart filters</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Generate emails & smart filters</p>
               </div>
 
             </div>
           </div>
 
-          {/* Sub-toolbar Controls Row - Soft Light Pink */}
-          <div className="px-6 pt-3.5 pb-3 bg-[#FFF5F8] flex flex-col space-y-2 shrink-0 border-b border-pink-200/60">
+          {/* Sub-toolbar Controls Row */}
+          <div className="px-6 pt-3.5 pb-3 flex flex-col space-y-2 shrink-0 border-b border-[var(--border-subtle)]">
+
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-lg font-black tracking-tight text-neutral-900 font-display">Contact Directory</h2>
               

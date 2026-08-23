@@ -38,6 +38,7 @@ interface ApolloNavigationDrawerProps {
   onShowMessage: (text: string, type: 'success' | 'error') => void;
   onAddTeammateClick?: () => void;
   onOpenSupabase?: () => void;
+  contactsCount?: number;
 }
 
 export default function ApolloNavigationDrawer({
@@ -45,7 +46,8 @@ export default function ApolloNavigationDrawer({
   setActiveView,
   onShowMessage,
   onAddTeammateClick,
-  onOpenSupabase
+  onOpenSupabase,
+  contactsCount
 }: ApolloNavigationDrawerProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -204,7 +206,7 @@ export default function ApolloNavigationDrawer({
           
           {(openSections.discover || isCollapsed) && (
             <div className={`space-y-1 ${!isCollapsed ? 'mt-1' : ''}`}>
-              {renderMenuItem('Contacts', <Users className="w-4 h-4 text-indigo-400" />, '12k')}
+              {renderMenuItem('Contacts', <Users className="w-4 h-4 text-indigo-400" />, contactsCount !== undefined ? String(contactsCount) : '90')}
               {renderMenuItem('Organizations', <Building className="w-4 h-4 text-emerald-400" />)}
               {renderMenuItem('Directories', <List className="w-4 h-4 text-amber-400" />)}
               {renderMenuItem('Data Enhancement', <Database className="w-4 h-4 text-blue-400" />, 'PRO')}

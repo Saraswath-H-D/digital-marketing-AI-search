@@ -1,6 +1,6 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
-import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase } from '../lib/supabase.ts';
+import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, getSupabaseConfig } from '../lib/supabase.ts';
 
 const STORAGE_KEY = 'apollo_leads_v9';
 const HEADERS_KEY = 'apollo_active_headers';
@@ -193,14 +193,14 @@ let memoryLeadCache: Lead[] | null = null;
 
 // Get leads from memory cache / localStorage & purge any blank (- - -) junk rows
 export const getStoredLeads = (): Lead[] => {
-  if (memoryLeadCache !== null) {
+  if (memoryLeadCache !== null && memoryLeadCache.length > 0) {
     return memoryLeadCache;
   }
   try {
     const data = localStorage.getItem(STORAGE_KEY);
     if (data !== null) {
       const parsed = JSON.parse(data);
-      if (Array.isArray(parsed)) {
+      if (Array.isArray(parsed) && parsed.length > 0) {
         const validOnly = parsed.filter(l => {
           const fn = (l.firstName || '').trim();
           const ln = (l.lastName || '').trim();
@@ -210,12 +210,14 @@ export const getStoredLeads = (): Lead[] => {
           return !isBlank;
         });
 
-        const result = validOnly.map((l, idx) => ({
-          ...sanitizeLead(l),
-          id: idx + 1
-        }));
-        memoryLeadCache = result;
-        return result;
+        if (validOnly.length > 0) {
+          const result = validOnly.map((l, idx) => ({
+            ...sanitizeLead(l),
+            id: idx + 1
+          }));
+          memoryLeadCache = result;
+          return result;
+        }
       }
     }
   } catch (err) {
@@ -225,6 +227,11 @@ export const getStoredLeads = (): Lead[] => {
     ...sanitizeLead(l),
     id: idx + 1
   }));
+  sanitizedDefaults.forEach(l => {
+    if (l.sourceName && l.sourceName !== '-') {
+      addCsvTag(l.sourceName);
+    }
+  });
   memoryLeadCache = sanitizedDefaults;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedDefaults));
@@ -556,10 +563,12 @@ export const addLead = async (newLeadData: Partial<Lead>): Promise<Lead> => {
   const updated = [lead, ...allLeads];
   saveStoredLeads(updated);
 
-  try {
-    await pushLeadsToSupabase([lead]);
-  } catch (err) {
-    console.error('Auto-sync add to Supabase failed:', err);
+  if (getSupabaseConfig().autoSync) {
+    try {
+      await pushLeadsToSupabase([lead]);
+    } catch (err) {
+      console.error('Auto-sync add to Supabase failed:', err);
+    }
   }
 
   return lead;
@@ -580,10 +589,12 @@ export const updateLead = async (id: number, updateData: Partial<Lead>): Promise
 
   if (updatedLead) {
     saveStoredLeads(updated);
-    try {
-      await pushLeadsToSupabase([updatedLead]);
-    } catch (err) {
-      console.error('Auto-sync update to Supabase failed:', err);
+    if (getSupabaseConfig().autoSync) {
+      try {
+        await pushLeadsToSupabase([updatedLead]);
+      } catch (err) {
+        console.error('Auto-sync update to Supabase failed:', err);
+      }
     }
   }
   return updatedLead;
@@ -716,10 +727,12 @@ export const restoreLeadsFromTrash = async (specificLeads?: Lead[]): Promise<{ u
   saveStoredLeads(updatedLeads);
   saveTrashLeads([]);
 
-  try {
-    await pushLeadsToSupabase(restoredLeadsWithFreshIds);
-  } catch (err) {
-    console.error('Restore sync to Supabase failed:', err);
+  if (getSupabaseConfig().autoSync) {
+    try {
+      await pushLeadsToSupabase(restoredLeadsWithFreshIds);
+    } catch (err) {
+      console.error('Restore sync to Supabase failed:', err);
+    }
   }
 
   return {
@@ -769,8 +782,8 @@ export const bulkImportLeads = async (
 
   saveStoredLeads([...createdLeads, ...allLeads]);
 
-  let supabaseResult: { success: boolean; count: number; error?: string } = { success: false, count: 0, error: 'No leads created' };
-  if (createdLeads.length > 0) {
+  let supabaseResult: { success: boolean; count: number; error?: string } = { success: false, count: 0, error: 'Auto-sync disabled' };
+  if (createdLeads.length > 0 && getSupabaseConfig().autoSync) {
     try {
       supabaseResult = await pushLeadsToSupabase(createdLeads);
     } catch (err: any) {
