@@ -630,7 +630,26 @@ CREATE TABLE IF NOT EXISTS public.${tableName} (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 2. Allow explicit ID insertion starting from 1
+-- 2. Add missing columns to existing tables automatically
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS first_name TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS last_name TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS phone_number TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS job_title TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS company_name TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS city TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS state TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS country TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS email_status TEXT DEFAULT 'Verified';
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS seniority TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS department TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS industry TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS employee_size TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS person_linkedin_url TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS website TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS company_linkedin_url TEXT;
+
+-- 3. Allow explicit ID insertion starting from 1
 ALTER TABLE public.${tableName} ALTER COLUMN id DROP IDENTITY IF EXISTS;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS id BIGINT;
 
