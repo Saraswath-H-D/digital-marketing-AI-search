@@ -260,7 +260,7 @@ export default function App() {
     fetchLeads();
   }, [filters, page, limit]);
 
-  // Auto-sync live database records from Supabase on app startup (Single Master Source of Truth)
+  // Single Master Source of Truth Live Database Sync
   useEffect(() => {
     const syncLiveDatabase = async () => {
       try {
@@ -270,20 +270,13 @@ export default function App() {
         const deletedEmailSet = new Set(trashLeads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
 
         if (res.success && res.leads.length > 0) {
-          // Filter out deleted trash leads so deleted leads NEVER re-appear in app
+          // Filter out deleted trash leads
           const activeRemoteLeads = res.leads.filter(l => {
             const cleanEmail = (l.email || '').toLowerCase().trim();
             return !cleanEmail || cleanEmail === '-' || !deletedEmailSet.has(cleanEmail);
           });
-
-          const existingEmailSet = new Set(activeRemoteLeads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
-          const missingLocal = localLeads.filter(l => {
-            const clean = (l.email || '').toLowerCase().trim();
-            return clean && clean !== '-' && !existingEmailSet.has(clean) && !deletedEmailSet.has(clean);
-          });
-          const merged = [...activeRemoteLeads, ...missingLocal];
-          saveStoredLeads(merged);
-          await pushLeadsToSupabase(merged);
+          
+          saveStoredLeads(activeRemoteLeads);
         } else if (localLeads.length > 0) {
           const activeLocalLeads = localLeads.filter(l => {
             const clean = (l.email || '').toLowerCase().trim();
