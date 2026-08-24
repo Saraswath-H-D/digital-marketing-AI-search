@@ -28,6 +28,7 @@ import {
 
 interface LeadsTableProps {
   leads: Lead[];
+  allFilteredIds?: number[];
   selectedIds: number[];
   setSelectedIds: React.Dispatch<React.SetStateAction<number[]>>;
   onSaveToggle: (lead: Lead) => void;
@@ -59,6 +60,7 @@ const getCompanyColor = (name: string | null) => {
 
 export default function LeadsTable({
   leads,
+  allFilteredIds,
   selectedIds,
   setSelectedIds,
   onSaveToggle,
@@ -103,7 +105,11 @@ export default function LeadsTable({
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedIds(leads.map((l) => l.id));
+      if (allFilteredIds && allFilteredIds.length > 0) {
+        setSelectedIds(allFilteredIds);
+      } else {
+        setSelectedIds(leads.map((l) => l.id));
+      }
     } else {
       setSelectedIds([]);
     }

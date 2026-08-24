@@ -22,7 +22,8 @@ import {
   removeCsvTag,
   bulkImportLeads,
   getActiveHeaders,
-  getTrashLeads
+  getTrashLeads,
+  deleteAllLeads
 } from './data/leadStorage.ts';
 import { pullLeadsFromSupabase, pushLeadsToSupabase } from './lib/supabase.ts';
 import FiltersSidebar from './components/FiltersSidebar.tsx';
@@ -101,6 +102,7 @@ export default function App() {
 
   // Leads & Metadata State
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [allFilteredIds, setAllFilteredIds] = useState<number[]>([]);
   const [totalLeads, setTotalLeads] = useState(0);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -236,6 +238,7 @@ export default function App() {
       const allLeads = getStoredLeads();
       const filtered = filterClientLeads(allLeads, filters);
       setTotalLeads(filtered.length);
+      setAllFilteredIds(filtered.map(l => l.id));
 
       const startIndex = (page - 1) * limit;
       const paginated = filtered.slice(startIndex, startIndex + limit);
@@ -439,6 +442,21 @@ export default function App() {
     } catch (err) {
       console.error('Bulk delete failed:', err);
       showStatus('An error occurred during bulk deletion.', 'error');
+    }
+  };
+
+  const executeDeleteAll = async () => {
+    try {
+      showStatus('Purging all contact data from system & Supabase...', 'success');
+      await deleteAllLeads();
+      fetchLeads();
+      fetchFilterOptions();
+      setSelectedIds([]);
+      setBulkMenuOpen(false);
+      showStatus('All contacts successfully deleted from system & Supabase!', 'success');
+    } catch (err) {
+      console.error('Delete all failed:', err);
+      showStatus('An error occurred while purging all contacts.', 'error');
     }
   };
 
@@ -1540,7 +1558,19 @@ export default function App() {
                           className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2 font-semibold border-t border-gray-100 mt-1"
                         >
                           <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                          <span>Delete Selected</span>
+                          <span>Delete Selected ({selectedIds.length})</span>
+                        </button>
+                        {/* Delete ALL Contacts */}
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`⚠️ Are you sure you want to PERMANENTLY DELETE ALL ${totalLeads} contacts from the directory and Supabase?`)) {
+                              executeDeleteAll();
+                            }
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs text-red-700 bg-red-50/50 hover:bg-red-100/70 flex items-center space-x-2 font-bold"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                          <span>Delete ALL {totalLeads} Contacts</span>
                         </button>
                       </div>
                     )}
@@ -1599,6 +1629,7 @@ export default function App() {
 
                 <LeadsTable
                   leads={displayedLeads}
+                  allFilteredIds={allFilteredIds}
                   selectedIds={selectedIds}
                   setSelectedIds={setSelectedIds}
                   onSaveToggle={handleSaveToggle}

@@ -540,6 +540,25 @@ export const bulkDeleteLeadsFromSupabase = async (
   }
 };
 
+export const deleteAllLeadsFromSupabase = async (
+  config?: SupabaseConfig
+): Promise<{ success: boolean; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return { success: false, error: 'Supabase credentials unconfigured' };
+
+  const tableName = activeConfig.tableName || 'registration_contacts';
+  try {
+    const { error } = await client.from(tableName).delete().neq('id', 0);
+    if (error) {
+      console.warn('Delete all from Supabase warning:', error.message);
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Delete all operation failed' };
+  }
+};
+
 export const deleteLeadsByTagFromSupabase = async (
   tag: string,
   targetLeads?: Lead[],

@@ -1,6 +1,6 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
-import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, getSupabaseConfig } from '../lib/supabase.ts';
+import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, deleteAllLeadsFromSupabase, getSupabaseConfig } from '../lib/supabase.ts';
 
 const STORAGE_KEY = 'operon_leads_v9';
 const LEGACY_STORAGE_KEY = 'apollo_leads_v9';
@@ -946,6 +946,20 @@ export const bulkDeleteLeads = async (ids: number[]): Promise<void> => {
     } catch (err) {
       console.error('Bulk delete sync to Supabase failed:', err);
     }
+  }
+};
+
+// Delete All Leads (Purge Directory & Supabase)
+export const deleteAllLeads = async (): Promise<void> => {
+  const allLeads = getStoredLeads();
+  if (allLeads.length > 0) {
+    addLeadsToTrash(allLeads);
+  }
+  saveStoredLeads([]);
+  try {
+    await deleteAllLeadsFromSupabase();
+  } catch (err) {
+    console.error('Delete all from Supabase failed:', err);
   }
 };
 
