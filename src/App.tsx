@@ -21,7 +21,8 @@ import {
   addCsvTag,
   removeCsvTag,
   bulkImportLeads,
-  getActiveHeaders
+  getActiveHeaders,
+  getTrashLeads
 } from './data/leadStorage.ts';
 import { pullLeadsFromSupabase, pushLeadsToSupabase } from './lib/supabase.ts';
 import FiltersSidebar from './components/FiltersSidebar.tsx';
@@ -265,18 +266,31 @@ export default function App() {
       try {
         const res = await pullLeadsFromSupabase();
         const localLeads = getStoredLeads();
+        const trashLeads = getTrashLeads();
+        const deletedEmailSet = new Set(trashLeads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
+
         if (res.success && res.leads.length > 0) {
-          // Combine remote Supabase leads with local leads without duplicate emails
-          const existingEmailSet = new Set(res.leads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
+          // Filter out deleted trash leads so deleted leads NEVER re-appear in app
+          const activeRemoteLeads = res.leads.filter(l => {
+            const cleanEmail = (l.email || '').toLowerCase().trim();
+            return !cleanEmail || cleanEmail === '-' || !deletedEmailSet.has(cleanEmail);
+          });
+
+          const existingEmailSet = new Set(activeRemoteLeads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
           const missingLocal = localLeads.filter(l => {
             const clean = (l.email || '').toLowerCase().trim();
-            return clean && clean !== '-' && !existingEmailSet.has(clean);
+            return clean && clean !== '-' && !existingEmailSet.has(clean) && !deletedEmailSet.has(clean);
           });
-          const merged = [...res.leads, ...missingLocal];
+          const merged = [...activeRemoteLeads, ...missingLocal];
           saveStoredLeads(merged);
           await pushLeadsToSupabase(merged);
         } else if (localLeads.length > 0) {
-          await pushLeadsToSupabase(localLeads);
+          const activeLocalLeads = localLeads.filter(l => {
+            const clean = (l.email || '').toLowerCase().trim();
+            return !clean || clean === '-' || !deletedEmailSet.has(clean);
+          });
+          saveStoredLeads(activeLocalLeads);
+          await pushLeadsToSupabase(activeLocalLeads);
         }
         fetchLeads();
         fetchFilterOptions();
