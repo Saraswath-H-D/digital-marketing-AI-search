@@ -432,16 +432,14 @@ let memoryLeadCache: Lead[] | null = null;
 
 // Get leads from memory cache / localStorage & purge any blank (- - -) junk rows
 export const getStoredLeads = (): Lead[] => {
-  if (memoryLeadCache !== null && memoryLeadCache.length > 0) {
-    // Re-sanitize memory cache to guarantee city & title deduplication
-    memoryLeadCache = memoryLeadCache.map((l, idx) => ({ ...sanitizeLead(l), id: l.id || idx + 1 }));
+  if (memoryLeadCache !== null) {
     return memoryLeadCache;
   }
   try {
     const data = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     if (data !== null) {
       const parsed = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         const validOnly = parsed.filter(l => {
           const fn = (l.firstName || '').trim();
           const ln = (l.lastName || '').trim();
@@ -451,19 +449,19 @@ export const getStoredLeads = (): Lead[] => {
           return !isBlank;
         });
 
-        if (validOnly.length > 0) {
-          const result = validOnly.map((l, idx) => ({
-            ...sanitizeLead(l),
-            id: idx + 1
-          }));
-          memoryLeadCache = result;
-          return result;
-        }
+        const result = validOnly.map((l, idx) => ({
+          ...sanitizeLead(l),
+          id: idx + 1
+        }));
+        memoryLeadCache = result;
+        return result;
       }
     }
   } catch (err) {
     console.error('Error reading leads from localStorage:', err);
   }
+
+  // Only load initialLeads on the very FIRST app startup when localStorage key does not exist at all
   const sanitizedDefaults = initialLeads.map((l, idx) => ({
     ...sanitizeLead(l),
     id: idx + 1
