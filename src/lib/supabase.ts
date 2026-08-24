@@ -248,12 +248,37 @@ export const pushLeadsToSupabase = async (
         console.warn(`Supabase upsert chunk at index ${i} warning:`, error.message);
         lastError = error.message;
 
-        // Fallback Tier 2: Row-by-row upsert so valid rows succeed regardless
-        for (const singleRow of batch) {
-          const { error: rowErr } = await client
-            .from(tableName)
-            .upsert([singleRow], { onConflict: 'id' });
-          if (!rowErr) totalPushed += 1;
+        // Fallback Tier 2: Strip optional extended columns if schema cache missing column error occurs
+        const coreBatch = batch.map(row => ({
+          id: row.id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          email: row.email,
+          phone: row.phone || row.phone_number || '',
+          registration_time: row.registration_time,
+          approval_status: row.approval_status,
+          organization: row.organization || row.company_name || '',
+          job_title: row.job_title,
+          city: row.city,
+          questions: row.questions,
+          source_name: row.source_name || row.source || '-',
+          created_at: row.created_at
+        }));
+
+        const { error: coreErr } = await client
+          .from(tableName)
+          .upsert(coreBatch, { onConflict: 'id' });
+
+        if (!coreErr) {
+          totalPushed += coreBatch.length;
+        } else {
+          // Fallback Tier 3: Row-by-row upsert so valid rows succeed regardless
+          for (const singleRow of coreBatch) {
+            const { error: rowErr } = await client
+              .from(tableName)
+              .upsert([singleRow], { onConflict: 'id' });
+            if (!rowErr) totalPushed += 1;
+          }
         }
       } else {
         totalPushed += batch.length;
