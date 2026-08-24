@@ -13,8 +13,8 @@ export interface SupabaseConfig {
 }
 
 export const getSupabaseConfig = (): SupabaseConfig => {
-  const envUrl = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) || '';
-  const envKey = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || '';
+  const envUrl = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL) || 'https://vwtaxabsqftvacokntbb.supabase.co';
+  const envKey = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || 'sb_publishable_PbvZuOz46vMR8Ny5KHSIHQ_PihbOkiI';
 
   try {
     const saved = localStorage.getItem(SUPABASE_CONFIG_KEY) || localStorage.getItem(LEGACY_SUPABASE_CONFIG_KEY);
@@ -24,7 +24,7 @@ export const getSupabaseConfig = (): SupabaseConfig => {
         url: parsed.url || envUrl,
         anonKey: parsed.anonKey || envKey,
         tableName: parsed.tableName || 'registration_contacts',
-        autoSync: parsed.autoSync ?? false,
+        autoSync: parsed.autoSync ?? true,
       };
     }
   } catch (e) {
@@ -34,7 +34,7 @@ export const getSupabaseConfig = (): SupabaseConfig => {
     url: envUrl,
     anonKey: envKey,
     tableName: 'registration_contacts',
-    autoSync: false,
+    autoSync: true,
   };
 };
 

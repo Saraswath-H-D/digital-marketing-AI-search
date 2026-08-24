@@ -264,20 +264,24 @@ export default function App() {
     const syncLiveDatabase = async () => {
       try {
         const res = await pullLeadsFromSupabase();
-        if (res.success) {
-          if (res.leads.length > 0) {
-            saveStoredLeads(res.leads);
-          } else {
-            const localLeads = getStoredLeads();
-            if (localLeads.length > 0) {
-              await pushLeadsToSupabase(localLeads);
-            }
-          }
-          fetchLeads();
-          fetchFilterOptions();
+        const localLeads = getStoredLeads();
+        if (res.success && res.leads.length > 0) {
+          // Combine remote Supabase leads with local leads without duplicate emails
+          const existingEmailSet = new Set(res.leads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
+          const missingLocal = localLeads.filter(l => {
+            const clean = (l.email || '').toLowerCase().trim();
+            return clean && clean !== '-' && !existingEmailSet.has(clean);
+          });
+          const merged = [...res.leads, ...missingLocal];
+          saveStoredLeads(merged);
+          await pushLeadsToSupabase(merged);
+        } else if (localLeads.length > 0) {
+          await pushLeadsToSupabase(localLeads);
         }
+        fetchLeads();
+        fetchFilterOptions();
       } catch (err) {
-        console.error('Initial Supabase fetch failed:', err);
+        console.error('Initial Supabase auto-sync failed:', err);
       }
     };
     syncLiveDatabase();
