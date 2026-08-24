@@ -326,7 +326,7 @@ export default function SupabaseModal({
                         <Sparkles className="w-4 h-4 text-indigo-600" />
                         Excel Data Synchronization
                       </h4>
-                      <span className="text-xs text-slate-500 font-semibold">{leads.length} contacts loaded in Apollo</span>
+                      <span className="text-xs text-slate-500 font-semibold">{leads.length} contacts loaded in Operon</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -358,7 +358,7 @@ export default function SupabaseModal({
                           <span className="text-xs font-bold">Pull from Supabase</span>
                         </div>
                         <p className="text-[11px] text-slate-300 leading-snug">
-                          Fetch live contacts from your Supabase PostgreSQL table into Apollo.
+                          Fetch live contacts from your Supabase PostgreSQL table into Operon.
                         </p>
                       </button>
                     </div>
@@ -446,7 +446,7 @@ export default function SupabaseModal({
               {activeTab === 'guide' && (
                 <div className="space-y-4 text-xs text-slate-700">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                    How to connect Apollo with Supabase (3 Simple Steps)
+                    How to connect Operon with Supabase (3 Simple Steps)
                   </h4>
 
                   <div className="space-y-3">

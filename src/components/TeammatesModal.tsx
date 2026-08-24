@@ -39,7 +39,7 @@ export default function TeammatesModal({ isOpen, onClose, onShowMessage }: Teamm
             </div>
             <div>
               <h3 className="text-base font-extrabold tracking-tight">Invite Sales Teammates</h3>
-              <p className="text-2xs text-purple-200">Grant team access to Apollo Enterprise Lead Intelligence</p>
+              <p className="text-2xs text-purple-200">Grant team access to Operon Enterprise Lead Intelligence</p>
             </div>
           </div>
 

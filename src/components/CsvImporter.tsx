@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import Papa from 'papaparse';
 import { motion, AnimatePresence } from 'motion/react';
 import { Upload, X, Check, AlertCircle, FileSpreadsheet, Eye, ArrowRight, Table, Tag } from 'lucide-react';
-import { setActiveHeaders, getStoredLeads } from '../data/leadStorage.ts';
+import { setActiveHeaders, getStoredLeads, normalizeCityName, normalizeNameOrTitle } from '../data/leadStorage.ts';
 
 interface CsvImporterProps {
   isOpen: boolean;
@@ -95,8 +95,8 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
           };
 
           // Explicit First Name and Last Name column lookups
-          let fName = findVal(['first name', 'firstname', 'fname', 'first_name']);
-          let lName = findVal(['last name', 'lastname', 'lname', 'last_name', 'surname']);
+          let fName = findVal(['fast name', 'first name', 'firstname', 'fname', 'first_name', 'f_name', 'given name', 'given_name', 'f name', 'first']);
+          let lName = findVal(['lastname', 'last name', 'lname', 'last_name', 'l_name', 'surname', 'family name', 'family_name', 'l name', 'last']);
 
           // Full Name column lookups
           const fullName = findVal(['full name', 'fullname', 'contact name', 'contact person', 'person name', 'attendee name', 'name of attendee', 'name', 'attendee']);
@@ -108,12 +108,12 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
           }
 
           const rawEmail = findVal(
-            ['email', 'email address', 'primary email', 'work email', 'mail', 'e-mail', 'contact email'],
+            ['email', 'email address', 'primary email', 'work email', 'mail', 'e-mail', 'contact email', 'email_id', 'emailid'],
             ['status', 'secondary', 'alt', 'backup', 'validation', 'verified', 'flag']
           );
 
           const extractedSource = findVal(
-            ['source name', 'source_name', 'lead source', 'lead_source', 'registration source', 'source', 'channel', 'utm_source'],
+            ['source', 'source name', 'source_name', 'lead source', 'lead_source', 'registration source', 'channel', 'utm_source'],
             ['resource', 'sourcecode', 'outsource', 'status']
           );
 
@@ -123,17 +123,28 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
             return (str === '' || str === 'undefined' || str === 'null') ? '-' : str;
           };
 
-          // Populate standard attributes for filters, searching, and Supabase
-          leadObj.firstName = cleanVal(fName);
-          leadObj.lastName = cleanVal(lName);
+          // Auto-detect and populate standard 18 requested attributes
+          leadObj.firstName = normalizeNameOrTitle(fName);
+          leadObj.lastName = normalizeNameOrTitle(lName);
           leadObj.email = cleanVal(rawEmail);
-          leadObj.organization = cleanVal(findVal(['organization', 'company', 'employer', 'business', 'org', 'firm']));
-          leadObj.jobTitle = cleanVal(findVal(['job title', 'jobtitle', 'title', 'role', 'designation', 'position', 'occupation']));
-          leadObj.city = cleanVal(findVal(['city', 'location', 'town', 'country', 'state', 'address', 'region']));
-          leadObj.phone = cleanVal(findVal(['phone', 'phone number', 'mobile', 'telephone', 'contact number', 'cell']));
-          leadObj.approvalStatus = cleanVal(findVal(['approval status', 'status', 'approved', 'state']) || 'approved');
-          leadObj.questions = cleanVal(findVal(['do have any questions to speaker!', 'questions', 'question', 'inquiry', 'notes', 'comments', 'remarks']));
+          leadObj.phone = cleanVal(findVal(['phone number', 'phone', 'mobile', 'telephone', 'contact number', 'cell', 'phone_no', 'mobile_no', 'phone_number']));
+          leadObj.jobTitle = normalizeNameOrTitle(findVal(['jobtitle', 'job title', 'title', 'role', 'designation', 'position', 'occupation', 'job_title']));
+          leadObj.organization = normalizeNameOrTitle(findVal(['companyname', 'company name', 'company', 'organization', 'org', 'employer', 'business', 'firm', 'company_name', 'organization_name']));
+          leadObj.city = normalizeCityName(findVal(['city', 'city_name', 'town', 'address', 'person location', 'location']));
+          leadObj.state = cleanVal(findVal(['state', 'province', 'state_name', 'region']));
+          leadObj.country = cleanVal(findVal(['country', 'nation', 'country_name']));
           leadObj.sourceName = extractedSource ? extractedSource.trim().replace(/\s+/g, '-') : '-';
+          leadObj.emailStatus = cleanVal(findVal(['email status', 'email verification status', 'email_status', 'verification status', 'deliverability', 'email_verification_status'])) as any || 'Verified';
+          leadObj.seniority = cleanVal(findVal(['seniority', 'management level', 'seniority level', 'level', 'seniority_level', 'job level', 'experience level']));
+          leadObj.department = cleanVal(findVal(['department', 'dept', 'function', 'team', 'department_name', 'business unit']));
+          leadObj.industry = cleanVal(findVal(['industry', 'sector', 'market sector', 'domain', 'business_type', 'industry_name']));
+          leadObj.companySize = cleanVal(findVal(['employee size', 'company size', 'employee headcount', 'headcount', 'no of employees', 'number of employees', 'employees', 'company_size', 'employee_size']));
+          leadObj.linkedinUrl = cleanVal(findVal(['person linkdin url', 'person linkedin url', 'linkedin', 'linkedin url', 'linkedin_url', 'person linkedin', 'linkedin profile', 'profile url']));
+          leadObj.website = cleanVal(findVal(['website', 'company website', 'url', 'web', 'domain', 'company url', 'site']));
+          leadObj.companyLinkedinUrl = cleanVal(findVal(['company linkdin url', 'company linkedin url', 'company linkedin', 'company_linkedin_url', 'org linkedin', 'organization linkedin']));
+          leadObj.registrationTime = cleanVal(findVal(['registration time', 'registration_time', 'reg time', 'registered at', 'registration date', 'signup date', 'created_at', 'timestamp']));
+          leadObj.approvalStatus = cleanVal(findVal(['approval status', 'approval_status', 'status', 'approved', 'state', 'stage']) || 'approved');
+          leadObj.questions = cleanVal(findVal(['do have any questions to speaker!', 'questions', 'question', 'inquiry', 'notes', 'comments', 'remarks']));
 
           const hasAnyRowData = Object.values(r).some(v => v !== undefined && v !== null && String(v).trim() !== '' && String(v).trim() !== '-');
           return hasAnyRowData ? leadObj : null;

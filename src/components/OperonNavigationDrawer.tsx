@@ -32,7 +32,7 @@ import {
   Grid
 } from 'lucide-react';
 
-interface ApolloNavigationDrawerProps {
+interface OperonNavigationDrawerProps {
   activeView: string;
   setActiveView: (view: string) => void;
   onShowMessage: (text: string, type: 'success' | 'error') => void;
@@ -41,14 +41,14 @@ interface ApolloNavigationDrawerProps {
   contactsCount?: number;
 }
 
-export default function ApolloNavigationDrawer({
+export default function OperonNavigationDrawer({
   activeView,
   setActiveView,
   onShowMessage,
   onAddTeammateClick,
   onOpenSupabase,
   contactsCount
-}: ApolloNavigationDrawerProps) {
+}: OperonNavigationDrawerProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Accordion state
@@ -132,7 +132,7 @@ export default function ApolloNavigationDrawer({
 
   return (
     <aside 
-      id="apollo-navigation-drawer"
+      id="operon-navigation-drawer"
       className={`border-r border-purple-200 bg-[#F5EEFB] text-purple-950 flex flex-col h-full shrink-0 select-none transition-all duration-300 ${
         isCollapsed ? 'w-16' : 'w-60'
       }`}
@@ -146,7 +146,7 @@ export default function ApolloNavigationDrawer({
               <Grid className="w-4 h-4" />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="font-black text-sm text-purple-950 tracking-widest leading-none font-display">APOLLO</span>
+              <span className="font-black text-sm text-purple-950 tracking-widest leading-none font-display">OPERON</span>
               <span className="text-[9px] text-purple-700 font-extrabold uppercase tracking-wider mt-1">Lead Intelligence Platform</span>
             </div>
           </div>
@@ -288,25 +288,5 @@ export default function ApolloNavigationDrawer({
         )}
       </div>
     </aside>
-  );
-}
-
-// Logo icon
-function AsteriskLogo({ className }: { className?: string }) {
-  return (
-    <svg 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className={className}
-    >
-      <line x1="12" y1="2" x2="12" y2="22" />
-      <line x1="17" y1="5" x2="7" y2="19" />
-      <line x1="19" y1="12" x2="5" y2="12" />
-      <line x1="17" y1="19" x2="7" y2="5" />
-    </svg>
   );
 }

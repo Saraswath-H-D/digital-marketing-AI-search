@@ -1,6 +1,6 @@
 {
-  "name": "Apollo Attendees Lead Directory",
-  "description": "An interactive Apollo.io style lead finder and attendee list with local storage persistence and AI Copilot.",
+  "name": "Operon Attendees Lead Directory",
+  "description": "An interactive Operon style lead finder and attendee list with local storage persistence and AI Copilot.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

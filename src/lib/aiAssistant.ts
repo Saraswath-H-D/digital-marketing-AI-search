@@ -402,7 +402,7 @@ function parseCommandLocally(
 
   return {
     action: 'chat',
-    explanation: `I am your Apollo AI Assistant. I can search records, summarize page context, answer questions based on chat history, or edit contacts.`
+    explanation: `I am your Operon AI Assistant. I can search records, summarize page context, answer questions based on chat history, or edit contacts.`
   };
 }
 

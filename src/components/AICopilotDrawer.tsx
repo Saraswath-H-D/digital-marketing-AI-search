@@ -302,7 +302,7 @@ I came across your profile as a ${titleStr} ${companyStr}. Given your background
 Would you be open to a brief 10-minute discovery call next week to explore potential synergies?
 
 Best regards,
-Apollo AI Growth Team`;
+Operon AI Growth Team`;
 
       const insights = [
         `High-intent prospect: ${titleStr} ${companyStr}`,
@@ -426,7 +426,7 @@ Apollo AI Growth Team`;
             <Sparkles className="w-4.5 h-4.5 text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-black text-gray-950 leading-none font-display tracking-tight">Apollo AI Assistant</h2>
+            <h2 className="text-sm font-black text-gray-950 leading-none font-display tracking-tight">Operon AI Assistant</h2>
             <span className="text-4xs uppercase tracking-wider text-indigo-600 font-black block mt-1 font-mono">
               Natural Language Command & Control
             </span>

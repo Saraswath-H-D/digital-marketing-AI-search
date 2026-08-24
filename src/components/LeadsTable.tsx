@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lead } from '../types.ts';
-import { getActiveHeaders } from '../data/leadStorage.ts';
+import { getActiveHeaders, formatHeaderName } from '../data/leadStorage.ts';
 import { 
   Check, 
   Mail, 
@@ -317,7 +317,7 @@ export default function LeadsTable({
       <table className="w-full text-left border-collapse min-w-[1000px]">
         {/* Table Header */}
         <thead className="bg-[var(--surface-card-elevated)] border-b border-[var(--border-subtle)] sticky top-0 z-10">
-          <tr className="micro-label py-3">
+          <tr className="micro-label py-3 text-purple-950 font-black uppercase tracking-widest text-[11px]">
             {/* Checkbox */}
             <th className="py-3.5 px-4 w-12 text-center border-r border-[var(--border-subtle)]">
               <input
@@ -327,91 +327,33 @@ export default function LeadsTable({
                 className="w-4 h-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500 transition-colors cursor-pointer accent-indigo-600"
               />
             </th>
-
-            {csvHeaders ? (
-              // Dynamic headers directly from uploaded CSV
-              csvHeaders.map((header) => (
-                <th key={header} className="py-3.5 px-4 min-w-[160px] text-purple-950 hover:bg-purple-200/50 border-r border-purple-200/80 font-black uppercase tracking-widest transition-colors cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <span>{header}</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                  </div>
-                </th>
-              ))
-            ) : (
-              // Standard Layout headers
-              <>
-                <th className="py-3.5 px-4 min-w-[200px] hover:bg-purple-200/50 border-r border-purple-200/80 transition-colors cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <span>Contact Name</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 min-w-[200px] hover:bg-purple-200/50 border-r border-purple-200/80 transition-colors cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <span>Designation</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 min-w-[180px] hover:bg-purple-200/50 border-r border-purple-200/80 transition-colors cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <span>Organization</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 min-w-[185px] hover:bg-purple-200/50 border-r border-purple-200/80 transition-colors cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <span>Email Address</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 min-w-[160px] hover:bg-purple-200/50 border-r border-purple-200/80 transition-colors cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <span>Phone Number</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 min-w-[140px] hover:bg-purple-200/50 border-r border-purple-200/80 transition-colors cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <span>Location</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 w-28 hover:bg-purple-200/50 border-r border-purple-200/80 transition-colors cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <span>Status</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                  </div>
-                </th>
-                <th className="py-3.5 px-4 min-w-[120px] hover:bg-purple-200/50 border-r border-purple-200/80 transition-colors cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <span>Lead Source</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                  </div>
-                </th>
-                {extraKeys.map((customHeader) => (
-                  <th key={customHeader} className="py-3.5 px-4 min-w-[140px] hover:bg-purple-200/50 border-r border-purple-200/80 transition-colors cursor-pointer group">
-                    <div className="flex items-center justify-between">
-                      <span>{customHeader.replace(/_/g, ' ')}</span>
-                      <ChevronDown className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-900 transition-colors" />
-                    </div>
-                  </th>
-                ))}
-              </>
-            )}
-
-            {/* Actions */}
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">First Name</th>
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Last Name</th>
+            <th className="py-3.5 px-4 min-w-[185px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Email</th>
+            <th className="py-3.5 px-4 min-w-[160px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Phone Number</th>
+            <th className="py-3.5 px-4 min-w-[160px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Job Title</th>
+            <th className="py-3.5 px-4 min-w-[160px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Company Name</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">City</th>
+            <th className="py-3.5 px-4 min-w-[120px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">State</th>
+            <th className="py-3.5 px-4 min-w-[120px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Country</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Source</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Email Status</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Seniority</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Department</th>
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Industry</th>
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Employee Size</th>
+            <th className="py-3.5 px-4 min-w-[160px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Person Linkedin Url</th>
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Website</th>
+            <th className="py-3.5 px-4 min-w-[170px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Company Linkedin Url</th>
             <th className="py-3.5 px-4 w-32 text-right bg-purple-100/80 text-purple-950 font-black">Actions</th>
           </tr>
         </thead>
-
 
         {/* Table Body */}
         <tbody className="divide-y divide-gray-150">
           {leads.length === 0 ? (
             <tr>
-              <td colSpan={10 + extraKeys.length} className="py-20 text-center">
-
+              <td colSpan={19} className="py-20 text-center">
                 <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                   <div className="w-16 h-16 rounded-2xl bg-blue-100/70 text-blue-600 flex items-center justify-center mx-auto mb-4 shadow-3xs">
                     <HelpCircle className="w-8 h-8" />
@@ -429,7 +371,6 @@ export default function LeadsTable({
             leads.map((lead) => {
               const isSelected = selectedIds.includes(lead.id);
               const isExpanded = expandedRowIds.includes(lead.id);
-              const initials = `${lead.firstName[0] || ''}${lead.lastName ? lead.lastName[0] : ''}`.toUpperCase();
               const companyColor = getCompanyColor(lead.organization);
 
               return (
@@ -450,126 +391,191 @@ export default function LeadsTable({
                       />
                     </td>
 
-                    {csvHeaders ? (
-                      // Render dynamic cells directly matching uploaded CSV headers
-                      csvHeaders.map((header) => (
-                        <td key={header} className="py-3.5 px-4 text-gray-800 font-semibold truncate max-w-[240px]">
-                          {renderDynamicCell(lead, header)}
-                        </td>
-                      ))
-                    ) : (
-                      // Standard Layout cells
-                      <>
-                        {/* Name column */}
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                              {initials || <Building className="w-3.5 h-3.5" />}
-                            </div>
-                            <div>
-                              <div className="font-semibold text-gray-900 leading-snug flex items-center space-x-1.5">
-                                <span className="hover:text-indigo-600 cursor-pointer transition-colors">
-                                  {(() => {
-                                    const nameStr = `${lead.firstName && lead.firstName !== '-' ? lead.firstName : ''} ${lead.lastName && lead.lastName !== '-' ? lead.lastName : ''}`.trim();
-                                    if (nameStr) return nameStr;
-                                    if (lead.organization && lead.organization !== '-') return lead.organization;
-                                    if (lead.email && lead.email !== '-') return lead.email;
-                                    return 'Contact Record';
-                                  })()}
-                                </span>
-                                {lead.questions && (
-                                  <button
-                                    onClick={() => toggleRowExpanded(lead.id)}
-                                    title="Has questions to speaker"
-                                    className="p-0.5 rounded-sm hover:bg-gray-100 text-amber-500 hover:text-amber-600 transition-colors"
-                                  >
-                                    <MessageSquare className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                              {lead.registrationTime && (
-                                <span className="text-3xs text-gray-400 font-medium block mt-0.5">
-                                  Reg: {lead.registrationTime}
-                                </span>
-                              )}
-                            </div>
+                    {/* 1. First Name */}
+                    <td className="py-3.5 px-4 font-semibold text-gray-900">
+                      {lead.firstName && lead.firstName !== '-' ? lead.firstName : '-'}
+                    </td>
+
+                    {/* 2. Last Name */}
+                    <td className="py-3.5 px-4 font-semibold text-gray-900">
+                      {lead.lastName && lead.lastName !== '-' ? lead.lastName : '-'}
+                    </td>
+
+                    {/* 3. Email */}
+                    <td className="py-3.5 px-4">
+                      {renderEmailCell(lead)}
+                    </td>
+
+                    {/* 4. Phone Number */}
+                    <td className="py-3.5 px-4">
+                      {renderPhoneCell(lead)}
+                    </td>
+
+                    {/* 5. Job Title */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                      {lead.jobTitle && lead.jobTitle !== '-' ? (
+                        <div className="flex items-center space-x-1.5 max-w-[190px]">
+                          <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span className="truncate" title={lead.jobTitle}>
+                            {lead.jobTitle}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
+
+                    {/* 6. Company Name */}
+                    <td className="py-3.5 px-4 font-semibold">
+                      {lead.organization && lead.organization !== '-' ? (
+                        <div className="flex items-center space-x-2">
+                          <div className={`w-6 h-6 rounded-md border flex items-center justify-center text-3xs font-bold shrink-0 shadow-3xs ${companyColor}`}>
+                            {lead.organization[0].toUpperCase()}
                           </div>
-                        </td>
+                          <span className="font-semibold text-gray-800 truncate max-w-[140px]" title={lead.organization}>
+                            {lead.organization}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
 
-                        {/* Job Title column */}
-                        <td className="py-3.5 px-4">
-                          {lead.jobTitle ? (
-                            <div className="flex items-center space-x-1.5 max-w-[190px]">
-                              <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                              <span className="truncate text-gray-700 font-medium" title={lead.jobTitle}>
-                                {lead.jobTitle}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 font-medium">-</span>
-                          )}
-                        </td>
+                    {/* 7. City */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                      {lead.city && lead.city !== '-' ? (
+                        <div className="flex items-center space-x-1 text-gray-650">
+                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span className="truncate max-w-[130px]" title={lead.city}>
+                            {lead.city}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
 
-                        {/* Company column */}
-                        <td className="py-3.5 px-4">
-                          {lead.organization ? (
-                            <div className="flex items-center space-x-2">
-                              <div className={`w-6 h-6 rounded-md border flex items-center justify-center text-3xs font-bold shrink-0 shadow-3xs ${companyColor}`}>
-                                {lead.organization[0].toUpperCase()}
-                              </div>
-                              <span className="font-semibold text-gray-800 truncate max-w-[140px]" title={lead.organization}>
-                                {lead.organization}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 font-medium">-</span>
-                          )}
-                        </td>
+                    {/* 8. State */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                      {lead.state && lead.state !== '-' ? (
+                        <span className="truncate max-w-[110px] inline-block">{lead.state}</span>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
 
-                        {/* Email column */}
-                        <td className="py-3.5 px-4">
-                          {renderEmailCell(lead)}
-                        </td>
+                    {/* 9. Country */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                      {lead.country && lead.country !== '-' ? (
+                        <span className="truncate max-w-[110px] inline-block">{lead.country}</span>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
 
-                        {/* Phone column */}
-                        <td className="py-3.5 px-4">
-                          {renderPhoneCell(lead)}
-                        </td>
+                    {/* 10. Source */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                      {lead.sourceName && lead.sourceName !== '-' ? (
+                        <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold">
+                          {lead.sourceName}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
 
-                        {/* Location column */}
-                        <td className="py-3.5 px-4">
-                          {lead.city ? (
-                            <div className="flex items-center space-x-1 text-gray-650 font-medium">
-                              <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                              <span className="truncate max-w-[110px]" title={lead.city}>
-                                {lead.city}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 font-medium">-</span>
-                          )}
-                        </td>
+                    {/* 11. Email Status */}
+                    <td className="py-3.5 px-4">
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+                        {lead.emailStatus || 'Verified'}
+                      </span>
+                    </td>
 
-                        {/* Status column */}
-                        <td className="py-3.5 px-4">
-                          {getStatusBadge(lead.approvalStatus)}
-                        </td>
+                    {/* 12. Seniority */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                      {lead.seniority && lead.seniority !== '-' ? (
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-semibold">
+                          {lead.seniority}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
 
-                        {/* Source / CSV Tag column */}
-                        <td className="py-3.5 px-4">
-                          <span className="text-gray-400 font-medium text-xs select-none">-</span>
-                        </td>
+                    {/* 13. Department */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                      {lead.department && lead.department !== '-' ? (
+                        <span className="truncate max-w-[120px] inline-block">{lead.department}</span>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
 
-                        {/* Dynamic Custom Columns Cell Values */}
-                        {extraKeys.map((customHeader) => (
-                          <td key={customHeader} className="py-3.5 px-4 text-gray-700 font-medium">
-                            {(lead as any)[customHeader] !== undefined && (lead as any)[customHeader] !== null
-                              ? String((lead as any)[customHeader])
-                              : <span className="text-gray-400 italic text-2xs">-</span>}
-                          </td>
-                        ))}
-                      </>
-                    )}
+                    {/* 14. Industry */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                      {lead.industry && lead.industry !== '-' ? (
+                        <span className="truncate max-w-[130px] inline-block">{lead.industry}</span>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
+
+                    {/* 15. Employee Size */}
+                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                      {lead.companySize && lead.companySize !== '-' ? (
+                        <span className="truncate max-w-[130px] inline-block">{lead.companySize}</span>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
+
+                    {/* 16. Person Linkedin Url */}
+                    <td className="py-3.5 px-4 font-medium">
+                      {lead.linkedinUrl && lead.linkedinUrl !== '-' ? (
+                        <a
+                          href={lead.linkedinUrl.startsWith('http') ? lead.linkedinUrl : `https://${lead.linkedinUrl}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-200 font-bold hover:bg-blue-100 transition-colors text-[10px]"
+                        >
+                          LinkedIn
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
+
+                    {/* 17. Website */}
+                    <td className="py-3.5 px-4 font-medium">
+                      {lead.website && lead.website !== '-' ? (
+                        <a
+                          href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-bold hover:bg-slate-200 transition-colors text-[10px]"
+                        >
+                          Website
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
+
+                    {/* 18. Company Linkedin Url */}
+                    <td className="py-3.5 px-4 font-medium">
+                      {lead.companyLinkedinUrl && lead.companyLinkedinUrl !== '-' ? (
+                        <a
+                          href={lead.companyLinkedinUrl.startsWith('http') ? lead.companyLinkedinUrl : `https://${lead.companyLinkedinUrl}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-600 border border-indigo-200 font-bold hover:bg-indigo-100 transition-colors text-[10px]"
+                        >
+                          Company LinkedIn
+                        </a>
+                      ) : (
+                        <span className="text-gray-400 font-medium">-</span>
+                      )}
+                    </td>
 
                     {/* Actions column */}
                     <td className="py-3.5 px-4 text-right">
@@ -635,7 +641,7 @@ export default function LeadsTable({
                   {/* Expanded Row for Speaker Questions / Details */}
                   {isExpanded && (
                     <tr className="bg-indigo-50/5/50 border-b border-gray-200">
-                      <td colSpan={10} className="p-0">
+                      <td colSpan={16} className="p-0">
                         <div className="px-16 py-4 space-y-3 text-xs text-gray-700 bg-gray-50/50">
                           {lead.questions ? (
                             <div className="bg-amber-50/40 border border-amber-100/50 p-4 rounded-xl flex items-start space-x-3 max-w-3xl shadow-3xs">

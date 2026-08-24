@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Filters, FilterOptions } from '../types.ts';
+import { formatHeaderName } from '../data/leadStorage.ts';
 import { 
   ChevronDown, 
   ChevronUp,
@@ -8,7 +9,19 @@ import {
   Search,
   SlidersHorizontal,
   Tag,
-  RotateCcw
+  RotateCcw,
+  Users,
+  Building,
+  Briefcase,
+  MapPin,
+  ShieldCheck,
+  Zap,
+  HelpCircle,
+  Check,
+  Layers,
+  Sparkles,
+  Bookmark,
+  Filter
 } from 'lucide-react';
 
 interface FiltersSidebarProps {
@@ -26,73 +39,239 @@ export default function FiltersSidebar({
   onClear,
   isLoading,
 }: FiltersSidebarProps) {
-  // Column Search State
-  const [columnSearch, setColumnSearch] = useState('');
+  // Global filter search state
+  const [filterSearch, setFilterSearch] = useState('');
   
   // Custom Accordion Open/Closed State
-  const [openCustomSections, setOpenCustomSections] = useState<Record<string, boolean>>({});
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    persona: true,
+    jobTitles: true,
+    seniority: true,
+    companySize: true,
+    industry: true,
+    cities: false,
+    companies: false,
+    emailStatuses: false,
+    intents: false,
+    technologies: false,
+    sources: false,
+    statuses: false,
+    csvColumns: false,
+  });
 
-  // Inner Option Search per column
+  // Option Search strings for each category
   const [optionSearches, setOptionSearches] = useState<Record<string, string>>({});
+  
+  // Dedicated Job Title Search Input
+  const [jobTitleInput, setJobTitleInput] = useState('');
 
-  // All available custom columns from uploaded CSV file
+  // Toggle accordion section
+  const toggleSection = (key: string) => {
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // CSV Columns filter options
   const customFiltersObj = filterOptions.customFilters || {};
-  const totalColumnCount = Object.keys(customFiltersObj).length;
+  const totalCustomColumnCount = Object.keys(customFiltersObj).length;
 
-  // Filter column accordions based on search input
-  const filteredColumns = useMemo(() => {
-    const entries = Object.entries(customFiltersObj);
-    if (!columnSearch.trim()) return entries;
-    const query = columnSearch.trim().toLowerCase();
-    return entries.filter(([colName]) => {
-      const cleanName = colName.replace(/_/g, ' ').toLowerCase();
-      return cleanName.includes(query);
-    });
-  }, [customFiltersObj, columnSearch]);
+  // Active filter counts
+  const activeCounts = useMemo(() => {
+    let count = 0;
+    if (filters.persona) count += 1;
+    if (filters.jobTitles?.length) count += filters.jobTitles.length;
+    if (filters.seniorities?.length) count += filters.seniorities.length;
+    if (filters.cities?.length) count += filters.cities.length;
+    if (filters.companies?.length) count += filters.companies.length;
+    if (filters.companySizes?.length) count += filters.companySizes.length;
+    if (filters.industries?.length) count += filters.industries.length;
+    if (filters.emailStatuses?.length) count += filters.emailStatuses.length;
+    if (filters.intents?.length) count += filters.intents.length;
+    if (filters.technologies?.length) count += filters.technologies.length;
+    if (filters.sources?.length) count += filters.sources.length;
+    if (filters.statuses?.length) count += filters.statuses.length;
+    if (filters.tags?.length) count += filters.tags.length;
+    if (filters.savedOnly) count += 1;
+    if (filters.netNewOnly) count += 1;
+    if (filters.customFilters) {
+      count += Object.values(filters.customFilters).reduce((acc, vals) => acc + (vals ? vals.length : 0), 0);
+    }
+    return count;
+  }, [filters]);
 
-  // Active filter count calculation
-  const activeCustomFilterCount = useMemo(() => {
-    if (!filters.customFilters) return 0;
-    return Object.values(filters.customFilters).reduce((acc, vals) => acc + (vals ? vals.length : 0), 0);
-  }, [filters.customFilters]);
-
-  const hasActiveFilters = activeCustomFilterCount > 0;
+  const hasActiveFilters = activeCounts > 0;
 
   const handleClearAll = () => {
     setFilters(prev => ({
-      ...prev,
-      customFilters: {}
+      search: '',
+      jobTitles: [],
+      companies: [],
+      cities: [],
+      sources: [],
+      statuses: [],
+      savedOnly: false,
+      netNewOnly: false,
+      selectedList: null,
+      persona: null,
+      emailStatuses: [],
+      seniorities: [],
+      companySizes: [],
+      industries: [],
+      intents: [],
+      technologies: [],
+      tags: [],
+      customFilters: {},
     }));
     onClear();
+  };
+
+  // Helper checkbox handler for array filters
+  const toggleArrayFilter = (key: keyof Filters, item: string) => {
+    setFilters(prev => {
+      const current = (prev[key] as string[]) || [];
+      const updated = current.includes(item)
+        ? current.filter(v => v !== item)
+        : [...current, item];
+      return { ...prev, [key]: updated };
+    });
+  };
+
+  // Helper to render searchable filter category accordion
+  const renderFilterAccordion = (
+    id: string,
+    title: string,
+    icon: React.ReactNode,
+    options: string[],
+    selectedItems: string[],
+    onToggle: (val: string) => void,
+    badgeColor: string = 'bg-purple-600'
+  ) => {
+    const isOpen = !!openSections[id];
+    const query = (optionSearches[id] || filterSearch || '').trim().toLowerCase();
+    const filteredOptions = query
+      ? options.filter(opt => opt.toLowerCase().includes(query))
+      : options;
+
+    if (filterSearch && filteredOptions.length === 0 && !title.toLowerCase().includes(filterSearch.toLowerCase())) {
+      return null;
+    }
+
+    return (
+      <div key={id} className="select-none">
+        <button
+          onClick={() => toggleSection(id)}
+          className={`w-full flex items-center justify-between py-2.5 px-3 rounded-2xl border transition-all duration-200 text-left cursor-pointer group super-3d-card ${
+            selectedItems.length > 0
+              ? 'bg-purple-100/90 border-purple-300 text-purple-950 font-black shadow-xs'
+              : 'bg-white hover:bg-purple-50/60 border-purple-200/80 text-slate-800 font-bold'
+          }`}
+        >
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border ${
+              selectedItems.length > 0 ? 'bg-purple-600 text-white border-purple-700' : 'bg-purple-50 text-purple-600 border-purple-200'
+            }`}>
+              {icon}
+            </div>
+            <span className="text-xs tracking-tight truncate max-w-[150px]">{title}</span>
+          </div>
+
+          <div className="flex items-center space-x-1.5 shrink-0">
+            {selectedItems.length > 0 && (
+              <span className={`px-2 py-0.5 text-[9px] font-black text-white rounded-full ${badgeColor}`}>
+                {selectedItems.length}
+              </span>
+            )}
+            <div className="w-5 h-5 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center">
+              {isOpen ? <ChevronUp className="w-3 h-3 text-purple-700" /> : <ChevronDown className="w-3 h-3 text-purple-700" />}
+            </div>
+          </div>
+        </button>
+
+        {isOpen && (
+          <div className="p-3 bg-white rounded-2xl border border-purple-200/90 shadow-xs space-y-2 mt-1 animate-fadeIn super-3d-card">
+            {options.length > 5 && (
+              <div className="relative mb-1">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-purple-400">
+                  <Search className="w-3 h-3" />
+                </span>
+                <input
+                  type="text"
+                  value={optionSearches[id] || ''}
+                  onChange={(e) => setOptionSearches(prev => ({ ...prev, [id]: e.target.value }))}
+                  placeholder={`Search ${title.toLowerCase()}...`}
+                  className="w-full pl-7 pr-6 py-1 text-xs border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 bg-purple-50/30 text-purple-950 font-bold"
+                />
+                {optionSearches[id] && (
+                  <button
+                    type="button"
+                    onClick={() => setOptionSearches(prev => ({ ...prev, [id]: '' }))}
+                    className="absolute inset-y-0 right-0 flex items-center pr-2 text-slate-400 hover:text-purple-600"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-1 max-h-44 overflow-y-auto scrollbar-thin pr-1">
+              {filteredOptions.length === 0 ? (
+                <p className="text-2xs text-slate-400 italic py-1 text-center">No options match</p>
+              ) : (
+                filteredOptions.map(val => {
+                  const isChecked = selectedItems.includes(val);
+                  return (
+                    <label 
+                      key={val} 
+                      className={`flex items-center space-x-2 py-1 px-2 rounded-xl cursor-pointer text-xs transition-colors border ${
+                        isChecked 
+                          ? 'bg-purple-100 border-purple-300 text-purple-950 font-black shadow-2xs' 
+                          : 'hover:bg-purple-50/70 border-transparent text-slate-700 font-semibold'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => onToggle(val)}
+                        className="w-3.5 h-3.5 rounded-sm text-purple-600 border-purple-300 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                      />
+                      <span className="truncate">{val}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
     <aside id="filters-sidebar" className="w-80 border-r border-[var(--border-subtle)] bg-[var(--surface-card)] flex flex-col h-full overflow-hidden select-none shrink-0">
       
-      {/* Sidebar Top Header */}
-      <div className="p-4 bg-[var(--surface-card-elevated)] border-b border-[var(--border-subtle)] shrink-0 flex items-center justify-between">
+      {/* Sidebar Top Header & Reset Button */}
+      <div className="p-3.5 bg-gradient-to-r from-purple-100 via-pink-50 to-purple-100 border-b border-purple-200 shrink-0 flex items-center justify-between">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600 flex items-center justify-center">
-            <Tag className="w-4 h-4 text-purple-600" />
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 text-white flex items-center justify-center shadow-xs">
+            <SlidersHorizontal className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center space-x-1.5">
-              <span className="micro-label font-black text-xs tracking-widest uppercase text-[var(--text-primary)]">CSV Column Filters</span>
-              {activeCustomFilterCount > 0 && (
+              <span className="font-black text-xs tracking-tight uppercase text-purple-950 font-display">Filters</span>
+              {activeCounts > 0 && (
                 <span className="px-2 py-0.5 text-[9px] font-black text-white bg-purple-600 rounded-full shadow-2xs">
-                  {activeCustomFilterCount} Active
+                  {activeCounts} Active
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-slate-500 font-semibold">{totalColumnCount} CSV columns available</p>
+            <p className="text-[10px] text-purple-700 font-bold">Target People & Firmographics</p>
           </div>
         </div>
 
         {hasActiveFilters && (
           <button
             onClick={handleClearAll}
-            className="text-2xs font-black text-purple-900 flex items-center space-x-1 px-2.5 py-1 bg-white hover:bg-purple-50 border border-purple-200 rounded-xl transition-all cursor-pointer super-3d-white-btn"
-            title="Clear all active CSV column filters"
+            className="text-2xs font-black text-purple-900 flex items-center space-x-1 px-2.5 py-1 bg-white hover:bg-purple-50 border border-purple-300 rounded-xl transition-all cursor-pointer shadow-2xs"
+            title="Reset all active search filters"
           >
             <RotateCcw className="w-3 h-3 text-purple-700" />
             <span>Reset</span>
@@ -100,24 +279,24 @@ export default function FiltersSidebar({
         )}
       </div>
 
-      {/* 3D Column Search Bar */}
-      <div className="p-3 border-b border-pink-200/60 bg-[#FDF2F8] shrink-0">
+      {/* Global Filter Search Input */}
+      <div className="p-3 border-b border-purple-200/60 bg-purple-50/40 shrink-0">
         <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-purple-500">
+          <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-purple-500">
             <Search className="w-4 h-4" />
           </span>
           <input
             type="text"
-            value={columnSearch}
-            onChange={(e) => setColumnSearch(e.target.value)}
-            placeholder={`Search ${totalColumnCount} CSV column filters...`}
-            className="w-full pl-9.5 pr-8 py-2 text-xs border border-purple-200 rounded-2xl focus:outline-none focus:border-purple-500 transition-all bg-white/95 placeholder-slate-400 font-bold text-purple-950 super-3d-input"
+            value={filterSearch}
+            onChange={(e) => setFilterSearch(e.target.value)}
+            placeholder="Search all filters & options..."
+            className="w-full pl-9 pr-8 py-2 text-xs border border-purple-200 rounded-2xl focus:outline-none focus:border-purple-500 transition-all bg-white font-bold text-purple-950 placeholder-slate-400 shadow-2xs"
           />
-          {columnSearch && (
+          {filterSearch && (
             <button
               type="button"
-              onClick={() => setColumnSearch('')}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-purple-600 active:scale-90 cursor-pointer"
+              onClick={() => setFilterSearch('')}
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-purple-600 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -125,155 +304,388 @@ export default function FiltersSidebar({
         </div>
       </div>
 
-      {/* 3D Column Accordions List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2.5 scrollbar-thin">
-        {totalColumnCount === 0 ? (
-          <div className="text-center py-10 px-4 bg-white/80 rounded-2xl border border-purple-200/60 super-3d-card">
-            <Tag className="w-8 h-8 text-purple-300 mx-auto mb-2" />
-            <p className="text-xs font-black text-purple-950">No CSV Columns Found</p>
-            <p className="text-[11px] text-slate-500 mt-1 font-medium">Upload a CSV file to activate targeting filters for all headers.</p>
+      {/* Categorized Filters Accordion Body */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-thin">
+
+        {/* SECTION 1: PEOPLE FILTERS */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] font-black tracking-widest text-purple-800 uppercase flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-indigo-600" />
+              PEOPLE FILTERS
+            </span>
           </div>
-        ) : filteredColumns.length === 0 ? (
-          <div className="text-center py-8 px-4 bg-white/80 rounded-2xl border border-purple-200/60 super-3d-card">
-            <Search className="w-6 h-6 text-purple-400 mx-auto mb-2" />
-            <p className="text-xs font-black text-purple-950">No Matching Filters</p>
-            <p className="text-[11px] text-slate-500 mt-1">No CSV columns match "{columnSearch}"</p>
+
+          {/* 1. Job Titles & Roles Filter (TOP OF PEOPLE FILTERS WITH SEARCH BAR) */}
+          <div className="select-none">
             <button
-              onClick={() => setColumnSearch('')}
-              className="mt-2 text-xs font-black text-purple-700 hover:underline cursor-pointer"
+              onClick={() => toggleSection('jobTitles')}
+              className={`w-full flex items-center justify-between py-2.5 px-3 rounded-2xl border transition-all duration-200 text-left cursor-pointer group super-3d-card ${
+                filters.jobTitles && filters.jobTitles.length > 0
+                  ? 'bg-purple-100 border-purple-300 text-purple-950 font-black shadow-xs'
+                  : 'bg-white hover:bg-purple-50/60 border-purple-200 text-slate-800 font-bold'
+              }`}
             >
-              Clear search
+              <div className="flex items-center space-x-2.5 min-w-0">
+                <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border ${
+                  filters.jobTitles && filters.jobTitles.length > 0 ? 'bg-purple-600 text-white border-purple-700' : 'bg-purple-50 text-purple-600 border-purple-200'
+                }`}>
+                  <Briefcase className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-xs font-black tracking-tight truncate">Job Titles & Roles</span>
+              </div>
+
+              <div className="flex items-center space-x-1.5 shrink-0">
+                {filters.jobTitles && filters.jobTitles.length > 0 && (
+                  <span className="px-2 py-0.5 text-[9px] font-black text-white bg-purple-600 rounded-full shadow-2xs">
+                    {filters.jobTitles.length} Active
+                  </span>
+                )}
+                <div className="w-5 h-5 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center">
+                  {openSections.jobTitles ? <ChevronUp className="w-3 h-3 text-purple-700" /> : <ChevronDown className="w-3 h-3 text-purple-700" />}
+                </div>
+              </div>
             </button>
-          </div>
-        ) : (
-          filteredColumns.map(([columnName, options]) => {
-            const selectedCustomValues = (filters.customFilters && filters.customFilters[columnName]) || [];
-            const isOpen = !!openCustomSections[columnName];
-            const cleanTitle = columnName.replace(/_/g, ' ');
-            const isActive = selectedCustomValues.length > 0;
-            const optSearch = optionSearches[columnName] || '';
 
-            // Filter inner options if user types in option search
-            const filteredOptions = optSearch.trim()
-              ? options.filter(opt => opt.toLowerCase().includes(optSearch.trim().toLowerCase()))
-              : options;
-
-            return (
-              <div key={columnName} className="select-none">
-                {/* 3D Accordion Pill Header Button */}
-                <button
-                  onClick={() => setOpenCustomSections(prev => ({ ...prev, [columnName]: !prev[columnName] }))}
-                  className={`w-full flex items-center justify-between py-2.5 px-3.5 rounded-full border transition-all duration-200 text-left cursor-pointer group super-3d-card ${
-                    isActive 
-                      ? 'bg-purple-100 border-purple-300 text-purple-950 font-black shadow-sm' 
-                      : 'bg-white hover:bg-pink-50/60 border-pink-200/90 text-slate-900'
-                  }`}
+            {openSections.jobTitles && (
+              <div className="p-3 bg-white rounded-2xl border border-purple-200/90 shadow-xs space-y-2.5 mt-1 animate-fadeIn super-3d-card">
+                {/* Dedicated Job Title Search & Add Bar */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (jobTitleInput.trim()) {
+                      const cleanTitle = jobTitleInput.trim();
+                      if (!filters.jobTitles?.includes(cleanTitle)) {
+                        setFilters(prev => ({
+                          ...prev,
+                          jobTitles: [...(prev.jobTitles || []), cleanTitle]
+                        }));
+                      }
+                      setJobTitleInput('');
+                    }
+                  }}
+                  className="relative flex items-center space-x-1.5"
                 >
-                  <div className="flex items-center space-x-2.5 min-w-0">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 border ${
-                      isActive ? 'bg-purple-600 text-white border-purple-700' : 'bg-purple-50 text-purple-600 border-purple-200'
-                    }`}>
-                      <SlidersHorizontal className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="text-xs font-black tracking-tight capitalize truncate max-w-[150px]">{cleanTitle}</span>
+                  <div className="relative flex-1">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-purple-500">
+                      <Search className="w-3.5 h-3.5" />
+                    </span>
+                    <input
+                      type="text"
+                      value={jobTitleInput}
+                      onChange={(e) => setJobTitleInput(e.target.value)}
+                      placeholder="Type or search job title (e.g. CEO)..."
+                      className="w-full pl-8 pr-7 py-1.5 text-xs border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 bg-purple-50/40 text-purple-950 font-bold placeholder-slate-400"
+                    />
+                    {jobTitleInput && (
+                      <button
+                        type="button"
+                        onClick={() => setJobTitleInput('')}
+                        className="absolute inset-y-0 right-0 flex items-center pr-2 text-slate-400 hover:text-purple-600 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
+                  <button
+                    type="submit"
+                    disabled={!jobTitleInput.trim()}
+                    className="px-2.5 py-1.5 text-xs font-black bg-purple-600 hover:bg-purple-700 text-white rounded-xl disabled:opacity-40 transition-all cursor-pointer shrink-0 shadow-2xs"
+                  >
+                    + Add
+                  </button>
+                </form>
 
-                  <div className="flex items-center space-x-1.5 shrink-0">
-                    {selectedCustomValues.length > 0 && (
-                      <span className="px-2 py-0.5 text-[9px] font-black bg-purple-600 text-white rounded-full shadow-2xs">
-                        {selectedCustomValues.length}
+                {/* Active Selected Job Title Chips */}
+                {filters.jobTitles && filters.jobTitles.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1 pb-1 border-b border-purple-100">
+                    {filters.jobTitles.map(t => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center space-x-1 px-2 py-0.5 text-[10px] font-black bg-purple-100 text-purple-950 border border-purple-300 rounded-lg shadow-2xs"
+                      >
+                        <span className="truncate max-w-[140px]">{t}</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleArrayFilter('jobTitles', t)}
+                          className="hover:text-purple-600 focus:outline-none cursor-pointer"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
                       </span>
-                    )}
-                    <div className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
-                      {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-purple-700" /> : <ChevronDown className="w-3.5 h-3.5 text-purple-700" />}
-                    </div>
-                  </div>
-                </button>
-
-                {/* Expanded 3D Options Container */}
-                {isOpen && (
-                  <div className="p-3 bg-white/95 rounded-2xl border border-purple-200 shadow-sm space-y-2 mt-1.5 animate-fadeIn super-3d-card">
-                    {/* Inner Option Search Bar for long option lists */}
-                    {options.length > 6 && (
-                      <div className="relative mb-2">
-                        <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-purple-400">
-                          <Search className="w-3 h-3" />
-                        </span>
-                        <input
-                          type="text"
-                          value={optSearch}
-                          onChange={(e) => setOptionSearches(prev => ({ ...prev, [columnName]: e.target.value }))}
-                          placeholder={`Filter ${cleanTitle} options...`}
-                          className="w-full pl-7 pr-6 py-1 text-xs border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 bg-purple-50/40 text-purple-950 font-bold"
-                        />
-                        {optSearch && (
-                          <button
-                            type="button"
-                            onClick={() => setOptionSearches(prev => ({ ...prev, [columnName]: '' }))}
-                            className="absolute inset-y-0 right-0 flex items-center pr-2 text-slate-400 hover:text-purple-600"
-                          >
-                            <X className="w-2.5 h-2.5" />
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Option Checkboxes */}
-                    <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-thin pr-1">
-                      {filteredOptions.length === 0 ? (
-                        <p className="text-xs text-gray-400 italic py-1 text-center">No matching options</p>
-                      ) : (
-                        filteredOptions.map(val => {
-                          const isChecked = selectedCustomValues.includes(val);
-                          return (
-                            <label 
-                              key={val} 
-                              className={`flex items-center space-x-2.5 py-1.5 px-2.5 rounded-xl cursor-pointer text-xs transition-colors border ${
-                                isChecked 
-                                  ? 'bg-purple-100/90 border-purple-300 text-purple-950 font-black' 
-                                  : 'hover:bg-purple-50/60 border-transparent text-slate-700'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => {
-                                  setFilters(prev => {
-                                    const currentCustom = prev.customFilters || {};
-                                    const currentColVals = currentCustom[columnName] || [];
-                                    const newColVals = isChecked 
-                                      ? currentColVals.filter(v => v !== val)
-                                      : [...currentColVals, val];
-                                    return {
-                                      ...prev,
-                                      customFilters: {
-                                        ...currentCustom,
-                                        [columnName]: newColVals
-                                      }
-                                    };
-                                  });
-                                }}
-                                className="w-3.5 h-3.5 rounded-sm text-purple-600 border-purple-300 focus:ring-purple-500 cursor-pointer accent-purple-600"
-                              />
-                              <span className="truncate">{val}</span>
-                            </label>
-                          );
-                        })
-                      )}
-                    </div>
+                    ))}
                   </div>
                 )}
+
+                {/* Matching Job Title Database Options */}
+                <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                  {((filterOptions.jobTitles || []).filter(opt => 
+                    !jobTitleInput.trim() || opt.toLowerCase().includes(jobTitleInput.trim().toLowerCase())
+                  )).length === 0 ? (
+                    <p className="text-2xs text-slate-400 italic py-1 text-center">No matching titles in database. Press "+ Add" above to use "{jobTitleInput.trim()}".</p>
+                  ) : (
+                    ((filterOptions.jobTitles || []).filter(opt => 
+                      !jobTitleInput.trim() || opt.toLowerCase().includes(jobTitleInput.trim().toLowerCase())
+                    )).map(val => {
+                      const isChecked = (filters.jobTitles || []).includes(val);
+                      return (
+                        <label 
+                          key={val} 
+                          className={`flex items-center space-x-2 py-1 px-2 rounded-xl cursor-pointer text-xs transition-colors border ${
+                            isChecked 
+                              ? 'bg-purple-100 border-purple-300 text-purple-950 font-black shadow-2xs' 
+                              : 'hover:bg-purple-50/70 border-transparent text-slate-700 font-semibold'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleArrayFilter('jobTitles', val)}
+                            className="w-3.5 h-3.5 rounded-sm text-purple-600 border-purple-300 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                          />
+                          <span className="truncate">{val}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            );
-          })
+            )}
+          </div>
+
+          {/* 2. Target Persona ICP Filter */}
+          <div className="select-none">
+            <button
+              onClick={() => toggleSection('persona')}
+              className={`w-full flex items-center justify-between py-2.5 px-3 rounded-2xl border transition-all text-left cursor-pointer super-3d-card ${
+                filters.persona
+                  ? 'bg-purple-100 border-purple-300 text-purple-950 font-black shadow-xs'
+                  : 'bg-white hover:bg-purple-50/60 border-purple-200 text-slate-800 font-bold'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5 min-w-0">
+                <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border ${
+                  filters.persona ? 'bg-purple-600 text-white border-purple-700' : 'bg-purple-50 text-purple-600 border-purple-200'
+                }`}>
+                  <Sparkles className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-xs truncate">Target Persona ICP</span>
+              </div>
+              <div className="flex items-center space-x-1.5 shrink-0">
+                {filters.persona && (
+                  <span className="px-2 py-0.5 text-[9px] font-black text-white bg-purple-600 rounded-full">
+                    1 Active
+                  </span>
+                )}
+                <div className="w-5 h-5 rounded-full bg-purple-50 border border-purple-200 flex items-center justify-center">
+                  {openSections.persona ? <ChevronUp className="w-3 h-3 text-purple-700" /> : <ChevronDown className="w-3 h-3 text-purple-700" />}
+                </div>
+              </div>
+            </button>
+
+            {openSections.persona && (
+              <div className="p-2.5 bg-white rounded-2xl border border-purple-200 space-y-1 mt-1 animate-fadeIn super-3d-card">
+                {['Founders & Executives', 'Finance Leaders', 'Auditors & Accountants', 'Marketing & Growth', 'Sales & Business Dev'].map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setFilters(prev => ({ ...prev, persona: prev.persona === p ? null : p }))}
+                    className={`w-full text-left px-3 py-1.5 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-all ${
+                      filters.persona === p
+                        ? 'bg-purple-600 text-white font-black shadow-xs'
+                        : 'text-slate-700 hover:bg-purple-50 font-semibold'
+                    }`}
+                  >
+                    <span>{p}</span>
+                    {filters.persona === p && <Check className="w-3.5 h-3.5 text-white" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Seniority / Management Level */}
+          {renderFilterAccordion(
+            'seniority',
+            'Management Level',
+            <SlidersHorizontal className="w-3.5 h-3.5" />,
+            filterOptions.seniorities || ['C-Suite', 'VP / Vice President', 'Director', 'Manager', 'Owner / Partner', 'Entry Level'],
+            filters.seniorities || [],
+            (val) => toggleArrayFilter('seniorities', val)
+          )}
+
+          {/* Person Location / Cities */}
+          {renderFilterAccordion(
+            'cities',
+            'Person Location / City',
+            <MapPin className="w-3.5 h-3.5" />,
+            filterOptions.cities || [],
+            filters.cities || [],
+            (val) => toggleArrayFilter('cities', val)
+          )}
+        </div>
+
+        {/* SECTION 2: COMPANY FILTERS (FIRMOGRAPHICS) */}
+        <div className="pt-2 border-t border-purple-200/80 space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] font-black tracking-widest text-purple-800 uppercase flex items-center gap-1.5">
+              <Building className="w-3.5 h-3.5 text-emerald-600" />
+              COMPANY & FIRMOGRAPHICS
+            </span>
+          </div>
+
+          {/* Companies / Organizations */}
+          {renderFilterAccordion(
+            'companies',
+            'Company / Organization',
+            <Building className="w-3.5 h-3.5" />,
+            filterOptions.companies || [],
+            filters.companies || [],
+            (val) => toggleArrayFilter('companies', val),
+            'bg-emerald-600'
+          )}
+
+          {/* Employee Headcount / Company Size */}
+          {renderFilterAccordion(
+            'companySize',
+            'Employee Headcount',
+            <Users className="w-3.5 h-3.5" />,
+            filterOptions.companySizes || ['1-10 employees', '11-50 employees', '51-200 employees', '201-500 employees', '501-1000 employees', '1000+ employees'],
+            filters.companySizes || [],
+            (val) => toggleArrayFilter('companySizes', val),
+            'bg-emerald-600'
+          )}
+
+          {/* Industry Sectors */}
+          {renderFilterAccordion(
+            'industry',
+            'Industry & Sector',
+            <Layers className="w-3.5 h-3.5" />,
+            filterOptions.industries || ['Software & SaaS', 'Financial Services', 'Healthcare & Biotech', 'Marketing & Advertising', 'E-Commerce & Retail', 'Education & Research', 'Consulting & IT'],
+            filters.industries || [],
+            (val) => toggleArrayFilter('industries', val),
+            'bg-emerald-600'
+          )}
+
+          {/* Tech Stack & Technologies */}
+          {renderFilterAccordion(
+            'technologies',
+            'Technologies Stack',
+            <Zap className="w-3.5 h-3.5" />,
+            filterOptions.technologies || ['React', 'Salesforce', 'HubSpot', 'AWS', 'Google Cloud', 'Stripe', 'Node.js', 'WordPress'],
+            filters.technologies || [],
+            (val) => toggleArrayFilter('technologies', val),
+            'bg-emerald-600'
+          )}
+        </div>
+
+        {/* SECTION 3: DATA & SIGNALS */}
+        <div className="pt-2 border-t border-purple-200/80 space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] font-black tracking-widest text-purple-800 uppercase flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-cyan-600" />
+              DATA & INTENT SIGNALS
+            </span>
+          </div>
+
+          {/* Email Verification Status */}
+          {renderFilterAccordion(
+            'emailStatuses',
+            'Email Verification',
+            <ShieldCheck className="w-3.5 h-3.5" />,
+            filterOptions.emailStatuses || ['Valid / Safe', 'Risky / Catch-all', 'Invalid / Bounce'],
+            filters.emailStatuses || [],
+            (val) => toggleArrayFilter('emailStatuses', val),
+            'bg-cyan-600'
+          )}
+
+          {/* Buying Intent Level */}
+          {renderFilterAccordion(
+            'intents',
+            'Buying Intent Score',
+            <Sparkles className="w-3.5 h-3.5" />,
+            filterOptions.intents || ['High Intent', 'Medium Intent', 'Low Intent'],
+            filters.intents || [],
+            (val) => toggleArrayFilter('intents', val),
+            'bg-cyan-600'
+          )}
+
+          {/* Lead Source & CSV Tags */}
+          {renderFilterAccordion(
+            'sources',
+            'Lead Source & Tag',
+            <Tag className="w-3.5 h-3.5" />,
+            filterOptions.sources || [],
+            filters.sources || [],
+            (val) => toggleArrayFilter('sources', val),
+            'bg-cyan-600'
+          )}
+
+          {/* Saved Records Quick Filter */}
+          <div className="select-none">
+            <button
+              onClick={() => setFilters(prev => ({ ...prev, savedOnly: !prev.savedOnly, netNewOnly: false }))}
+              className={`w-full flex items-center justify-between py-2.5 px-3 rounded-2xl border transition-all text-left cursor-pointer ${
+                filters.savedOnly
+                  ? 'bg-purple-600 text-white font-black border-purple-700 shadow-xs'
+                  : 'bg-white hover:bg-purple-50/60 border-purple-200 text-slate-800 font-bold'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Bookmark className={`w-4 h-4 ${filters.savedOnly ? 'text-white' : 'text-purple-600'}`} />
+                <span className="text-xs">Saved Contacts Only</span>
+              </div>
+              {filters.savedOnly && <Check className="w-4 h-4 text-white" />}
+            </button>
+          </div>
+        </div>
+
+        {/* SECTION 4: CSV CUSTOM COLUMNS */}
+        {totalCustomColumnCount > 0 && (
+          <div className="pt-2 border-t border-purple-200/80 space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black tracking-widest text-purple-800 uppercase flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-pink-600" />
+                CSV COLUMN FILTERS ({totalCustomColumnCount})
+              </span>
+            </div>
+
+            {Object.entries(customFiltersObj).map(([columnName, options]) => {
+              const selectedCustomValues = (filters.customFilters && filters.customFilters[columnName]) || [];
+              return renderFilterAccordion(
+                `csv_${columnName}`,
+                formatHeaderName(columnName),
+                <SlidersHorizontal className="w-3.5 h-3.5" />,
+                options,
+                selectedCustomValues,
+                (val) => {
+                  setFilters(prev => {
+                    const currentCustom = prev.customFilters || {};
+                    const currentColVals = currentCustom[columnName] || [];
+                    const updatedColVals = currentColVals.includes(val)
+                      ? currentColVals.filter(v => v !== val)
+                      : [...currentColVals, val];
+                    return {
+                      ...prev,
+                      customFilters: {
+                        ...currentCustom,
+                        [columnName]: updatedColVals
+                      }
+                    };
+                  });
+                },
+                'bg-pink-600'
+              );
+            })}
+          </div>
         )}
+
       </div>
 
-      {/* Loading Overlay */}
+      {/* Sync / Loading Footer Overlay */}
       {isLoading && (
-        <div className="px-4 py-2 bg-purple-50/80 border-t border-purple-200 flex items-center justify-center space-x-2 text-2xs font-extrabold text-purple-700 animate-pulse shrink-0">
+        <div className="px-4 py-2 bg-purple-50 border-t border-purple-200 flex items-center justify-center space-x-2 text-2xs font-extrabold text-purple-700 animate-pulse shrink-0">
           <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-600" />
-          <span>Syncing CSV column filters...</span>
+          <span>Refreshing search filters...</span>
         </div>
       )}
     </aside>

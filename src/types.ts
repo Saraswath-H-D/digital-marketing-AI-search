@@ -27,8 +27,11 @@ export interface Lead {
   linkedinUrl?: string;
   aiScore?: number;
   aiValueReasons?: string[];
+  state?: string;
   country?: string;
   department?: string;
+  website?: string;
+  companyLinkedinUrl?: string;
   revenue?: string;
   funding?: string;
 }

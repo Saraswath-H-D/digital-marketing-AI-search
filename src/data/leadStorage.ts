@@ -2,16 +2,19 @@ import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
 import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, getSupabaseConfig } from '../lib/supabase.ts';
 
-const STORAGE_KEY = 'apollo_leads_v9';
-const HEADERS_KEY = 'apollo_active_headers';
-const TRASH_KEY = 'apollo_deleted_trash_v1';
-const DELETED_HISTORY_KEY = 'apollo_deleted_history_v1';
-const CSV_TAGS_KEY = 'apollo_csv_upload_tags_v2';
+const STORAGE_KEY = 'operon_leads_v9';
+const LEGACY_STORAGE_KEY = 'apollo_leads_v9';
+const HEADERS_KEY = 'operon_active_headers';
+const LEGACY_HEADERS_KEY = 'apollo_active_headers';
+const TRASH_KEY = 'operon_deleted_trash_v1';
+const DELETED_HISTORY_KEY = 'operon_deleted_history_v1';
+const CSV_TAGS_KEY = 'operon_csv_upload_tags_v2';
+const LEGACY_CSV_TAGS_KEY = 'apollo_csv_upload_tags_v2';
 
 // Independent CSV Upload Tag Storage Registry
 export const getStoredCsvTags = (): string[] => {
   try {
-    const data = localStorage.getItem(CSV_TAGS_KEY);
+    const data = localStorage.getItem(CSV_TAGS_KEY) || localStorage.getItem(LEGACY_CSV_TAGS_KEY);
     if (data) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
@@ -53,7 +56,7 @@ export const removeCsvTag = (tag: string): void => {
 // Immediate cleanup of any legacy blank lead rows from localStorage
 (() => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
@@ -75,7 +78,7 @@ export const removeCsvTag = (tag: string): void => {
 
 export const getActiveHeaders = (): string[] | null => {
   try {
-    const raw = localStorage.getItem(HEADERS_KEY);
+    const raw = localStorage.getItem(HEADERS_KEY) || localStorage.getItem(LEGACY_HEADERS_KEY);
     if (raw) return JSON.parse(raw);
   } catch (err) {
     console.error('Error reading active headers:', err);
@@ -131,6 +134,242 @@ const cleanVal = (val: any) => {
   return (str === '' || str === 'undefined' || str === 'null') ? '-' : str;
 };
 
+// Known City Name Aliases & Standardizations dictionary
+const CITY_ALIASES_MAP: Record<string, string> = {
+  'mumbai': 'Mumbai',
+  'bombay': 'Mumbai',
+  'mumbai city': 'Mumbai',
+  'bengaluru': 'Bengaluru',
+  'bangalore': 'Bengaluru',
+  'bangluru': 'Bengaluru',
+  'bengluru': 'Bengaluru',
+  'bangaluru': 'Bengaluru',
+  'bengaluru city': 'Bengaluru',
+  'blore': 'Bengaluru',
+  'blr': 'Bengaluru',
+  'delhi': 'Delhi',
+  'new delhi': 'New Delhi',
+  'dilli': 'Delhi',
+  'ncr': 'Delhi',
+  'kolkata': 'Kolkata',
+  'calcutta': 'Kolkata',
+  'chennai': 'Chennai',
+  'madras': 'Chennai',
+  'gurugram': 'Gurugram',
+  'gurgaon': 'Gurugram',
+  'pune': 'Pune',
+  'poona': 'Pune',
+  'hyderabad': 'Hyderabad',
+  'hyd': 'Hyderabad',
+  'ahmedabad': 'Ahmedabad',
+  'amdavad': 'Ahmedabad',
+  'surat': 'Surat',
+  'jaipur': 'Jaipur',
+  'lucknow': 'Lucknow',
+  'kanpur': 'Kanpur',
+  'nagpur': 'Nagpur',
+  'indore': 'Indore',
+  'thane': 'Thane',
+  'bhopal': 'Bhopal',
+  'visakhapatnam': 'Visakhapatnam',
+  'patna': 'Patna',
+  'vadodara': 'Vadodara',
+  'ghaziabad': 'Ghaziabad',
+  'ludhiana': 'Ludhiana',
+  'agra': 'Agra',
+  'nashik': 'Nashik',
+  'faridabad': 'Faridabad',
+  'meerut': 'Meerut',
+  'rajkot': 'Rajkot',
+  'kalyan': 'Kalyan',
+  'vasai': 'Vasai',
+  'varanasi': 'Varanasi',
+  'srinagar': 'Srinagar',
+  'aurangabad': 'Aurangabad',
+  'dhanbad': 'Dhanbad',
+  'amritsar': 'Amritsar',
+  'navi mumbai': 'Navi Mumbai',
+  'allahabad': 'Prayagraj',
+  'prayagraj': 'Prayagraj',
+  'new york': 'New York',
+  'new york city': 'New York',
+  'nyc': 'New York',
+  'ny': 'New York',
+  'san francisco': 'San Francisco',
+  'san fran': 'San Francisco',
+  'sf': 'San Francisco',
+  'los angeles': 'Los Angeles',
+  'la': 'Los Angeles',
+  'chicago': 'Chicago',
+  'boston': 'Boston',
+  'seattle': 'Seattle',
+  'austin': 'Austin',
+  'london': 'London',
+  'london, uk': 'London',
+  'paris': 'Paris',
+  'tokyo': 'Tokyo',
+  'singapore': 'Singapore',
+  'dubai': 'Dubai',
+  'sydney': 'Sydney',
+  'toronto': 'Toronto',
+  'berlin': 'Berlin',
+};
+
+/**
+ * Convert string to Title Case with standard capitalization rules
+ */
+export const toProperTitleCase = (str: string): string => {
+  if (!str || str === '-') return '-';
+  const clean = str.trim().replace(/\s+/g, ' ');
+  if (!clean || clean === '-') return '-';
+
+  const lowerWords = new Set(['of', 'and', 'in', 'on', 'at', 'to', 'for', 'with', 'the']);
+  const upperAcronyms: Record<string, string> = {
+    'ceo': 'CEO',
+    'cfo': 'CFO',
+    'cto': 'CTO',
+    'coo': 'COO',
+    'cmo': 'CMO',
+    'cio': 'CIO',
+    'vp': 'VP',
+    'hr': 'HR',
+    'it': 'IT',
+    'ai': 'AI',
+    'ui': 'UI',
+    'ux': 'UX',
+    'se': 'SE',
+    'gm': 'GM',
+    'qa': 'QA',
+    'bdr': 'BDR',
+    'sdr': 'SDR',
+    'ca': 'CA',
+  };
+
+  const words = clean.split(' ');
+  const titleCased = words.map((w, idx) => {
+    const lower = w.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (upperAcronyms[lower]) {
+      return upperAcronyms[lower];
+    }
+    if (idx > 0 && lowerWords.has(lower)) {
+      return lower;
+    }
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  });
+
+  return titleCased.join(' ');
+};
+
+const HEADER_NAME_MAP: Record<string, string> = {
+  'fname': 'First Name',
+  'first_name': 'First Name',
+  'f_name': 'First Name',
+  'firstname': 'First Name',
+  'given_name': 'First Name',
+  'given name': 'First Name',
+  'name': 'First Name',
+  'lname': 'Last Name',
+  'last_name': 'Last Name',
+  'l_name': 'Last Name',
+  'lastname': 'Last Name',
+  'surname': 'Last Name',
+  'email': 'Email',
+  'e-mail': 'Email',
+  'mail': 'Email',
+  'email_id': 'Email',
+  'email_status': 'Email Status',
+  'emailstatus': 'Email Status',
+  'phone': 'Phone Number',
+  'phone_number': 'Phone Number',
+  'phone_no': 'Phone Number',
+  'mobile': 'Phone Number',
+  'mobile_no': 'Phone Number',
+  'organization': 'Company',
+  'company': 'Company',
+  'company_name': 'Company',
+  'org': 'Company',
+  'job_title': 'Job Title',
+  'jobtitle': 'Job Title',
+  'title': 'Job Title',
+  'designation': 'Job Title',
+  'role': 'Job Title',
+  'seniority': 'Seniority',
+  'seniority_level': 'Seniority',
+  'department': 'Department',
+  'dept': 'Department',
+  'industry': 'Industry',
+  'sector': 'Industry',
+  'company_size': 'Employee Size',
+  'employee_size': 'Employee Size',
+  'headcount': 'Employee Size',
+  'city': 'Location',
+  'location': 'Location',
+  'country': 'Country',
+  'linkedin_url': 'LinkedIn URL',
+  'linkedin': 'LinkedIn URL',
+  'website': 'Website',
+  'url': 'Website',
+  'registration_time': 'Registration Time',
+  'registrationtime': 'Registration Time',
+  'created_at': 'Registration Time',
+  'createdat': 'Registration Time',
+  'approval_status': 'Approval Status',
+  'approvalstatus': 'Approval Status',
+  'status': 'Approval Status',
+  'source_name': 'Lead Source',
+  'sourcename': 'Lead Source',
+};
+
+/**
+ * Format raw CSV header keys to clean Title Case standard display header names
+ */
+export const formatHeaderName = (header: string): string => {
+  if (!header || !header.trim()) return '';
+  const cleanKey = header.toLowerCase().trim().replace(/[^a-z0-9_]/g, '');
+  if (HEADER_NAME_MAP[cleanKey]) {
+    return HEADER_NAME_MAP[cleanKey];
+  }
+  return header
+    .replace(/_/g, ' ')
+    .replace(/-/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, char => char.toUpperCase());
+};
+
+/**
+ * Normalize city names across variations & aliases to standard original name
+ */
+export const normalizeCityName = (val: any): string => {
+  if (val === undefined || val === null) return '-';
+  const str = String(val).trim();
+  if (!str || str === '-' || str === 'undefined' || str === 'null') return '-';
+
+  const clean = str.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  if (CITY_ALIASES_MAP[clean]) {
+    return CITY_ALIASES_MAP[clean];
+  }
+
+  for (const [key, target] of Object.entries(CITY_ALIASES_MAP)) {
+    if (clean === key || clean.startsWith(key + ' ') || clean.endsWith(' ' + key)) {
+      return target;
+    }
+  }
+
+  return toProperTitleCase(str);
+};
+
+/**
+ * Normalize names, job titles, and organization strings to Title Case
+ */
+export const normalizeNameOrTitle = (val: any): string => {
+  if (val === undefined || val === null) return '-';
+  const str = String(val).trim();
+  if (!str || str === '-' || str === 'undefined' || str === 'null') return '-';
+
+  return toProperTitleCase(str);
+};
+
 // Helper to repair/sanitize leads if name was previously defaulted to 'Contact'
 const sanitizeLead = (l: any): Lead => {
   let fName = l.firstName ? String(l.firstName).trim() : '';
@@ -164,7 +403,7 @@ const sanitizeLead = (l: any): Lead => {
   }
 
   let srcName = l.sourceName ? String(l.sourceName).trim() : '';
-  if (!srcName || /^contacts$|^export$|^leads$|^data$|^apollo_.*export|^supabase/i.test(srcName)) {
+  if (!srcName || /^contacts$|^export$|^leads$|^data$|^apollo_.*export|^operon_.*export|^supabase/i.test(srcName)) {
     srcName = '-';
   } else {
     srcName = srcName.replace(/\s+/g, '-');
@@ -172,12 +411,12 @@ const sanitizeLead = (l: any): Lead => {
 
   return {
     ...l,
-    firstName: cleanVal(fName),
-    lastName: cleanVal(lName),
+    firstName: normalizeNameOrTitle(fName),
+    lastName: normalizeNameOrTitle(lName),
     email: cleanVal(l.email),
-    organization: cleanVal(l.organization),
-    jobTitle: cleanVal(l.jobTitle),
-    city: cleanVal(l.city),
+    organization: normalizeNameOrTitle(l.organization),
+    jobTitle: normalizeNameOrTitle(l.jobTitle),
+    city: normalizeCityName(l.city),
     phone: cleanVal(l.phone),
     approvalStatus: cleanVal(l.approvalStatus || 'approved'),
     sourceName: srcName,
@@ -194,10 +433,12 @@ let memoryLeadCache: Lead[] | null = null;
 // Get leads from memory cache / localStorage & purge any blank (- - -) junk rows
 export const getStoredLeads = (): Lead[] => {
   if (memoryLeadCache !== null && memoryLeadCache.length > 0) {
+    // Re-sanitize memory cache to guarantee city & title deduplication
+    memoryLeadCache = memoryLeadCache.map((l, idx) => ({ ...sanitizeLead(l), id: l.id || idx + 1 }));
     return memoryLeadCache;
   }
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
+    const data = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     if (data !== null) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -328,11 +569,16 @@ const extractFieldValues = (l: any, aliases: string[]): string[] => {
 export const getFilterOptions = (): FilterOptions => {
   const leads = getStoredLeads();
   
-  const getUniqueForAliases = (aliases: string[]): string[] => {
+  const getUniqueForAliases = (aliases: string[], isCityField: boolean = false): string[] => {
     const set = new Set<string>();
     leads.forEach(l => {
       const vals = extractFieldValues(l, aliases);
-      vals.forEach(v => set.add(v));
+      vals.forEach(v => {
+        const normalized = isCityField ? normalizeCityName(v) : normalizeNameOrTitle(v);
+        if (normalized && normalized !== '-') {
+          set.add(normalized);
+        }
+      });
     });
     return Array.from(set).sort();
   };
@@ -350,7 +596,10 @@ export const getFilterOptions = (): FilterOptions => {
     leads.forEach(l => {
       const val = (l as any)[col];
       if (val !== undefined && val !== null && String(val).trim() !== '' && String(val).trim() !== '-') {
-        valSet.add(String(val).trim());
+        const norm = col.toLowerCase().includes('city') || col.toLowerCase().includes('location') 
+          ? normalizeCityName(val) 
+          : normalizeNameOrTitle(val);
+        if (norm && norm !== '-') valSet.add(norm);
       }
     });
     if (valSet.size > 0 && valSet.size <= 250) {
@@ -361,9 +610,16 @@ export const getFilterOptions = (): FilterOptions => {
   return {
     jobTitles: getUniqueForAliases(['jobtitle', 'title', 'role', 'designation', 'position', 'occupation']),
     companies: getUniqueForAliases(['organization', 'company', 'employer', 'business', 'org', 'firm']),
-    cities: getUniqueForAliases(['city', 'location', 'town', 'country', 'state', 'address', 'region']),
+    cities: getUniqueForAliases(['city', 'location', 'town', 'country', 'state', 'address', 'region'], true),
     sources: getUniqueForAliases(['sourcename', 'source', 'leadsource']),
     statuses: getUniqueForAliases(['approvalstatus', 'status', 'approved', 'state']),
+    seniorities: ['C-Suite', 'VP / Vice President', 'Director', 'Manager', 'Owner / Partner', 'Entry Level'],
+    companySizes: ['1-10 employees', '11-50 employees', '51-200 employees', '201-500 employees', '501-1000 employees', '1000+ employees'],
+    industries: ['Software & SaaS', 'Financial Services', 'Healthcare & Biotech', 'Marketing & Advertising', 'E-Commerce & Retail', 'Education & Research', 'Consulting & IT'],
+    emailStatuses: ['Valid / Safe', 'Risky / Catch-all', 'Invalid / Bounce'],
+    intents: ['High Intent', 'Medium Intent', 'Low Intent'],
+    technologies: ['React', 'Salesforce', 'HubSpot', 'AWS', 'Google Cloud', 'Stripe', 'Node.js', 'WordPress'],
+    tags: getStoredCsvTags(),
     customFilters: customFilterMap,
   };
 };
@@ -440,7 +696,67 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
       } else if (filters.persona === 'Auditors & Accountants') {
         const isAuditor = ['accountant', 'auditor', 'audit', 'tax', 'ca'].some(k => title.includes(k));
         if (!isAuditor) return false;
+      } else if (filters.persona === 'Marketing & Growth') {
+        const isMkt = ['marketing', 'growth', 'brand', 'content', 'seo'].some(k => title.includes(k));
+        if (!isMkt) return false;
+      } else if (filters.persona === 'Sales & Business Dev') {
+        const isSales = ['sales', 'business development', 'account', 'bdr', 'sdr'].some(k => title.includes(k));
+        if (!isSales) return false;
       }
+    }
+
+    if (filters.seniorities && filters.seniorities.length > 0) {
+      const titleLower = (l.jobTitle || '').toLowerCase();
+      const matchSeniority = filters.seniorities.some(sen => {
+        const s = sen.toLowerCase();
+        if (s.includes('c-suite')) return ['ceo', 'cfo', 'cto', 'coo', 'cmo', 'cio', 'chief', 'founder', 'president'].some(k => titleLower.includes(k));
+        if (s.includes('vp')) return ['vp', 'vice president'].some(k => titleLower.includes(k));
+        if (s.includes('director')) return ['director', 'head'].some(k => titleLower.includes(k));
+        if (s.includes('manager')) return ['manager', 'lead', 'supervisor'].some(k => titleLower.includes(k));
+        if (s.includes('owner')) return ['owner', 'partner', 'proprietor'].some(k => titleLower.includes(k));
+        if (s.includes('entry')) return ['assistant', 'associate', 'intern', 'specialist', 'executive', 'analyst'].some(k => titleLower.includes(k));
+        return titleLower.includes(s);
+      });
+      if (!matchSeniority) return false;
+    }
+
+    if (filters.companySizes && filters.companySizes.length > 0) {
+      const sizeLower = (l.companySize || '').toLowerCase();
+      const orgLower = (l.organization || '').toLowerCase();
+      const matchSize = filters.companySizes.some(cs => {
+        const targetNum = cs.split(' ')[0];
+        if (sizeLower.includes(targetNum)) return true;
+        if (!sizeLower && (targetNum === '1-10' || targetNum === '11-50')) return true;
+        return false;
+      });
+      if (!matchSize) return false;
+    }
+
+    if (filters.industries && filters.industries.length > 0) {
+      const indStr = (l.industry || `${l.organization || ''} ${l.jobTitle || ''}`).toLowerCase();
+      const matchInd = filters.industries.some(ind => {
+        const keyword = ind.toLowerCase().split(' ')[0];
+        return indStr.includes(keyword);
+      });
+      if (!matchInd) return false;
+    }
+
+    if (filters.intents && filters.intents.length > 0) {
+      const intentVal = l.intent || (l.aiScore && l.aiScore > 80 ? 'High Intent' : l.aiScore && l.aiScore > 50 ? 'Medium Intent' : 'Low Intent');
+      const matchIntent = filters.intents.some(i => intentVal.toLowerCase().includes(i.toLowerCase().split(' ')[0]));
+      if (!matchIntent) return false;
+    }
+
+    if (filters.technologies && filters.technologies.length > 0) {
+      const techStr = (l.technologies ? l.technologies.join(' ') : `${l.questions || ''} ${l.sourceName || ''}`).toLowerCase();
+      const matchTech = filters.technologies.some(tech => techStr.includes(tech.toLowerCase()));
+      if (!matchTech) return false;
+    }
+
+    if (filters.tags && filters.tags.length > 0) {
+      const srcLower = (l.sourceName || '').toLowerCase();
+      const matchTag = filters.tags.some(tag => srcLower.includes(tag.toLowerCase()));
+      if (!matchTag) return false;
     }
 
     if (filters.emailStatuses && filters.emailStatuses.length > 0) {
@@ -543,15 +859,15 @@ export const addLead = async (newLeadData: Partial<Lead>): Promise<Lead> => {
 
   const lead: Lead = {
     id: nextId,
-    firstName: fName,
-    lastName: lName,
+    firstName: normalizeNameOrTitle(fName),
+    lastName: normalizeNameOrTitle(lName),
     email: emailVal,
     registrationTime: new Date().toLocaleString(),
     approvalStatus: cleanVal(newLeadData.approvalStatus || 'approved'),
-    city: cleanVal(newLeadData.city),
+    city: normalizeCityName(newLeadData.city),
     phone: cleanVal(newLeadData.phone),
-    organization: cleanVal(newLeadData.organization),
-    jobTitle: cleanVal(newLeadData.jobTitle),
+    organization: normalizeNameOrTitle(newLeadData.organization),
+    jobTitle: normalizeNameOrTitle(newLeadData.jobTitle),
     questions: cleanVal(newLeadData.questions),
     sourceName: newLeadData.sourceName && String(newLeadData.sourceName).trim() ? String(newLeadData.sourceName).trim().replace(/\s+/g, '-') : 'Manual-Entry',
     createdAt: new Date().toISOString(),
@@ -758,15 +1074,15 @@ export const bulkImportLeads = async (
     return {
       ...item,
       id: maxId,
-      firstName: cleanVal(item.firstName),
-      lastName: cleanVal(item.lastName),
+      firstName: normalizeNameOrTitle(item.firstName),
+      lastName: normalizeNameOrTitle(item.lastName),
       email: cleanVal(item.email),
       registrationTime: cleanVal(item.registrationTime),
       approvalStatus: cleanVal(item.approvalStatus || 'approved'),
-      city: cleanVal(item.city),
+      city: normalizeCityName(item.city),
       phone: cleanVal(item.phone),
-      organization: cleanVal(item.organization),
-      jobTitle: cleanVal(item.jobTitle),
+      organization: normalizeNameOrTitle(item.organization),
+      jobTitle: normalizeNameOrTitle(item.jobTitle),
       questions: cleanVal(item.questions),
       sourceName: tagVal,
       createdAt: new Date().toISOString(),

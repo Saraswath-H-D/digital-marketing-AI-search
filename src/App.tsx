@@ -29,7 +29,7 @@ import LeadsTable from './components/LeadsTable.tsx';
 import AddLeadModal from './components/AddLeadModal.tsx';
 import EditLeadModal from './components/EditLeadModal.tsx';
 import CsvImporter from './components/CsvImporter.tsx';
-import ApolloNavigationDrawer from './components/ApolloNavigationDrawer.tsx';
+import OperonNavigationDrawer from './components/OperonNavigationDrawer.tsx';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal.tsx';
 import { AICopilotDrawer } from './components/AICopilotDrawer.tsx';
 import ContactProfileDrawer from './components/ContactProfileDrawer.tsx';
@@ -79,12 +79,12 @@ import {
 export default function App() {
   // Theme State (Design.md specification)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('apollo-theme') as 'light' | 'dark') || 'light';
+    return (localStorage.getItem('operon-theme') || localStorage.getItem('apollo-theme') as 'light' | 'dark') || 'light';
   });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('apollo-theme', theme);
+    localStorage.setItem('operon-theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
@@ -103,7 +103,7 @@ export default function App() {
   const [totalLeads, setTotalLeads] = useState(0);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [creditBalance, setCreditBalance] = useState(100); // Simulate Apollo Credit System
+  const [creditBalance, setCreditBalance] = useState(100); // Simulate Operon Credit System
   const [showFiltersSidebar, setShowFiltersSidebar] = useState(true);
   const [stats, setStats] = useState({ total: 0, netNew: 0, saved: 0 });
 
@@ -330,7 +330,7 @@ export default function App() {
     }
   };
 
-  // Single Contact Unlocking Actions (Apollo Credit simulation)
+  // Single Contact Unlocking Actions (Operon Credit simulation)
   const handleUnlockEmail = async (lead: Lead) => {
     if (creditBalance < 1) {
       showStatus('Out of credits! Refill credits to unlock contacts.', 'error');
@@ -579,7 +579,7 @@ export default function App() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `apollo_contacts_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `operon_contacts_export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -682,8 +682,8 @@ export default function App() {
       {/* Main Glass Shell Container */}
       <div className="app-shell glass-panel">
         
-        {/* Apollo Left-most Collapsible Navigation Drawer */}
-        <ApolloNavigationDrawer 
+        {/* Operon Left-most Collapsible Navigation Drawer */}
+        <OperonNavigationDrawer 
           activeView={activeView}
           setActiveView={setActiveView}
           onShowMessage={showStatus} 
@@ -716,7 +716,7 @@ export default function App() {
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <h1 className="text-base font-black tracking-tight font-display text-[var(--text-primary)]">APOLLO ENTERPRISE AI</h1>
+                  <h1 className="text-base font-black tracking-tight font-display text-[var(--text-primary)]">OPERON ENTERPRISE AI</h1>
                   <span className="badge badge-priority-high">
                     SUPER ADMIN
                   </span>
@@ -755,7 +755,7 @@ export default function App() {
                 <span className="font-mono text-emerald-700 dark:text-emerald-400 text-xs font-bold">Supabase Connected</span>
               </button>
 
-              {/* Apollo Credit Balance */}
+              {/* Operon Credit Balance */}
               <div className="pill-control space-x-2 text-[var(--text-primary)]">
                 <TrendingUp className="w-3.5 h-3.5 text-indigo-600" />
                 <span>Credits: <strong className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">{creditBalance}</strong></span>
@@ -800,7 +800,7 @@ export default function App() {
                 <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Table: <code className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">registration_contacts</code></p>
               </div>
 
-              {/* Card 3: Apollo AI Copilot */}
+              {/* Card 3: Operon AI Copilot */}
               <div className="p-4 glass-card relative overflow-hidden group">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-600" />
                 <div className="flex items-center justify-between mb-2">
@@ -881,7 +881,7 @@ export default function App() {
               </div>
             </div>
             
-            {/* Apollo Sub-toolbar row with high fidelity to Apollo's controls (Screenshot 1) */}
+            {/* Operon Sub-toolbar row with high fidelity to Operon's controls (Screenshot 1) */}
             <div className="flex items-center space-x-3 text-xs font-semibold text-gray-650 pt-1 select-none">
               
               {/* Default view dropdown */}
@@ -1563,7 +1563,7 @@ export default function App() {
                   <div className="absolute inset-0 z-20 bg-white/70 backdrop-blur-3xs flex items-center justify-center">
                     <div className="flex flex-col items-center space-y-3">
                       <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-xs font-semibold text-gray-500 tracking-wide">Syncing Apollo lead directory...</span>
+                      <span className="text-xs font-semibold text-gray-500 tracking-wide">Syncing Operon lead directory...</span>
                     </div>
                   </div>
                 )}

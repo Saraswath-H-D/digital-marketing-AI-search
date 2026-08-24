@@ -2,7 +2,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Lead } from '../types.ts';
 import { setActiveHeaders, getActiveHeaders } from '../data/leadStorage.ts';
 
-const SUPABASE_CONFIG_KEY = 'apollo_supabase_config_v1';
+const SUPABASE_CONFIG_KEY = 'operon_supabase_config_v1';
+const LEGACY_SUPABASE_CONFIG_KEY = 'apollo_supabase_config_v1';
 
 export interface SupabaseConfig {
   url: string;
@@ -16,7 +17,7 @@ export const getSupabaseConfig = (): SupabaseConfig => {
   const envKey = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY) || '';
 
   try {
-    const saved = localStorage.getItem(SUPABASE_CONFIG_KEY);
+    const saved = localStorage.getItem(SUPABASE_CONFIG_KEY) || localStorage.getItem(LEGACY_SUPABASE_CONFIG_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       return {
@@ -203,14 +204,27 @@ export const pushLeadsToSupabase = async (
       first_name: l.firstName || '',
       last_name: l.lastName || '',
       email: emailToInsert,
+      phone_number: l.phone || '',
+      job_title: l.jobTitle || '',
+      company_name: l.organization || '',
+      organization: l.organization || '',
+      city: l.city || '',
+      state: l.state || '',
+      country: l.country || '',
+      source: l.sourceName || '-',
+      source_name: l.sourceName || '-',
+      email_status: l.emailStatus || 'Verified',
+      seniority: l.seniority || '',
+      department: l.department || '',
+      industry: l.industry || '',
+      employee_size: l.companySize || '',
+      person_linkedin_url: l.linkedinUrl || '',
+      linkedin_url: l.linkedinUrl || '',
+      website: l.website || '',
+      company_linkedin_url: l.companyLinkedinUrl || '',
+      questions: finalQuestions,
       registration_time: l.registrationTime || new Date().toLocaleString(),
       approval_status: l.approvalStatus || 'approved',
-      city: l.city || '',
-      phone: l.phone || '',
-      organization: l.organization || '',
-      job_title: l.jobTitle || '',
-      questions: finalQuestions,
-      source_name: l.sourceName || '-',
       created_at: l.createdAt || new Date().toISOString()
     };
 
@@ -394,14 +408,24 @@ export const pullLeadsFromSupabase = async (
         firstName: row.first_name || row.firstName || '-',
         lastName: row.last_name || row.lastName || '',
         email: cleanEmail,
+        phone: row.phone_number || row.phone || '',
+        jobTitle: row.job_title || row.jobTitle || '',
+        organization: row.company_name || row.organization || '',
+        city: row.city || '',
+        state: row.state || restoredCustomMeta.state || '',
+        country: row.country || restoredCustomMeta.country || '',
+        sourceName: row.source || srcName,
+        emailStatus: row.email_status || row.emailStatus || restoredCustomMeta.emailStatus || 'Verified',
+        seniority: row.seniority || row.seniority_level || restoredCustomMeta.seniority || '',
+        department: row.department || row.dept || restoredCustomMeta.department || '',
+        industry: row.industry || row.sector || restoredCustomMeta.industry || '',
+        companySize: row.employee_size || row.company_size || row.companySize || restoredCustomMeta.companySize || '',
+        linkedinUrl: row.person_linkedin_url || row.linkedin_url || row.linkedinUrl || restoredCustomMeta.linkedinUrl || '',
+        website: row.website || row.url || restoredCustomMeta.website || '',
+        companyLinkedinUrl: row.company_linkedin_url || restoredCustomMeta.companyLinkedinUrl || '',
         registrationTime: row.registration_time || row.registrationTime || new Date().toLocaleString(),
         approvalStatus: row.approval_status || row.approvalStatus || 'approved',
-        city: row.city || '',
-        phone: row.phone || '',
-        organization: row.organization || '',
-        jobTitle: row.job_title || row.jobTitle || '',
         questions: cleanQuestions,
-        sourceName: srcName,
         createdAt: row.created_at || row.createdAt || new Date().toISOString(),
         isSaved: false,
         emailUnlocked: false,
@@ -562,14 +586,22 @@ CREATE TABLE IF NOT EXISTS public.${tableName} (
   first_name TEXT,
   last_name TEXT,
   email TEXT UNIQUE NOT NULL,
-  registration_time TEXT,
-  approval_status TEXT DEFAULT 'approved',
-  city TEXT,
-  phone TEXT,
-  organization TEXT,
+  phone_number TEXT,
   job_title TEXT,
+  company_name TEXT,
+  city TEXT,
+  state TEXT,
+  country TEXT,
+  source TEXT,
+  email_status TEXT DEFAULT 'Verified',
+  seniority TEXT,
+  department TEXT,
+  industry TEXT,
+  employee_size TEXT,
+  person_linkedin_url TEXT,
+  website TEXT,
+  company_linkedin_url TEXT,
   questions TEXT,
-  source_name TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
