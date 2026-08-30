@@ -41,6 +41,8 @@ import TeammatesModal from './components/TeammatesModal.tsx';
 import AnalyticsView from './components/AnalyticsView.tsx';
 import OutreachView from './components/OutreachView.tsx';
 import SavedSearchesModal from './components/SavedSearchesModal.tsx';
+import SectionInfoModal, { SectionModalKind } from './components/SectionInfoModal.tsx';
+import DataEnhancementModal from './components/DataEnhancementModal.tsx';
 
 import { 
   Search, 
@@ -158,6 +160,8 @@ export default function App() {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [deleteConfirmData, setDeleteConfirmData] = useState<{ type: 'single'; lead: Lead } | { type: 'bulk' } | null>(null);
+  const [sectionModal, setSectionModal] = useState<SectionModalKind | null>(null);
+  const [isDataEnhancementOpen, setIsDataEnhancementOpen] = useState(false);
 
   // General States
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
@@ -343,6 +347,56 @@ export default function App() {
       showStatus(lead.isSaved ? 'Lead removed from bookmarks.' : 'Lead saved successfully!', 'success');
     } catch (err) {
       console.error('Save action failed:', err);
+    }
+  };
+
+  // Applied from a sidebar section popup (Organizations / Directories / Bookmarks) —
+  // jump to the Contact Directory pre-filtered on that value.
+  const handleApplyFilterFromSection = (kind: 'organization' | 'city' | 'source' | 'saved', value?: string) => {
+    setActiveView('Contacts');
+    setSearchInput('');
+    if (kind === 'saved') {
+      setFilters(prev => ({ ...prev, search: '', companies: [], cities: [], sources: [], savedOnly: true }));
+    } else if (kind === 'organization') {
+      setFilters(prev => ({ ...prev, search: '', companies: value ? [value] : [], savedOnly: false }));
+    } else if (kind === 'city') {
+      setFilters(prev => ({ ...prev, search: '', cities: value ? [value] : [], savedOnly: false }));
+    } else if (kind === 'source') {
+      setFilters(prev => ({ ...prev, search: '', sources: value ? [value] : [], savedOnly: false }));
+    }
+    setPage(1);
+  };
+
+  // Data Enhancement: apply honest, derived-from-existing-data field fills (never
+  // fabricated contact details) as one batch — update locally, then a single
+  // Supabase push for the whole batch rather than one round-trip per contact.
+  const handleApplyEnrichment = async (
+    updates: Array<{ id: number; field: 'seniority' | 'department' | 'industry'; value: string }>
+  ) => {
+    if (updates.length === 0) return;
+    try {
+      const allLeads = getStoredLeads();
+      const updateMap = new Map(updates.map(u => [u.id, u]));
+      const changedLeads: Lead[] = [];
+
+      const updatedLeads = allLeads.map(l => {
+        const u = updateMap.get(l.id);
+        if (!u) return l;
+        const changed = { ...l, [u.field]: u.value };
+        changedLeads.push(changed);
+        return changed;
+      });
+
+      saveStoredLeads(updatedLeads);
+      if (changedLeads.length > 0) {
+        await pushLeadsToSupabase(changedLeads);
+      }
+      setCreditBalance(prev => Math.max(0, prev - updates.length));
+      fetchLeads();
+      fetchFilterOptions();
+    } catch (err) {
+      console.error('Data enhancement batch update failed:', err);
+      showStatus('An error occurred while applying data enhancement.', 'error');
     }
   };
 
@@ -643,12 +697,15 @@ export default function App() {
       <div className="app-shell glass-panel">
         
         {/* Operon Left-most Collapsible Navigation Drawer */}
-        <OperonNavigationDrawer 
+        <OperonNavigationDrawer
           activeView={activeView}
           setActiveView={setActiveView}
-          onShowMessage={showStatus} 
+          onShowMessage={showStatus}
           onAddTeammateClick={() => setShowTeammatesModal(true)}
           onOpenSupabase={() => setIsSupabaseOpen(true)}
+          onOpenSectionModal={(section) => setSectionModal(section as SectionModalKind)}
+          onOpenAIAssistant={() => setShowAICopilot(true)}
+          onOpenDataEnhancement={() => setIsDataEnhancementOpen(true)}
           contactsCount={leads.length}
         />
 
@@ -794,7 +851,7 @@ export default function App() {
           <div className="px-6 pt-3.5 pb-3 flex flex-col space-y-2 shrink-0 border-b border-[var(--border-subtle)]">
 
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h2 className="text-lg font-black tracking-tight text-neutral-900 font-display">Contact Directory</h2>
+              <h2 className="text-lg font-black tracking-tight text-[var(--text-primary)] font-display">Contact Directory</h2>
               
               {/* TOP TABLE PAGINATION CONTROLS & "25 per page" DROPDOWN */}
               <div className="flex items-center space-x-3">
@@ -1078,7 +1135,7 @@ export default function App() {
                   className="flex items-center flex-1 w-full relative"
                 >
                   <div className="relative w-full">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-[var(--text-muted)]">
                       <Search className="w-4 h-4" />
                     </span>
                     <input
@@ -1093,7 +1150,7 @@ export default function App() {
                         setMainSearchDropdownOpen(true);
                       }}
                       placeholder="Search contacts by name, company, title, location..."
-                      className="w-full pl-9 pr-8 py-2 text-xs border border-[var(--border-input)] rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all bg-[var(--surface-input)] font-medium text-[var(--text-primary)] placeholder-gray-500 shadow-2xs"
+                      className="search-pill pr-8 text-xs font-medium placeholder-gray-500"
                     />
                     {searchInput && (
                       <button
@@ -1270,7 +1327,7 @@ export default function App() {
                 <div className="flex flex-col space-y-1.5 w-full sm:w-64 shrink-0">
                   <div className="relative w-full">
                     <div className="relative w-full">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-purple-600">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-purple-600">
                         <Tag className="w-3.5 h-3.5" />
                       </span>
                       <input
@@ -1287,7 +1344,7 @@ export default function App() {
                           setPage(1);
                         }}
                         placeholder="Search CSV Tag (e.g. Q3-Marketing)..."
-                        className="w-full pl-8.5 pr-8 py-2 text-xs font-bold border border-[var(--border-input)] rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all bg-purple-50/30 dark:bg-purple-500/10 text-[var(--text-primary)] placeholder-purple-400 shadow-2xs"
+                        className="search-pill pr-8 text-xs font-bold placeholder-purple-400 !bg-purple-50/30 dark:!bg-purple-500/10 !border-purple-200"
                       />
                       {tagSearchInput && (
                         <button
@@ -1548,20 +1605,20 @@ export default function App() {
           <div className="flex-1 overflow-hidden flex flex-col relative">
             
             {activeView === 'Deliverability' || activeView === 'Settings' ? (
-              <div className="flex-1 overflow-y-auto">
+              <div key="analytics-view" className="flex-1 overflow-y-auto page-enter">
                 <AnalyticsView leads={leads} />
               </div>
             ) : activeView === 'Campaigns' || activeView === 'Messages' || activeView === 'Phone Calls' || activeView === 'Action Items' ? (
-              <div className="flex-1 overflow-y-auto">
+              <div key="outreach-view" className="flex-1 overflow-y-auto page-enter">
                 <OutreachView leads={leads} onShowMessage={showStatus} />
               </div>
             ) : (
-              <>
+              <div key="contacts-view" className="page-enter flex-1 flex flex-col min-h-0">
                 {isLoadingLeads && (
-                  <div className="absolute inset-0 z-20 bg-white/70 backdrop-blur-3xs flex items-center justify-center">
+                  <div className="absolute inset-0 z-20 bg-[var(--surface-base)]/70 backdrop-blur-3xs flex items-center justify-center">
                     <div className="flex flex-col items-center space-y-3">
                       <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-xs font-semibold text-gray-500 tracking-wide">Syncing Operon lead directory...</span>
+                      <span className="text-xs font-semibold text-[var(--text-muted)] tracking-wide">Syncing Operon lead directory...</span>
                     </div>
                   </div>
                 )}
@@ -1600,7 +1657,7 @@ export default function App() {
                   isAuthenticated={!!authS.user}
                   onSelectLeadForDrawer={setSelectedLeadForDrawer}
                 />
-              </>
+              </div>
             )}
 
           </div>
@@ -1798,6 +1855,22 @@ export default function App() {
           setPage(1);
         }}
         onShowMessage={showStatus}
+      />
+
+      <SectionInfoModal
+        section={sectionModal}
+        leads={getStoredLeads()}
+        onClose={() => setSectionModal(null)}
+        onApplyFilter={handleApplyFilterFromSection}
+        onUnsave={handleSaveToggle}
+      />
+
+      <DataEnhancementModal
+        isOpen={isDataEnhancementOpen}
+        onClose={() => setIsDataEnhancementOpen(false)}
+        leads={getStoredLeads()}
+        creditBalance={creditBalance}
+        onApplyEnrichment={handleApplyEnrichment}
       />
 
     </div>

@@ -41,21 +41,28 @@ interface LeadsTableProps {
 }
 
 // Generate premium company icon background colors based on name
-const getCompanyColor = (name: string | null) => {
-  if (!name) return 'bg-[var(--surface-card-header)] text-[var(--text-muted)]';
-  const charCode = name.charCodeAt(0) || 0;
-  const colors = [
-    'bg-blue-50 text-blue-600 border-blue-100',
-    'bg-indigo-50 text-indigo-600 border-indigo-100',
-    'bg-violet-50 text-violet-600 border-violet-100',
-    'bg-purple-50 text-purple-600 border-purple-100',
-    'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-100',
-    'bg-emerald-50 text-emerald-600 border-emerald-100',
-    'bg-teal-50 text-teal-600 border-teal-100',
-    'bg-amber-50 text-amber-600 border-amber-100',
-    'bg-rose-50 text-rose-600 border-rose-100',
-  ];
-  return colors[charCode % colors.length];
+// Design.md §2: deterministic "brand colour" for entity marks — hash the id/name over
+// the fixed 8-colour palette so a given entity is always the same colour:
+//   hash = Σ charCode + ((hash<<5) - hash);  color = palette[abs(hash) % 8]
+const ENTITY_MARK_PALETTE = ['#6366F1', '#0EA5E9', '#10B981', '#F59E0B', '#F472B6', '#8B5CF6', '#06B6D4', '#EF4444'];
+
+const getCompanyColor = (name: string | null): string => {
+  if (!name) return ENTITY_MARK_PALETTE[0];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return ENTITY_MARK_PALETTE[Math.abs(hash) % ENTITY_MARK_PALETTE.length];
+};
+
+// Design.md §14: avatar/entity marks show 2-letter initials — first letter of each of
+// the first two words, or the first two letters if it's a single word.
+const getEntityInitials = (name: string): string => {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return (words[0] || '').slice(0, 2).toUpperCase();
 };
 
 export default function LeadsTable({
@@ -435,8 +442,14 @@ export default function LeadsTable({
                     <td className="py-3.5 px-4 font-semibold">
                       {lead.organization && lead.organization !== '-' ? (
                         <div className="flex items-center space-x-2">
-                          <div className={`w-6 h-6 rounded-md border flex items-center justify-center text-3xs font-bold shrink-0 shadow-3xs ${companyColor}`}>
-                            {lead.organization[0].toUpperCase()}
+                          <div
+                            className="w-6 h-6 rounded-md flex items-center justify-center text-3xs font-bold shrink-0 text-white"
+                            style={{
+                              background: `linear-gradient(135deg, ${companyColor}, ${companyColor}CC)`,
+                              boxShadow: `0 4px 10px ${companyColor}55`,
+                            }}
+                          >
+                            {getEntityInitials(lead.organization)}
                           </div>
                           <span className="font-semibold text-[var(--text-secondary)] truncate max-w-[140px]" title={lead.organization}>
                             {lead.organization}

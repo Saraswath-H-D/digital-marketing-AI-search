@@ -282,7 +282,7 @@ export default function FiltersSidebar({
       {/* Global Filter Search Input */}
       <div className="p-3 border-b border-[var(--border-subtle)] bg-[var(--surface-card-header)] shrink-0">
         <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-purple-500">
+          <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-purple-500">
             <Search className="w-4 h-4" />
           </span>
           <input
@@ -290,7 +290,7 @@ export default function FiltersSidebar({
             value={filterSearch}
             onChange={(e) => setFilterSearch(e.target.value)}
             placeholder="Search all filters & options..."
-            className="w-full pl-9 pr-8 py-2 text-xs border border-[var(--border-input)] rounded-2xl focus:outline-none focus:border-purple-500 transition-all bg-[var(--surface-input)] font-bold text-[var(--text-primary)] placeholder-slate-400 shadow-2xs"
+            className="search-pill pr-8 text-xs font-bold placeholder-slate-400"
           />
           {filterSearch && (
             <button

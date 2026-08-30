@@ -375,7 +375,7 @@ export default function ContactProfileDrawer({
             <div className="space-y-4 animate-fadeIn">
               <h3 className="text-xs font-extrabold text-[var(--text-secondary)] uppercase tracking-wider mb-2">Audit & Interaction Timeline</h3>
 
-              <div className="space-y-3 relative pl-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+              <div className="space-y-3 relative pl-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-[var(--border-default)]">
                 <div className="relative flex items-start space-x-3 bg-[var(--surface-card)] p-3.5 border border-[var(--border-subtle)] rounded-xl shadow-2xs">
                   <div className="absolute -left-6 top-4 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[var(--surface-card)] ring-2 ring-emerald-100" />
                   <div>
