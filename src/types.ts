@@ -34,6 +34,12 @@ export interface Lead {
   companyLinkedinUrl?: string;
   revenue?: string;
   funding?: string;
+  // Reliable per-upload-batch identifier, independent of sourceName. sourceName is a
+  // per-row lead-origin value (e.g. from the CSV's own "Source" column) and can differ
+  // row-to-row within one upload; csvTag is the tag the user gave THIS UPLOAD and is
+  // stamped identically on every row in the batch, so searching/selecting/deleting by
+  // tag reliably captures the whole upload regardless of individual sourceName values.
+  csvTag?: string | null;
 }
 
 export interface FilterOptions {

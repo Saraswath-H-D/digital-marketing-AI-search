@@ -663,9 +663,14 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
     }
 
     if (filters.sources && filters.sources.length > 0) {
+      // Match on the same csvTag-or-sourceName logic deleteLeadsByTag uses, so a tag
+      // search here finds exactly the rows a delete-by-tag would remove — no row can
+      // "appear selected" in a search that delete then fails to reach.
       const vals = extractFieldValues(leadObj, ['sourcename', 'source', 'leadsource']);
       const lowerSelected = filters.sources.map(s => s.toLowerCase());
-      if (!vals.some(v => lowerSelected.includes(v.toLowerCase()))) return false;
+      const matchesSource = vals.some(v => lowerSelected.includes(v.toLowerCase()));
+      const matchesCsvTag = filters.sources.some(s => leadMatchesTag(l, s));
+      if (!matchesSource && !matchesCsvTag) return false;
     }
 
     if (filters.statuses && filters.statuses.length > 0) {
@@ -973,20 +978,27 @@ export const deleteAllLeads = async (): Promise<void> => {
 };
 
 // Delete all leads associated with a specific CSV Tag / Source Name
+// Shared by search/filter and delete-by-tag so "found by search" and "deleted by tag"
+// can never disagree on which rows a tag actually covers. Normalizes hyphens/spaces to
+// a single form (CSV tags are stored hyphenated, but a typed search term may have
+// spaces) so "Test Tag" and "Test-Tag" are recognized as the same tag.
+const normalizeTagValue = (s: string | null | undefined): string =>
+  (s || '').trim().toLowerCase().replace(/[-_\s]+/g, '-');
+
+export const leadMatchesTag = (lead: Lead, tag: string): boolean => {
+  const cleanTag = normalizeTagValue(tag);
+  if (!cleanTag) return false;
+  // csvTag is the reliable per-upload identity; sourceName is checked too so leads
+  // tagged before this field existed (or created outside the CSV importer) still match.
+  return normalizeTagValue(lead.csvTag) === cleanTag || normalizeTagValue(lead.sourceName) === cleanTag;
+};
+
 export const deleteLeadsByTag = async (tag: string): Promise<number> => {
   if (!tag || !tag.trim()) return 0;
-  const cleanTag = tag.trim().replace(/\s+/g, '-').toLowerCase();
 
   const allLeads = getStoredLeads();
-  const targetLeads = allLeads.filter(l => {
-    const src = (l.sourceName || '').trim().replace(/\s+/g, '-').toLowerCase();
-    return src === cleanTag;
-  });
-
-  const updatedLeads = allLeads.filter(l => {
-    const src = (l.sourceName || '').trim().replace(/\s+/g, '-').toLowerCase();
-    return src !== cleanTag;
-  });
+  const targetLeads = allLeads.filter(l => leadMatchesTag(l, tag));
+  const updatedLeads = allLeads.filter(l => !leadMatchesTag(l, tag));
 
   saveStoredLeads(updatedLeads);
   removeCsvTag(tag);
@@ -1089,9 +1101,15 @@ export const bulkImportLeads = async (
   const createdLeads: Lead[] = newLeadsList.map(item => {
     maxId += 1;
     const tagVal = item.sourceName && String(item.sourceName).trim() ? String(item.sourceName).trim().replace(/\s+/g, '-') : '-';
-    if (tagVal !== '-') {
-      addCsvTag(tagVal);
-    }
+    // csvTag is the upload batch's own identity (set by CsvImporter on every row in the
+    // batch, independent of each row's sourceName) — preserve it as-is so tag search/
+    // select/delete can reliably find the whole batch regardless of per-row sourceName.
+    // Fall back to sourceName only for callers that never set csvTag (manual/legacy paths).
+    const csvTagVal = item.csvTag && String(item.csvTag).trim()
+      ? String(item.csvTag).trim().replace(/\s+/g, '-')
+      : (tagVal !== '-' ? tagVal : null);
+    if (tagVal !== '-') addCsvTag(tagVal);
+    if (csvTagVal && csvTagVal !== tagVal) addCsvTag(csvTagVal);
     return {
       ...item,
       id: maxId,
@@ -1106,6 +1124,7 @@ export const bulkImportLeads = async (
       jobTitle: normalizeNameOrTitle(item.jobTitle),
       questions: cleanVal(item.questions),
       sourceName: tagVal,
+      csvTag: csvTagVal,
       createdAt: new Date().toISOString(),
       isSaved: false,
       emailUnlocked: true,

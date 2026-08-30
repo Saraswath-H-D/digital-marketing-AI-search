@@ -1317,7 +1317,7 @@ export default function App() {
                   </div>
                   <button
                     type="submit"
-                    className="ml-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors cursor-pointer shrink-0 shadow-2xs"
+                    className="btn-primary !text-xs !py-2 ml-2 shrink-0"
                   >
                     Search
                   </button>
@@ -1393,19 +1393,26 @@ export default function App() {
                       // front, like a data-quality bug where a contact's own name ended up in
                       // their own sourceName field (one contact each, never a real "tag").
                       const tagUsageCount = new Map<string, number>();
+                      // csvTag is always a deliberate, explicit batch identifier (typed by the
+                      // user or defaulted to the filename at upload time) — never a data-quality
+                      // leak the way a stray sourceName can be — so any csvTag value qualifies
+                      // regardless of how many rows carry it.
+                      const explicitCsvTags = new Set<string>();
                       getStoredLeads().forEach(l => {
                         const src = (l.sourceName || '').trim();
                         if (src && src !== '-') {
                           tagUsageCount.set(src, (tagUsageCount.get(src) || 0) + 1);
                         }
+                        const tag = (l.csvTag || '').trim();
+                        if (tag && tag !== '-') explicitCsvTags.add(tag);
                       });
 
-                      const combinedTags = new Set([...getStoredCsvTags(), ...Array.from(tagUsageCount.keys())]);
+                      const combinedTags = new Set([...getStoredCsvTags(), ...Array.from(tagUsageCount.keys()), ...explicitCsvTags]);
 
                       const csvImportTags = Array.from(combinedTags).filter(t => {
                         if (!t || t === '-' || t.trim() === '') return false;
                         if (mockSourcesToIgnore.has(normalizeTag(t))) return false;
-                        return (tagUsageCount.get(t) || 0) > 1;
+                        return explicitCsvTags.has(t) || (tagUsageCount.get(t) || 0) > 1;
                       });
 
                       if (csvImportTags.length === 0) return null;
@@ -1519,10 +1526,10 @@ export default function App() {
                   <span>Upload CSV</span>
                 </button>
 
-                {/* Add Contact button */}
+                {/* Add Contact button — Design.md §8: routine primary action = .btn-primary */}
                 <button
                   onClick={() => setIsAddOpen(true)}
-                  className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 rounded-xl cursor-pointer super-3d-button"
+                  className="btn-primary !text-xs !py-2"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Contact</span>

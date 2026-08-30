@@ -62,7 +62,7 @@ export default function TeammatesModal({ isOpen, onClose, onShowMessage }: Teamm
               value={emailsText}
               onChange={(e) => setEmailsText(e.target.value)}
               placeholder="e.g. sarah.rep@company.com, mike.manager@company.com"
-              className="w-full text-xs font-medium p-3.5 border border-[var(--border-input)] rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-[var(--surface-input)] text-[var(--text-primary)]"
+              className="glass-textarea !text-xs font-medium focus:!border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
               required
             />
           </div>
@@ -98,14 +98,14 @@ export default function TeammatesModal({ isOpen, onClose, onShowMessage }: Teamm
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-xs font-extrabold text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] rounded-xl transition-colors cursor-pointer"
+              className="btn-secondary !text-xs"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2.5 text-xs font-black text-slate-950 bg-gradient-to-r from-amber-400 via-orange-400 to-pink-500 hover:from-amber-300 hover:to-pink-400 rounded-xl shadow-md transition-all cursor-pointer flex items-center space-x-2"
+              className="btn-brand-gradient !text-xs"
             >
               {isSubmitting ? (
                 <span>Sending Invites...</span>

@@ -340,15 +340,22 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
   };
 
   const handleImportSubmit = async () => {
-    if (parsedData.length === 0) return;
+    if (parsedData.length === 0 || isUploading) return; // guard against duplicate/overlapping submits
     setIsUploading(true);
 
     const fileNameTag = file ? file.name.replace(/\.csv$/i, '').trim().replace(/\s+/g, '-') : 'CSV-Import';
     const finalTag = (importTag && importTag.trim()) ? importTag.trim().replace(/\s+/g, '-') : fileNameTag;
 
+    // csvTag is stamped on EVERY row in this batch unconditionally — it's the upload's
+    // own identity, independent of sourceName (which stays whatever the CSV itself
+    // mapped, or falls back to the tag only when the row had none). Previously the tag
+    // only ever lived inside sourceName, and a row with its own "Source" column value
+    // would silently lose its tag association entirely — this is what made searching/
+    // deleting by tag miss rows or leave part of an upload behind.
     const finalData = parsedData.map(item => ({
       ...item,
-      sourceName: (item.sourceName && item.sourceName !== '-') ? item.sourceName : finalTag
+      sourceName: (item.sourceName && item.sourceName !== '-') ? item.sourceName : finalTag,
+      csvTag: finalTag,
     }));
 
     const success = await onImport(finalData);
@@ -648,8 +655,17 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                     type="text"
                     value={importTag}
                     onChange={(e) => setImportTag(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return;
+                      e.preventDefault(); // no surrounding <form>, but keep this inert regardless
+                      // Enter auto-uploads only once a real tag name is present; an empty
+                      // tag here does nothing (the toolbar button below still falls back
+                      // to a filename-based tag on click, unchanged).
+                      if (!importTag.trim() || isUploading || parsedData.length === 0) return;
+                      handleImportSubmit();
+                    }}
                     placeholder="Tag this CSV import (e.g. Q3-Marketing, Event-Leads)..."
-                    className="w-full pl-9 pr-3 py-2 text-xs font-bold border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 bg-purple-50/30 text-[var(--text-primary)] placeholder-purple-400 transition-all shadow-2xs"
+                    className="glass-input pl-9 pr-3 !text-xs font-bold focus:!border-purple-500 focus:!ring-2 focus:!ring-purple-500/20 !bg-purple-50/30 dark:!bg-purple-500/10 !border-purple-200 placeholder-purple-400"
                   />
                 </div>
 
@@ -657,7 +673,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2.5 text-xs font-extrabold text-[var(--text-primary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-hover)] focus:outline-none transition-colors cursor-pointer"
+                    className="btn-secondary"
                   >
                     Cancel
                   </button>
@@ -665,7 +681,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                     type="button"
                     disabled={isUploading || parsedData.length === 0}
                     onClick={handleImportSubmit}
-                    className="px-6 py-2.5 text-xs font-black text-white bg-purple-600 rounded-xl hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center space-x-2 cursor-pointer active:scale-95 shrink-0"
+                    className="btn-primary shrink-0"
                   >
                     {isUploading ? (
                       <>

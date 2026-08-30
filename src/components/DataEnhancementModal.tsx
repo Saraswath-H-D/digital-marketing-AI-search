@@ -208,7 +208,7 @@ export default function DataEnhancementModal({ isOpen, onClose, leads, creditBal
                     <button
                       disabled={action.candidates.length === 0 || isRunning !== null}
                       onClick={() => runEnrichment(action.field, action.candidates, action.infer, action.sourceKey, action.label)}
-                      className="shrink-0 inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg shadow-xs cursor-pointer"
+                      className="btn-primary shrink-0 !text-xs !py-2 !px-3 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isRunning === action.field ? (
                         <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />

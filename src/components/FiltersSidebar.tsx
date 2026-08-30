@@ -198,7 +198,7 @@ export default function FiltersSidebar({
                   value={optionSearches[id] || ''}
                   onChange={(e) => setOptionSearches(prev => ({ ...prev, [id]: e.target.value }))}
                   placeholder={`Search ${title.toLowerCase()}...`}
-                  className="w-full pl-7 pr-6 py-1 text-xs border border-[var(--border-input)] rounded-xl focus:outline-none focus:border-purple-500 bg-[var(--surface-input)] text-[var(--text-primary)] font-bold"
+                  className="glass-input pl-7 pr-6 !py-1 !text-xs focus:!border-purple-500 font-bold"
                 />
                 {optionSearches[id] && (
                   <button
@@ -375,7 +375,7 @@ export default function FiltersSidebar({
                       value={jobTitleInput}
                       onChange={(e) => setJobTitleInput(e.target.value)}
                       placeholder="Type or search job title (e.g. CEO)..."
-                      className="w-full pl-8 pr-7 py-1.5 text-xs border border-[var(--border-input)] rounded-xl focus:outline-none focus:border-purple-500 bg-[var(--surface-input)] text-[var(--text-primary)] font-bold placeholder-slate-400"
+                      className="glass-input pl-8 pr-7 !py-1.5 !text-xs focus:!border-purple-500 font-bold placeholder-slate-400"
                     />
                     {jobTitleInput && (
                       <button

@@ -240,7 +240,7 @@ export default function SupabaseModal({
                         value={config.url}
                         onChange={(e) => setConfig({ ...config, url: e.target.value })}
                         placeholder="https://your-project-id.supabase.co"
-                        className="w-full px-3.5 py-2 text-xs font-mono bg-[var(--surface-input)] text-[var(--text-primary)] border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        className="glass-input !text-xs font-mono focus:!border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
 
@@ -253,7 +253,7 @@ export default function SupabaseModal({
                         value={config.anonKey}
                         onChange={(e) => setConfig({ ...config, anonKey: e.target.value })}
                         placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                        className="w-full px-3.5 py-2 text-xs font-mono bg-[var(--surface-input)] text-[var(--text-primary)] border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        className="glass-input !text-xs font-mono focus:!border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
 
@@ -266,7 +266,7 @@ export default function SupabaseModal({
                         value={config.tableName}
                         onChange={(e) => setConfig({ ...config, tableName: e.target.value })}
                         placeholder="registration_contacts"
-                        className="w-full px-3.5 py-2 text-xs font-mono bg-[var(--surface-input)] text-[var(--text-primary)] border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        className="glass-input !text-xs font-mono focus:!border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
 

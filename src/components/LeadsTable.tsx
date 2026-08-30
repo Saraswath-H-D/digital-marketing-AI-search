@@ -224,7 +224,12 @@ export default function LeadsTable({
     return '';
   };
 
-  const isAllSelected = leads.length > 0 && selectedIds.length === leads.length;
+  // Compare against the full filtered set (all pages), not just this page's rows —
+  // otherwise, after "select all" on a filtered/tagged search spanning multiple pages,
+  // selectedIds correctly holds every matching id but this checkbox still reads as
+  // unchecked, making a working selection look broken.
+  const totalSelectableCount = allFilteredIds && allFilteredIds.length > 0 ? allFilteredIds.length : leads.length;
+  const isAllSelected = totalSelectableCount > 0 && selectedIds.length === totalSelectableCount;
 
   const renderEmailCell = (lead: Lead) => {
     if (!lead.email || lead.email === '-') {

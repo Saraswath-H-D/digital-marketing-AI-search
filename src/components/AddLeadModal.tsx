@@ -114,7 +114,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       placeholder="e.g. John"
-                      className="w-full pl-3 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input"
                     />
                   </div>
                 </div>
@@ -129,7 +129,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="e.g. Doe"
-                    className="w-full px-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                    className="glass-input"
                   />
                 </div>
 
@@ -148,7 +148,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="e.g. john.doe@company.com"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -167,7 +167,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="e.g. +91 98765 43210"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -186,7 +186,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={organization}
                       onChange={(e) => setOrganization(e.target.value)}
                       placeholder="e.g. TrilliantDigital"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -205,7 +205,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={jobTitle}
                       onChange={(e) => setJobTitle(e.target.value)}
                       placeholder="e.g. Digital Marketing Manager"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -224,7 +224,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       placeholder="e.g. Bangalore"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -241,7 +241,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                     <select
                       value={sourceName}
                       onChange={(e) => setSourceName(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)] appearance-none cursor-pointer"
+                      className="glass-select pl-9 pr-3 !text-sm appearance-none cursor-pointer"
                     >
                       <option value="Manual Entry">Manual Entry</option>
                       <option value="Facebook Ads">Facebook Ads</option>
@@ -289,7 +289,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                     value={questions}
                     onChange={(e) => setQuestions(e.target.value)}
                     placeholder="Describe any questions or custom inquiries..."
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)] resize-none"
+                    className="glass-textarea pl-9 pr-3 !text-sm resize-none"
                   />
                 </div>
               </div>
@@ -299,14 +299,14 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--surface-hover)] focus:outline-hidden transition-colors"
+                  className="btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center space-x-1.5"
+                  className="btn-primary"
                 >
                   {isSubmitting ? (
                     <>

@@ -116,7 +116,7 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                     required
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                    className="glass-input"
                   />
                 </div>
 
@@ -129,7 +129,7 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                    className="glass-input"
                   />
                 </div>
 
@@ -147,7 +147,7 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -165,7 +165,7 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                       type="text"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -183,7 +183,7 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                       type="text"
                       value={organization}
                       onChange={(e) => setOrganization(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -201,7 +201,7 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                       type="text"
                       value={jobTitle}
                       onChange={(e) => setJobTitle(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -219,7 +219,7 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                       type="text"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
+                      className="glass-input pl-9 pr-3 !text-sm"
                     />
                   </div>
                 </div>
@@ -236,7 +236,7 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                     <select
                       value={sourceName}
                       onChange={(e) => setSourceName(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)] appearance-none cursor-pointer font-medium"
+                      className="glass-select pl-9 pr-3 !text-sm appearance-none cursor-pointer font-medium"
                     >
                       <option value="Manual Entry">Manual Entry</option>
                       <option value="Facebook Ads">Facebook Ads</option>
@@ -283,7 +283,7 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                     rows={2}
                     value={questions}
                     onChange={(e) => setQuestions(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)] resize-none"
+                    className="glass-textarea pl-9 pr-3 !text-sm resize-none"
                   />
                 </div>
               </div>
@@ -293,14 +293,14 @@ export default function EditLeadModal({ isOpen, onClose, lead, onUpdate }: EditL
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--surface-hover)] focus:outline-hidden transition-colors"
+                  className="btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all shadow-md hover:shadow-lg disabled:opacity-50 flex items-center space-x-1.5"
+                  className="btn-primary"
                 >
                   {isSubmitting ? (
                     <>

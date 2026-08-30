@@ -100,7 +100,7 @@ export default function OperonNavigationDrawer({
     <aside id="operon-navigation-drawer" className="sidebar">
       {/* Logo mark — Design.md §6: 44×44 rounded 0.875rem, indigo→purple gradient, sparkle SVG */}
       <div
-        className="w-11 h-11 rounded-[0.875rem] bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm mb-4"
+        className="w-11 h-11 rounded-[0.875rem] bg-[linear-gradient(135deg,#6366F1,#7C3AED)] text-white flex items-center justify-center shrink-0 shadow-sm mb-4"
         title="Operon"
       >
         <Sparkles className="w-5 h-5" />
@@ -145,7 +145,7 @@ export default function OperonNavigationDrawer({
           if (onAddTeammateClick) onAddTeammateClick();
           else onShowMessage('Teammate Invitation Dialog opened!', 'success');
         }}
-        className="group relative w-12 h-12 mt-2 mb-1 flex items-center justify-center rounded-[0.875rem] bg-gradient-to-r from-amber-400 to-pink-500 text-slate-950 shadow-lg shadow-orange-950/20 transition-transform active:scale-95 cursor-pointer shrink-0"
+        className="group relative w-12 h-12 mt-2 mb-1 flex items-center justify-center rounded-[0.875rem] bg-[linear-gradient(135deg,#7C3AED,#4F46E5)] text-white shadow-[0_8px_20px_rgba(124,58,237,0.35)] transition-transform active:scale-95 cursor-pointer shrink-0"
         title="Add Teammates"
       >
         <UserPlus className="w-5 h-5 stroke-[2.5]" />

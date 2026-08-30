@@ -267,7 +267,7 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
 
             <button
               onClick={() => setIsCreating(true)}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 text-xs font-black text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl shadow-md cursor-pointer transition-all active:scale-95"
+              className="btn-primary !text-xs"
             >
               <Plus className="w-4 h-4" />
               <span>+ Create Campaign</span>
@@ -284,12 +284,12 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
                   value={newCampName}
                   onChange={(e) => setNewCampName(e.target.value)}
                   placeholder="e.g. Q4 Executive Leadership Campaign..."
-                  className="flex-1 text-xs font-semibold px-4 py-2 border border-[var(--border-input)] rounded-xl bg-[var(--surface-input)] text-[var(--text-primary)] focus:outline-none focus:border-purple-500"
+                  className="glass-input flex-1 !text-xs font-semibold focus:!border-purple-500"
                   required
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-xs cursor-pointer"
+                  className="btn-primary !text-xs !py-2"
                 >
                   Launch Sequence
                 </button>
@@ -398,7 +398,7 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
 
             <button
               onClick={() => setEditingTemplate(emptyTemplate())}
-              className="inline-flex items-center space-x-2 px-4 py-2.5 text-xs font-black text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl shadow-md cursor-pointer transition-all active:scale-95"
+              className="btn-primary !text-xs"
             >
               <Plus className="w-4 h-4" />
               <span>Create template</span>
@@ -521,13 +521,13 @@ function TemplateEditor({
         <div className="flex items-center space-x-2">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-xs font-semibold text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-hover)] cursor-pointer"
+            className="btn-secondary !text-xs"
           >
             Cancel
           </button>
           <button
             onClick={onSave}
-            className="px-4 py-2 text-xs font-black text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl shadow-md cursor-pointer"
+            className="btn-primary !text-xs !py-2"
           >
             Save
           </button>
@@ -548,7 +548,7 @@ function TemplateEditor({
               value={template.name}
               onChange={(e) => onChange({ ...template, name: e.target.value })}
               placeholder="e.g. New Test Template"
-              className="w-full px-3 py-2 text-xs font-semibold border border-[var(--border-input)] rounded-lg bg-[var(--surface-input)] text-[var(--text-primary)] focus:outline-none focus:border-purple-500"
+              className="glass-input !text-xs font-semibold focus:!border-purple-500"
             />
           </div>
 
@@ -598,7 +598,7 @@ function TemplateEditor({
               value={template.subject}
               onChange={(e) => onChange({ ...template, subject: e.target.value })}
               placeholder="e.g. Improve Your Outbound Sales"
-              className="w-full px-3 py-2 text-xs font-semibold border border-[var(--border-input)] rounded-lg bg-[var(--surface-input)] text-[var(--text-primary)] focus:outline-none focus:border-purple-500"
+              className="glass-input !text-xs font-semibold focus:!border-purple-500"
             />
           </div>
 
@@ -609,7 +609,7 @@ function TemplateEditor({
               value={template.body}
               onChange={(e) => onChange({ ...template, body: e.target.value })}
               placeholder="Hey {{first_name}} - ..."
-              className="w-full px-3 py-2 text-xs font-medium border border-[var(--border-input)] rounded-lg bg-[var(--surface-input)] text-[var(--text-primary)] focus:outline-none focus:border-purple-500 resize-none leading-relaxed"
+              className="glass-textarea !text-xs font-medium resize-none leading-relaxed focus:!border-purple-500"
             />
           </div>
         </div>
@@ -637,7 +637,7 @@ function TemplateEditor({
             </div>
           </div>
 
-          <button className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-bold text-[var(--text-primary)] bg-amber-300 hover:bg-amber-200 rounded-lg shadow-2xs cursor-pointer">
+          <button className="btn-primary !text-xs">
             <Send className="w-3.5 h-3.5" />
             <span>Send Test Email to Me</span>
           </button>
