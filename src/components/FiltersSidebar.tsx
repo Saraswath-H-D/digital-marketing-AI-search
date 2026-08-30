@@ -14,6 +14,8 @@ import {
   Building,
   Briefcase,
   MapPin,
+  Map,
+  Globe2,
   ShieldCheck,
   Zap,
   HelpCircle,
@@ -50,6 +52,8 @@ export default function FiltersSidebar({
     companySize: true,
     industry: true,
     cities: false,
+    states: false,
+    countries: false,
     companies: false,
     emailStatuses: false,
     intents: false,
@@ -81,6 +85,8 @@ export default function FiltersSidebar({
     if (filters.jobTitles?.length) count += filters.jobTitles.length;
     if (filters.seniorities?.length) count += filters.seniorities.length;
     if (filters.cities?.length) count += filters.cities.length;
+    if (filters.states?.length) count += filters.states.length;
+    if (filters.countries?.length) count += filters.countries.length;
     if (filters.companies?.length) count += filters.companies.length;
     if (filters.companySizes?.length) count += filters.companySizes.length;
     if (filters.industries?.length) count += filters.industries.length;
@@ -106,6 +112,8 @@ export default function FiltersSidebar({
       jobTitles: [],
       companies: [],
       cities: [],
+      states: [],
+      countries: [],
       sources: [],
       statuses: [],
       savedOnly: false,
@@ -521,6 +529,26 @@ export default function FiltersSidebar({
             filterOptions.cities || [],
             filters.cities || [],
             (val) => toggleArrayFilter('cities', val)
+          )}
+
+          {/* State — separated out from City (previously lumped together) */}
+          {renderFilterAccordion(
+            'states',
+            'State',
+            <Map className="w-3.5 h-3.5" />,
+            filterOptions.states || [],
+            filters.states || [],
+            (val) => toggleArrayFilter('states', val)
+          )}
+
+          {/* Country — separated out from City (previously lumped together) */}
+          {renderFilterAccordion(
+            'countries',
+            'Country',
+            <Globe2 className="w-3.5 h-3.5" />,
+            filterOptions.countries || [],
+            filters.countries || [],
+            (val) => toggleArrayFilter('countries', val)
           )}
         </div>
 

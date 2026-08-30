@@ -77,19 +77,26 @@ export default function OperonNavigationDrawer({
       <button
         key={name}
         onClick={() => handleItemClick(name)}
-        className={`sidebar-item group ${isActive ? 'active' : ''}`}
+        className="flex flex-col items-center gap-1 w-full cursor-pointer"
         title={name}
       >
-        {icon}
-        {badge && (
-          <span className="absolute top-1 right-1 px-1 py-0.2 text-[8px] font-extrabold bg-purple-600 text-white rounded-full leading-none">
-            {badge}
-          </span>
-        )}
-        {/* Tooltip: dark chip to the right, shown on hover (Design.md §6) */}
-        <div className="absolute left-full ml-2 px-2.5 py-1 bg-slate-900 text-white text-3xs font-extrabold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 whitespace-nowrap z-50 shadow-lg border border-slate-700">
-          {name}
+        <div className={`sidebar-item relative ${isActive ? 'active' : ''}`}>
+          {icon}
+          {badge && (
+            <span className="absolute top-1 right-1 px-1 py-0.2 text-[8px] font-extrabold bg-purple-600 text-white rounded-full leading-none">
+              {badge}
+            </span>
+          )}
         </div>
+        {/* Name below each icon */}
+        <span
+          className={`text-[8.5px] font-bold leading-[1.1] text-center px-0.5 ${
+            isActive ? 'text-[#6366F1] dark:text-[#A5B4FC]' : 'text-[var(--text-muted)]'
+          }`}
+          style={{ maxWidth: '78px' }}
+        >
+          {name}
+        </span>
       </button>
     );
   };
@@ -107,7 +114,7 @@ export default function OperonNavigationDrawer({
       </div>
 
       {/*
-        Nav items — flat icon list, grouped by hairline dividers, no text labels.
+        Nav items — icon + name label, grouped by hairline dividers.
         Deliberately NOT overflow-y-auto: mixing overflow-y:auto with overflow-x:visible
         isn't actually possible (the CSS spec computes overflow-x to auto too whenever
         overflow-y isn't visible), which would silently clip the hover tooltips that
@@ -139,19 +146,21 @@ export default function OperonNavigationDrawer({
         {renderItem('Settings', <Settings className="w-5 h-5" />)}
       </nav>
 
-      {/* Footer — Add Teammates, same icon-rail treatment */}
+      {/* Footer — Add Teammates, same icon+label treatment */}
       <button
         onClick={() => {
           if (onAddTeammateClick) onAddTeammateClick();
           else onShowMessage('Teammate Invitation Dialog opened!', 'success');
         }}
-        className="group relative w-12 h-12 mt-2 mb-1 flex items-center justify-center rounded-[0.875rem] bg-[linear-gradient(135deg,#7C3AED,#4F46E5)] text-white shadow-[0_8px_20px_rgba(124,58,237,0.35)] transition-transform active:scale-95 cursor-pointer shrink-0"
+        className="flex flex-col items-center gap-1 w-full mt-2 mb-1 cursor-pointer shrink-0"
         title="Add Teammates"
       >
-        <UserPlus className="w-5 h-5 stroke-[2.5]" />
-        <div className="absolute left-full ml-2 px-2.5 py-1 bg-slate-900 text-white text-3xs font-extrabold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 whitespace-nowrap z-50 shadow-lg border border-slate-700">
-          Add Teammates
+        <div className="w-12 h-12 flex items-center justify-center rounded-[0.875rem] bg-[linear-gradient(135deg,#7C3AED,#4F46E5)] text-white shadow-[0_8px_20px_rgba(124,58,237,0.35)] transition-transform active:scale-95">
+          <UserPlus className="w-5 h-5 stroke-[2.5]" />
         </div>
+        <span className="text-[8.5px] font-bold leading-[1.1] text-center px-0.5 text-[var(--text-muted)]" style={{ maxWidth: '78px' }}>
+          Add Teammates
+        </span>
       </button>
     </aside>
   );

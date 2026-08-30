@@ -56,6 +56,8 @@ export interface FilterOptions {
   emailStatuses?: string[];
   technologies?: string[];
   tags?: string[];
+  states?: string[];
+  countries?: string[];
 }
 
 export interface Filters {
@@ -80,6 +82,8 @@ export interface Filters {
   companySizes?: string[];
   industries?: string[];
   locations?: string[];
+  states?: string[];
+  countries?: string[];
   intents?: string[];
   technologies?: string[];
   tags?: string[];
