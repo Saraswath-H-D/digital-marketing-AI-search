@@ -1,6 +1,6 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
-import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, deleteAllLeadsFromSupabase, getSupabaseConfig } from '../lib/supabase.ts';
+import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, deleteAllLeadsFromSupabase, getSupabaseConfig, getLastConfirmedDeletedEmails } from '../lib/supabase.ts';
 
 const STORAGE_KEY = 'operon_leads_v9';
 const LEGACY_STORAGE_KEY = 'apollo_leads_v9';
@@ -550,13 +550,29 @@ export const addLeadsToTrash = (leads: Lead[]): void => {
 };
 
 // Helper to extract values from standard OR dynamic custom keys
+// A column name merely *containing* an alias as a substring (e.g. a raw CSV column
+// literally named "Org Phone" containing "org") is enough to match below — that column
+// holds a phone number, not a company name, but the key-name check alone can't tell the
+// difference. None of the categories extractFieldValues serves (company, job title,
+// city, state, country, source, status) should ever legitimately be a bare phone
+// number, so reject values that are unambiguously phone-shaped regardless of which key
+// they came from — this is what actually stops a mismatched column from polluting a
+// filter's suggestions, rather than trying to guess every possible bad column name.
+const looksLikePhoneNumber = (val: string): boolean => {
+  const trimmed = val.trim();
+  if (trimmed.length < 7) return false;
+  const digitCount = (trimmed.match(/\d/g) || []).length;
+  const nonPhoneChars = trimmed.replace(/[\d\s\-+().]/g, '');
+  return nonPhoneChars.length === 0 && digitCount >= 7;
+};
+
 const extractFieldValues = (l: any, aliases: string[]): string[] => {
   const values: string[] = [];
   Object.keys(l).forEach(k => {
     const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (aliases.some(a => cleanK.includes(a))) {
       const val = l[k];
-      if (val !== undefined && val !== null && String(val).trim() !== '') {
+      if (val !== undefined && val !== null && String(val).trim() !== '' && !looksLikePhoneNumber(String(val))) {
         values.push(String(val).trim());
       }
     }
@@ -945,39 +961,70 @@ export const updateLead = async (id: number, updateData: Partial<Lead>): Promise
   return updatedLead;
 };
 
-// Delete Lead (with automatic Trash backup)
-export const deleteLead = async (id: number): Promise<void> => {
+// Delete Lead (with automatic Trash backup). Supabase FIRST — only remove locally
+// once Supabase actually confirms the delete, so a failed remote delete can't leave a
+// lead "gone" from the UI but still present in Supabase (which reappears next reload).
+export const deleteLead = async (id: number): Promise<{ error?: string }> => {
   const allLeads = getStoredLeads();
   const target = allLeads.find(l => l.id === id);
-  const updated = allLeads.filter(l => l.id !== id);
-  saveStoredLeads(updated);
+  if (!target) return {};
 
-  if (target) {
-    addLeadsToTrash([target]);
-    try {
-      await deleteLeadFromSupabase({ email: target.email, id: target.id });
-    } catch (err) {
-      console.error('Delete sync to Supabase failed:', err);
-    }
+  let supabaseError: string | undefined;
+  try {
+    const result = await deleteLeadFromSupabase({ email: target.email, id: target.id });
+    if (!result.success) supabaseError = result.error || 'Could not confirm this contact was deleted from Supabase.';
+  } catch (err: any) {
+    console.error('Delete sync to Supabase failed:', err);
+    supabaseError = err?.message || 'Delete sync to Supabase failed';
   }
+
+  // A blank-contact row has no reliable email to delete by at all (deleteLeadFromSupabase
+  // always reports failure for those) — still remove it locally rather than get stuck.
+  const isBlankContact = !target.email || target.email === '-';
+  if (!supabaseError || isBlankContact) {
+    const updated = allLeads.filter(l => l.id !== id);
+    saveStoredLeads(updated);
+    addLeadsToTrash([target]);
+    return {};
+  }
+
+  return { error: supabaseError };
 };
 
-// Bulk Delete Leads (with automatic Trash backup)
-export const bulkDeleteLeads = async (ids: number[]): Promise<void> => {
+// Bulk Delete Leads (with automatic Trash backup). Supabase FIRST, local storage
+// SECOND, and only remove locally what Supabase actually confirmed deleting — same
+// reasoning as deleteLeadsByTag: removing locally regardless of whether the remote
+// delete actually succeeded is exactly how a lead can vanish from the UI while
+// Supabase silently keeps it, then reappear on the next reload/pull.
+export const bulkDeleteLeads = async (ids: number[]): Promise<{ count: number; error?: string }> => {
   const allLeads = getStoredLeads();
   const idSet = new Set(ids);
   const targets = allLeads.filter(l => idSet.has(l.id));
-  const updated = allLeads.filter(l => !idSet.has(l.id));
+  if (targets.length === 0) return { count: 0 };
+
+  let supabaseError: string | undefined;
+  let confirmedEmails = new Set<string>();
+  try {
+    const result = await bulkDeleteLeadsFromSupabase(targets);
+    confirmedEmails = getLastConfirmedDeletedEmails();
+    if (!result.success) supabaseError = result.error || 'Some records could not be confirmed deleted from Supabase.';
+  } catch (err: any) {
+    console.error('Bulk delete sync to Supabase failed:', err);
+    supabaseError = err?.message || 'Bulk delete failed';
+  }
+
+  const isConfirmedRemoved = (l: Lead) => {
+    const email = (l.email || '').trim().toLowerCase();
+    return email && email !== '-' && confirmedEmails.has(email);
+  };
+  const removedLeads = targets.filter(l => isConfirmedRemoved(l) || (!supabaseError && (!l.email || l.email === '-')));
+  const removedIdSet = new Set(removedLeads.map(l => l.id));
+  const updated = allLeads.filter(l => !removedIdSet.has(l.id));
   saveStoredLeads(updated);
 
-  if (targets.length > 0) {
-    addLeadsToTrash(targets);
-    try {
-      await bulkDeleteLeadsFromSupabase(targets);
-    } catch (err) {
-      console.error('Bulk delete sync to Supabase failed:', err);
-    }
-  }
+  if (removedLeads.length > 0) addLeadsToTrash(removedLeads);
+
+  return { count: removedLeads.length, error: supabaseError };
 };
 
 // Delete All Leads (Purge Directory & Supabase)
@@ -1010,33 +1057,53 @@ export const leadMatchesTag = (lead: Lead, tag: string): boolean => {
   return normalizeTagValue(lead.csvTag) === cleanTag || normalizeTagValue(lead.sourceName) === cleanTag;
 };
 
-export const deleteLeadsByTag = async (tag: string): Promise<number> => {
-  if (!tag || !tag.trim()) return 0;
+export const deleteLeadsByTag = async (tag: string): Promise<{ count: number; error?: string }> => {
+  if (!tag || !tag.trim()) return { count: 0 };
 
   const allLeads = getStoredLeads();
   const targetLeads = allLeads.filter(l => leadMatchesTag(l, tag));
-  const updatedLeads = allLeads.filter(l => !leadMatchesTag(l, tag));
 
-  saveStoredLeads(updatedLeads);
-  removeCsvTag(tag);
-
-  if (targetLeads.length > 0) {
-    addLeadsToTrash(targetLeads);
-    try {
-      await deleteLeadsByTagFromSupabase(tag, targetLeads);
-    } catch (err) {
-      console.error(`Delete leads by tag '${tag}' from Supabase failed:`, err);
-    }
-  } else {
-    // If no local leads match, attempt SQL tag wipe directly on Supabase
-    try {
-      await deleteLeadsByTagFromSupabase(tag);
-    } catch (err) {
-      console.error(`Direct Supabase tag wipe for '${tag}' failed:`, err);
-    }
+  // Supabase FIRST, local storage SECOND — and only remove locally what Supabase
+  // actually confirmed deleting. The previous order (remove locally, then best-effort
+  // sync with every error swallowed) is exactly how a lead could vanish from the UI
+  // while Supabase silently kept it, then reappear on the next reload/pull.
+  let supabaseError: string | undefined;
+  let confirmedEmails = new Set<string>();
+  try {
+    const result = targetLeads.length > 0
+      ? await deleteLeadsByTagFromSupabase(tag, targetLeads)
+      : await deleteLeadsByTagFromSupabase(tag); // no local matches — still sweep Supabase directly in case it has rows this session never pulled
+    confirmedEmails = getLastConfirmedDeletedEmails();
+    if (!result.success) supabaseError = result.error || 'Some records could not be confirmed deleted from Supabase.';
+  } catch (err: any) {
+    console.error(`Delete leads by tag '${tag}' from Supabase failed:`, err);
+    supabaseError = err?.message || 'Delete leads by tag failed';
   }
 
-  return targetLeads.length;
+  const isConfirmedRemoved = (l: Lead) => {
+    const email = (l.email || '').trim().toLowerCase();
+    return email && email !== '-' && confirmedEmails.has(email);
+  };
+
+  // A target lead with no usable email (a blank-contact row) can never be confirmed
+  // by email — fall back to removing it locally whenever the Supabase call as a whole
+  // reported success, since there's nothing more specific to reconcile it against.
+  const removedLeads = targetLeads.filter(l => isConfirmedRemoved(l) || (!supabaseError && (!l.email || l.email === '-')));
+  const updatedLeads = allLeads.filter(l => !removedLeads.includes(l));
+
+  saveStoredLeads(updatedLeads);
+
+  // Only drop the tag from the suggestions registry once nothing with that tag remains
+  // — if some rows couldn't be confirmed deleted, the tag is still real and should keep
+  // showing up so the user can retry rather than losing track of the leftover data.
+  const stillHasMatches = updatedLeads.some(l => leadMatchesTag(l, tag));
+  if (!stillHasMatches) removeCsvTag(tag);
+
+  if (removedLeads.length > 0) {
+    addLeadsToTrash(removedLeads);
+  }
+
+  return { count: removedLeads.length, error: supabaseError };
 };
 
 // Strict Zero-Repetition Restore Deleted Leads from Trash or Specific Candidates

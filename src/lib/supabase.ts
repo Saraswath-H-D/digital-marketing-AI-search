@@ -559,13 +559,21 @@ export const deleteLeadFromSupabase = async (
   }
 };
 
+// Emails actually confirmed removed by the most recent bulkDeleteLeadsFromSupabase /
+// deleteLeadsByTagFromSupabase call — callers use this to reconcile local storage
+// against ONLY what Supabase actually deleted, instead of assuming every requested
+// email was removed. Cheap module-level handoff; each call overwrites it immediately
+// before the caller reads it, so there's no cross-call staleness risk.
+let lastConfirmedDeletedEmails: Set<string> = new Set();
+export const getLastConfirmedDeletedEmails = (): Set<string> => lastConfirmedDeletedEmails;
+
 export const bulkDeleteLeadsFromSupabase = async (
   leads: Lead[],
   config?: SupabaseConfig
 ): Promise<{ success: boolean; count: number; error?: string }> => {
   const activeConfig = config || getSupabaseConfig();
   const client = getSupabaseClient(activeConfig);
-  
+
   if (!client) {
     return { success: false, count: 0, error: 'Supabase credentials not configured.' };
   }
@@ -578,22 +586,52 @@ export const bulkDeleteLeadsFromSupabase = async (
     .map(l => (l.email || '').trim())
     .filter(e => e && e !== '-' && e !== 'undefined' && e !== 'null');
 
-  try {
-    let deletedCount = 0;
-    if (emailsToDelete.length > 0) {
-      const { data } = await client
+  lastConfirmedDeletedEmails = new Set();
+  if (emailsToDelete.length === 0) {
+    return { success: true, count: 0 };
+  }
+
+  // Chunk the .in('email', ...) delete — a single request listing hundreds of emails
+  // builds an extremely long filter URL that can silently fail (proxy/URL-length
+  // limits, request timeouts) with no error surfaced by the previous unchecked call,
+  // which is exactly how a bulk delete could report success while Supabase quietly
+  // kept the rows, reappearing on the next reload. Checking `error` on every chunk
+  // (instead of ignoring it) is the actual fix; chunking just keeps each request small
+  // enough to stay reliable regardless of how large the batch is.
+  const DELETE_CHUNK_SIZE = 100;
+  let deletedCount = 0;
+  let lastError: string | undefined;
+
+  for (let i = 0; i < emailsToDelete.length; i += DELETE_CHUNK_SIZE) {
+    const chunk = emailsToDelete.slice(i, i + DELETE_CHUNK_SIZE);
+    try {
+      const { data, error } = await client
         .from(tableName)
         .delete()
-        .in('email', emailsToDelete)
+        .in('email', chunk)
         .select();
 
-      if (data) deletedCount += data.length;
+      if (error) {
+        console.error(`Bulk delete chunk at index ${i} failed:`, error.message);
+        lastError = error.message;
+        continue;
+      }
+      (data || []).forEach((row: any) => {
+        if (row.email) lastConfirmedDeletedEmails.add(String(row.email).toLowerCase());
+      });
+      deletedCount += (data || []).length;
+    } catch (err: any) {
+      console.error(`Bulk delete chunk at index ${i} threw:`, err);
+      lastError = err?.message || 'Bulk delete operation failed';
     }
-    return { success: true, count: deletedCount };
-  } catch (err: any) {
-    console.error('Bulk delete from Supabase failed:', err);
-    return { success: false, count: 0, error: err?.message || 'Bulk delete operation failed' };
   }
+
+  const allConfirmed = deletedCount === emailsToDelete.length;
+  return {
+    success: allConfirmed,
+    count: deletedCount,
+    error: allConfirmed ? undefined : (lastError || `Only ${deletedCount} of ${emailsToDelete.length} requested deletes were confirmed by Supabase.`)
+  };
 };
 
 export const deleteAllLeadsFromSupabase = async (
@@ -632,21 +670,45 @@ export const deleteLeadsByTagFromSupabase = async (
   const cleanTagHyphen = rawTag.replace(/\s+/g, '-');
   const cleanTagSpace = rawTag.replace(/-/g, ' ');
 
-  try {
-    let deletedCount = 0;
+  lastConfirmedDeletedEmails = new Set();
+  let deletedCount = 0;
+  let lastError: string | undefined;
+  let expectedFromEmails = 0;
 
+  try {
     // Tier 1: Delete by email of matching leads if provided. Deliberately NOT deleting
     // by `id` — see deleteLeadFromSupabase's comment: local ids are a display-order
     // renumbering, not the real primary key, so `.in('id', ...)` would delete
-    // arbitrary unrelated rows.
+    // arbitrary unrelated rows. Chunked with per-chunk error checking — a single
+    // request listing hundreds of emails builds an extremely long filter URL that can
+    // silently fail (proxy/URL-length limits, timeouts); the previous version never
+    // checked `error` at all, so a failed delete here still reported success while
+    // Supabase quietly kept every row, which is exactly what made deleted leads (and
+    // now-empty tags) reappear after a reload.
     if (targetLeads && targetLeads.length > 0) {
       const emails = targetLeads
         .map(l => (l.email || '').trim())
         .filter(e => e && e !== '-' && e !== 'undefined' && e !== 'null');
+      expectedFromEmails = emails.length;
 
-      if (emails.length > 0) {
-        const { data } = await client.from(tableName).delete().in('email', emails).select();
-        if (data) deletedCount += data.length;
+      const DELETE_CHUNK_SIZE = 100;
+      for (let i = 0; i < emails.length; i += DELETE_CHUNK_SIZE) {
+        const chunk = emails.slice(i, i + DELETE_CHUNK_SIZE);
+        try {
+          const { data, error } = await client.from(tableName).delete().in('email', chunk).select();
+          if (error) {
+            console.error(`Delete by tag '${rawTag}' email chunk at index ${i} failed:`, error.message);
+            lastError = error.message;
+            continue;
+          }
+          (data || []).forEach((row: any) => {
+            if (row.email) lastConfirmedDeletedEmails.add(String(row.email).toLowerCase());
+          });
+          deletedCount += (data || []).length;
+        } catch (chunkErr: any) {
+          console.error(`Delete by tag '${rawTag}' email chunk at index ${i} threw:`, chunkErr);
+          lastError = chunkErr?.message || 'Delete operation failed';
+        }
       }
     }
 
@@ -660,15 +722,26 @@ export const deleteLeadsByTagFromSupabase = async (
         .or(filterQuery)
         .select();
 
-      if (!error && data) {
+      if (error) {
+        console.error(`Delete by tag '${rawTag}' source_name sweep failed:`, error.message);
+        lastError = lastError || error.message;
+      } else if (data) {
+        data.forEach((row: any) => {
+          if (row.email) lastConfirmedDeletedEmails.add(String(row.email).toLowerCase());
+        });
         deletedCount += data.length;
       }
     }
 
-    return { success: true, count: deletedCount };
+    const allConfirmed = !lastError && deletedCount >= expectedFromEmails;
+    return {
+      success: allConfirmed,
+      count: deletedCount,
+      error: allConfirmed ? undefined : lastError
+    };
   } catch (err: any) {
     console.error(`Delete by tag '${rawTag}' failed:`, err);
-    return { success: false, count: 0, error: err?.message || 'Delete operation failed' };
+    return { success: false, count: deletedCount, error: err?.message || 'Delete operation failed' };
   }
 };
 

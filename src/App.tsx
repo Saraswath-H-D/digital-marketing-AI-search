@@ -469,11 +469,15 @@ export default function App() {
 
   const executeDeleteLead = async (lead: Lead) => {
     try {
-      await deleteLead(lead.id);
+      const { error } = await deleteLead(lead.id);
       fetchLeads();
       fetchFilterOptions();
       setSelectedIds(prev => prev.filter(id => id !== lead.id));
-      showStatus('Lead deleted & synced to Supabase.', 'success');
+      if (error) {
+        showStatus(`Could not confirm this contact was deleted from Supabase (${error}) — left in place, try again shortly.`, 'error');
+      } else {
+        showStatus('Lead deleted & synced to Supabase.', 'success');
+      }
     } catch (err) {
       console.error('Delete lead failed:', err);
       showStatus('An error occurred while deleting the lead.', 'error');
@@ -489,12 +493,16 @@ export default function App() {
 
   const executeBulkDelete = async () => {
     try {
-      await bulkDeleteLeads(selectedIds);
+      const { count, error } = await bulkDeleteLeads(selectedIds);
       fetchLeads();
       fetchFilterOptions();
       setSelectedIds([]);
       setBulkMenuOpen(false);
-      showStatus('Bulk deletion complete & synced to Supabase!', 'success');
+      if (error) {
+        showStatus(`Deleted ${count} contact(s) confirmed in Supabase; the rest couldn't be verified as removed (${error}) and were left in place — try again shortly.`, 'error');
+      } else {
+        showStatus('Bulk deletion complete & synced to Supabase!', 'success');
+      }
     } catch (err) {
       console.error('Bulk delete failed:', err);
       showStatus('An error occurred during bulk deletion.', 'error');
@@ -1473,18 +1481,25 @@ export default function App() {
 
                       if (confirmDelete) {
                         showStatus(`Deleting contacts tagged with "${tagToDelete}"...`, 'success');
-                        const deletedCount = await deleteLeadsByTag(tagToDelete);
-                        
+                        const { count: deletedCount, error: deleteError } = await deleteLeadsByTag(tagToDelete);
+
                         setTagSearchInput('');
                         setFilters(prev => ({ ...prev, sources: [] }));
                         setPage(1);
                         await fetchLeads();
                         await fetchFilterOptions();
-                        
-                        showStatus(
-                          `Successfully deleted ${deletedCount} contact(s) tagged with "${tagToDelete}" from system & Supabase database.`,
-                          'success'
-                        );
+
+                        if (deleteError) {
+                          showStatus(
+                            `Deleted ${deletedCount} contact(s) confirmed in Supabase, but some records tagged "${tagToDelete}" could not be verified as removed (${deleteError}). They were left in place rather than risk hiding data that's still really there — try again in a moment.`,
+                            'error'
+                          );
+                        } else {
+                          showStatus(
+                            `Successfully deleted ${deletedCount} contact(s) tagged with "${tagToDelete}" from system & Supabase database.`,
+                            'success'
+                          );
+                        }
                       }
                     }}
                     title={
