@@ -347,14 +347,16 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     const finalTag = (importTag && importTag.trim()) ? importTag.trim().replace(/\s+/g, '-') : fileNameTag;
 
     // csvTag is stamped on EVERY row in this batch unconditionally — it's the upload's
-    // own identity, independent of sourceName (which stays whatever the CSV itself
-    // mapped, or falls back to the tag only when the row had none). Previously the tag
-    // only ever lived inside sourceName, and a row with its own "Source" column value
-    // would silently lose its tag association entirely — this is what made searching/
-    // deleting by tag miss rows or leave part of an upload behind.
+    // own identity, independent of sourceName. sourceName is left exactly as the CSV
+    // mapped it (or '-' if the row had none) and is NEVER defaulted to the tag name —
+    // a lead with no real source should display "-", not the batch tag, in the Source
+    // column. Previously the tag only ever lived inside sourceName (defaulted onto
+    // source-less rows), which both mislabeled the Source column and, for rows that DID
+    // have their own source value, lost the tag association entirely — the underlying
+    // bug that made searching/deleting by tag miss rows or leave part of an upload
+    // behind. csvTag now carries the tag reliably on its own regardless.
     const finalData = parsedData.map(item => ({
       ...item,
-      sourceName: (item.sourceName && item.sourceName !== '-') ? item.sourceName : finalTag,
       csvTag: finalTag,
     }));
 

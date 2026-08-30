@@ -617,7 +617,12 @@ export const getFilterOptions = (): FilterOptions => {
   return {
     jobTitles: getUniqueForAliases(['jobtitle', 'title', 'role', 'designation', 'position', 'occupation']),
     companies: getUniqueForAliases(['organization', 'company', 'employer', 'business', 'org', 'firm']),
-    cities: getUniqueForAliases(['city', 'location', 'town', 'country', 'state', 'address', 'region'], true),
+    // city/state/country used to be lumped into one "Person Location / City" filter
+    // (the cities alias list included 'state' and 'country'), which showed a jumbled
+    // mix of cities, states, and countries together — now split into 3 dedicated lists.
+    cities: getUniqueForAliases(['city', 'location', 'town', 'address'], true),
+    states: getUniqueForAliases(['state', 'province', 'region']),
+    countries: getUniqueForAliases(['country', 'nation']),
     sources: getUniqueForAliases(['sourcename', 'source', 'leadsource']),
     statuses: getUniqueForAliases(['approvalstatus', 'status', 'approved', 'state']),
     seniorities: ['C-Suite', 'VP / Vice President', 'Director', 'Manager', 'Owner / Partner', 'Entry Level'],
@@ -657,8 +662,20 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
     }
 
     if (filters.cities && filters.cities.length > 0) {
-      const vals = extractFieldValues(leadObj, ['city', 'location', 'town', 'country', 'state', 'address', 'region']);
+      const vals = extractFieldValues(leadObj, ['city', 'location', 'town', 'address']);
       const lowerSelected = filters.cities.map(c => c.toLowerCase());
+      if (!vals.some(v => lowerSelected.includes(v.toLowerCase()))) return false;
+    }
+
+    if (filters.states && filters.states.length > 0) {
+      const vals = extractFieldValues(leadObj, ['state', 'province', 'region']);
+      const lowerSelected = filters.states.map(s => s.toLowerCase());
+      if (!vals.some(v => lowerSelected.includes(v.toLowerCase()))) return false;
+    }
+
+    if (filters.countries && filters.countries.length > 0) {
+      const vals = extractFieldValues(leadObj, ['country', 'nation']);
+      const lowerSelected = filters.countries.map(c => c.toLowerCase());
       if (!vals.some(v => lowerSelected.includes(v.toLowerCase()))) return false;
     }
 
@@ -1100,16 +1117,21 @@ export const bulkImportLeads = async (
 
   const createdLeads: Lead[] = newLeadsList.map(item => {
     maxId += 1;
-    const tagVal = item.sourceName && String(item.sourceName).trim() ? String(item.sourceName).trim().replace(/\s+/g, '-') : '-';
+    // sourceName is the row's own lead-origin value, exactly as the CSV had it (or '-'
+    // if it had none) — never defaulted to the batch tag, so a lead with no real source
+    // correctly shows "-" rather than the upload's tag name.
+    const cleanSourceName = item.sourceName && String(item.sourceName).trim() ? String(item.sourceName).trim().replace(/\s+/g, '-') : '-';
     // csvTag is the upload batch's own identity (set by CsvImporter on every row in the
     // batch, independent of each row's sourceName) — preserve it as-is so tag search/
     // select/delete can reliably find the whole batch regardless of per-row sourceName.
-    // Fall back to sourceName only for callers that never set csvTag (manual/legacy paths).
+    // Only THIS is registered as a suggestible tag — a row's own arbitrary sourceName
+    // (which could be anything from the CSV, e.g. "Referral") is real lead data, not a
+    // deliberate batch tag, and registering it as one is what let unrelated one-off
+    // values leak into the tag-suggestion list.
     const csvTagVal = item.csvTag && String(item.csvTag).trim()
       ? String(item.csvTag).trim().replace(/\s+/g, '-')
-      : (tagVal !== '-' ? tagVal : null);
-    if (tagVal !== '-') addCsvTag(tagVal);
-    if (csvTagVal && csvTagVal !== tagVal) addCsvTag(csvTagVal);
+      : null;
+    if (csvTagVal) addCsvTag(csvTagVal);
     return {
       ...item,
       id: maxId,
@@ -1123,7 +1145,7 @@ export const bulkImportLeads = async (
       organization: normalizeNameOrTitle(item.organization),
       jobTitle: normalizeNameOrTitle(item.jobTitle),
       questions: cleanVal(item.questions),
-      sourceName: tagVal,
+      sourceName: cleanSourceName,
       csvTag: csvTagVal,
       createdAt: new Date().toISOString(),
       isSaved: false,
