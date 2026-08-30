@@ -81,9 +81,9 @@ export default function OperonNavigationDrawer({
           key={name}
           onClick={() => handleItemClick(name)}
           className={`w-10 h-10 mx-auto my-1 flex items-center justify-center rounded-xl transition-all relative group cursor-pointer ${
-            isActive 
-              ? 'bg-purple-200 text-purple-950 shadow-sm font-bold border-l-4 border-purple-600 ring-1 ring-purple-300' 
-              : 'text-purple-700 hover:bg-purple-100 hover:text-purple-950'
+            isActive
+              ? 'bg-[var(--accent-primary-soft)] text-[var(--accent-section)] shadow-sm font-bold border-l-4 border-purple-600 ring-1 ring-purple-300'
+              : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]'
           }`}
           title={name}
         >
@@ -94,7 +94,7 @@ export default function OperonNavigationDrawer({
             </span>
           )}
           {/* Tooltip */}
-          <div className="absolute left-full ml-2 px-2.5 py-1 bg-purple-900 text-white text-3xs font-extrabold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 whitespace-nowrap z-50 shadow-lg border border-purple-700">
+          <div className="absolute left-full ml-2 px-2.5 py-1 bg-slate-900 text-white text-3xs font-extrabold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 whitespace-nowrap z-50 shadow-lg border border-slate-700">
             {name}
           </div>
         </button>
@@ -106,22 +106,22 @@ export default function OperonNavigationDrawer({
         key={name}
         onClick={() => handleItemClick(name)}
         className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-all cursor-pointer ${
-          isActive 
-            ? 'bg-purple-200 text-purple-950 font-black shadow-xs border-l-4 border-purple-600 ring-1 ring-purple-300' 
-            : 'text-purple-900 font-semibold hover:bg-purple-100/80 hover:text-purple-950'
+          isActive
+            ? 'bg-[var(--accent-primary-soft)] text-[var(--accent-section)] font-black shadow-xs border-l-4 border-purple-600 ring-1 ring-purple-300'
+            : 'text-[var(--text-secondary)] font-semibold hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]'
         }`}
       >
         <div className="flex items-center space-x-2.5 min-w-0">
-          <span className={isActive ? 'text-purple-700 font-bold' : 'text-purple-600'}>{icon}</span>
+          <span className={isActive ? 'text-[var(--accent-section)] font-bold' : 'text-[var(--text-muted)]'}>{icon}</span>
           <span className="truncate">{name}</span>
         </div>
         {badge && (
           <span className={`px-2 py-0.5 text-[9px] font-extrabold rounded-full leading-none shrink-0 ${
-            badge === 'NEW' 
-              ? 'bg-purple-600 text-white font-black shadow-2xs' 
-              : isActive 
-                ? 'bg-purple-300 text-purple-950 border border-purple-400/50' 
-                : 'bg-purple-100 text-purple-800 border border-purple-200'
+            badge === 'NEW'
+              ? 'bg-purple-600 text-white font-black shadow-2xs'
+              : isActive
+                ? 'bg-purple-300 text-purple-950 border border-purple-400/50'
+                : 'bg-[var(--surface-card-elevated)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
           }`}>
             {badge}
           </span>
@@ -131,14 +131,14 @@ export default function OperonNavigationDrawer({
   };
 
   return (
-    <aside 
+    <aside
       id="operon-navigation-drawer"
-      className={`border-r border-purple-200 bg-[#F5EEFB] text-purple-950 flex flex-col h-full shrink-0 select-none transition-all duration-300 ${
+      className={`border-r border-[var(--border-subtle)] bg-[var(--surface-card)] text-[var(--text-primary)] flex flex-col h-full shrink-0 select-none transition-all duration-300 ${
         isCollapsed ? 'w-16' : 'w-60'
       }`}
     >
-      {/* Brand & Toggle Header - Light Purple */}
-      <div className="h-16 px-4 border-b border-purple-200 flex items-center justify-between bg-purple-100/90">
+      {/* Brand & Toggle Header */}
+      <div className="h-16 px-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--surface-card-elevated)]">
         {!isCollapsed && (
           <div className="flex items-center space-x-2.5 min-w-0">
             {/* Bright Gradient Brand Icon */}
@@ -146,8 +146,8 @@ export default function OperonNavigationDrawer({
               <Grid className="w-4 h-4" />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="font-black text-sm text-purple-950 tracking-widest leading-none font-display">OPERON</span>
-              <span className="text-[9px] text-purple-700 font-extrabold uppercase tracking-wider mt-1">Lead Intelligence Platform</span>
+              <span className="font-black text-sm text-[var(--text-primary)] tracking-widest leading-none font-display">OPERON</span>
+              <span className="text-[9px] text-[var(--text-muted)] font-extrabold uppercase tracking-wider mt-1">Lead Intelligence Platform</span>
             </div>
           </div>
         )}
@@ -160,7 +160,7 @@ export default function OperonNavigationDrawer({
 
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`p-1.5 rounded-lg border border-purple-200 bg-white hover:bg-purple-100 text-purple-700 cursor-pointer shadow-2xs ${
+          className={`p-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] cursor-pointer shadow-2xs ${
             isCollapsed ? 'mx-auto mt-0' : 'ml-2'
           }`}
           title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
@@ -177,10 +177,10 @@ export default function OperonNavigationDrawer({
           {!isCollapsed && (
             <button
               onClick={() => toggleSection('workspace')}
-              className="w-full flex items-center justify-between py-1 px-1.5 text-[10px] font-black text-purple-700 uppercase tracking-widest hover:text-purple-900 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between py-1 px-1.5 text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <span>WORKSPACE</span>
-              {openSections.workspace ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
+              {openSections.workspace ? <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" /> : <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />}
             </button>
           )}
           
@@ -193,14 +193,14 @@ export default function OperonNavigationDrawer({
         </div>
 
         {/* Discover & Enrich section */}
-        <div className="pt-2 border-t border-slate-800/60">
+        <div className="pt-2 border-t border-[var(--border-subtle)]">
           {!isCollapsed && (
             <button
               onClick={() => toggleSection('discover')}
-              className="w-full flex items-center justify-between py-1 px-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between py-1 px-1.5 text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-widest hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <span>DISCOVER & ENRICH</span>
-              {openSections.discover ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
+              {openSections.discover ? <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" /> : <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />}
             </button>
           )}
           
@@ -215,14 +215,14 @@ export default function OperonNavigationDrawer({
         </div>
 
         {/* Outreach section */}
-        <div className="pt-2 border-t border-slate-800/60">
+        <div className="pt-2 border-t border-[var(--border-subtle)]">
           {!isCollapsed && (
             <button
               onClick={() => toggleSection('outreach')}
-              className="w-full flex items-center justify-between py-1 px-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between py-1 px-1.5 text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-widest hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <span>OUTREACH</span>
-              {openSections.outreach ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
+              {openSections.outreach ? <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" /> : <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />}
             </button>
           )}
           
@@ -237,14 +237,14 @@ export default function OperonNavigationDrawer({
         </div>
 
         {/* Management section */}
-        <div className="pt-2 border-t border-slate-800/60">
+        <div className="pt-2 border-t border-[var(--border-subtle)]">
           {!isCollapsed && (
             <button
               onClick={() => toggleSection('management')}
-              className="w-full flex items-center justify-between py-1 px-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest hover:text-slate-200 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between py-1 px-1.5 text-[10px] font-extrabold text-[var(--text-muted)] uppercase tracking-widest hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <span>MANAGEMENT</span>
-              {openSections.management ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
+              {openSections.management ? <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" /> : <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />}
             </button>
           )}
           
@@ -252,7 +252,7 @@ export default function OperonNavigationDrawer({
             <div className={`space-y-1 ${!isCollapsed ? 'mt-1' : ''}`}>
               {renderMenuItem('Bookmarks', <Bookmark className="w-4 h-4 text-amber-400" />)}
               {renderMenuItem('Deliverability', <Activity className="w-4 h-4 text-emerald-400" />)}
-              {renderMenuItem('Settings', <Settings className="w-4 h-4 text-slate-400" />)}
+              {renderMenuItem('Settings', <Settings className="w-4 h-4 text-[var(--text-muted)]" />)}
             </div>
           )}
         </div>
@@ -260,7 +260,7 @@ export default function OperonNavigationDrawer({
       </div>
 
       {/* Footer Navigation & Teammates Button */}
-      <div className="p-3 border-t border-slate-800 space-y-2 bg-slate-950/60">
+      <div className="p-3 border-t border-[var(--border-subtle)] space-y-2 bg-[var(--surface-card-header)]">
         
         {/* Bright Gradient + Add Teammates Button */}
         {!isCollapsed ? (

@@ -42,7 +42,7 @@ interface LeadsTableProps {
 
 // Generate premium company icon background colors based on name
 const getCompanyColor = (name: string | null) => {
-  if (!name) return 'bg-gray-100 text-gray-400';
+  if (!name) return 'bg-[var(--surface-card-header)] text-[var(--text-muted)]';
   const charCode = name.charCodeAt(0) || 0;
   const colors = [
     'bg-blue-50 text-blue-600 border-blue-100',
@@ -221,7 +221,7 @@ export default function LeadsTable({
 
   const renderEmailCell = (lead: Lead) => {
     if (!lead.email || lead.email === '-') {
-      return <span className="text-gray-400 font-medium">-</span>;
+      return <span className="text-[var(--text-muted)] font-medium">-</span>;
     }
     const isRevealed = revealedEmailIds.includes(lead.id) || lead.emailUnlocked;
     if (isRevealed) {
@@ -232,7 +232,7 @@ export default function LeadsTable({
           </div>
           <a
             href={`mailto:${lead.email}`}
-            className="text-gray-800 hover:text-indigo-600 font-semibold truncate max-w-[130px] transition-colors"
+            className="text-[var(--text-secondary)] hover:text-indigo-600 font-semibold truncate max-w-[130px] transition-colors"
             title={lead.email}
           >
             {lead.email}
@@ -240,7 +240,7 @@ export default function LeadsTable({
           <button
             onClick={(e) => copyToClipboard(e, lead.email, lead.id, 'email')}
             title="Copy email address"
-            className="p-1 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 active:scale-90 active:ring-2 active:ring-indigo-300 opacity-0 group-hover:opacity-100 transition-all duration-150 cursor-pointer shrink-0"
+            className="p-1 rounded-lg text-[var(--text-muted)] hover:text-indigo-600 hover:bg-indigo-50 active:scale-90 active:ring-2 active:ring-indigo-300 opacity-0 group-hover:opacity-100 transition-all duration-150 cursor-pointer shrink-0"
           >
             {copiedStatus?.id === lead.id && copiedStatus?.field === 'email' ? (
               <Check className="w-3 h-3 text-indigo-600 animate-bounce" />
@@ -265,7 +265,7 @@ export default function LeadsTable({
 
   const renderPhoneCell = (lead: Lead) => {
     if (!lead.phone || lead.phone === '-') {
-      return <span className="text-gray-400 font-medium">-</span>;
+      return <span className="text-[var(--text-muted)] font-medium">-</span>;
     }
     const isRevealed = revealedPhoneIds.includes(lead.id) || lead.phoneUnlocked;
     if (isRevealed) {
@@ -276,7 +276,7 @@ export default function LeadsTable({
           </div>
           <a
             href={`tel:${lead.phone}`}
-            className="text-gray-800 hover:text-emerald-600 font-semibold truncate max-w-[130px] transition-colors"
+            className="text-[var(--text-secondary)] hover:text-emerald-600 font-semibold truncate max-w-[130px] transition-colors"
             title={lead.phone}
           >
             {lead.phone}
@@ -284,7 +284,7 @@ export default function LeadsTable({
           <button
             onClick={(e) => copyToClipboard(e, lead.phone, lead.id, 'phone')}
             title="Copy phone number"
-            className="p-1 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 active:scale-90 active:ring-2 active:ring-emerald-300 opacity-0 group-hover:opacity-100 transition-all duration-150 cursor-pointer shrink-0"
+            className="p-1 rounded-lg text-[var(--text-muted)] hover:text-emerald-600 hover:bg-emerald-50 active:scale-90 active:ring-2 active:ring-emerald-300 opacity-0 group-hover:opacity-100 transition-all duration-150 cursor-pointer shrink-0"
           >
             {copiedStatus?.id === lead.id && copiedStatus?.field === 'phone' ? (
               <Check className="w-3 h-3 text-emerald-600 animate-bounce" />
@@ -312,10 +312,10 @@ export default function LeadsTable({
     const isBlank = !val || val === '' || val === '-' || val === 'undefined' || val === 'null' || val === 'Contact';
     
     if (isBlank) {
-      return <span className="text-gray-400 font-bold text-xs select-none">-</span>;
+      return <span className="text-[var(--text-muted)] font-bold text-xs select-none">-</span>;
     }
     
-    return <span className="text-slate-800 font-medium text-xs truncate max-w-[280px] inline-block">{val}</span>;
+    return <span className="text-[var(--text-secondary)] font-medium text-xs truncate max-w-[280px] inline-block">{val}</span>;
   };
 
   return (
@@ -323,40 +323,40 @@ export default function LeadsTable({
       <table className="w-full text-left border-collapse min-w-[1000px]">
         {/* Table Header */}
         <thead className="bg-[var(--surface-card-elevated)] border-b border-[var(--border-subtle)] sticky top-0 z-10">
-          <tr className="micro-label py-3 text-purple-950 font-black uppercase tracking-widest text-[11px]">
+          <tr className="micro-label py-3 text-[var(--text-primary)] font-black uppercase tracking-widest text-[11px]">
             {/* Checkbox */}
             <th className="py-3.5 px-4 w-12 text-center border-r border-[var(--border-subtle)]">
               <input
                 type="checkbox"
                 checked={isAllSelected}
                 onChange={handleSelectAll}
-                className="w-4 h-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500 transition-colors cursor-pointer accent-indigo-600"
+                className="w-4 h-4 rounded text-indigo-600 border-[var(--border-input)] focus:ring-indigo-500 transition-colors cursor-pointer accent-indigo-600"
               />
             </th>
-            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">First Name</th>
-            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Last Name</th>
-            <th className="py-3.5 px-4 min-w-[185px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Email</th>
-            <th className="py-3.5 px-4 min-w-[160px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Phone Number</th>
-            <th className="py-3.5 px-4 min-w-[160px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Job Title</th>
-            <th className="py-3.5 px-4 min-w-[160px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Company Name</th>
-            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">City</th>
-            <th className="py-3.5 px-4 min-w-[120px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">State</th>
-            <th className="py-3.5 px-4 min-w-[120px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Country</th>
-            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Source</th>
-            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Email Status</th>
-            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Seniority</th>
-            <th className="py-3.5 px-4 min-w-[130px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Department</th>
-            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Industry</th>
-            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Employee Size</th>
-            <th className="py-3.5 px-4 min-w-[160px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Person Linkedin Url</th>
-            <th className="py-3.5 px-4 min-w-[140px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Website</th>
-            <th className="py-3.5 px-4 min-w-[170px] border-r border-purple-200/80 hover:bg-purple-200/50 transition-colors cursor-pointer">Company Linkedin Url</th>
-            <th className="py-3.5 px-4 w-32 text-right bg-purple-100/80 text-purple-950 font-black">Actions</th>
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">First Name</th>
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Last Name</th>
+            <th className="py-3.5 px-4 min-w-[185px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Email</th>
+            <th className="py-3.5 px-4 min-w-[160px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Phone Number</th>
+            <th className="py-3.5 px-4 min-w-[160px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Job Title</th>
+            <th className="py-3.5 px-4 min-w-[160px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Company Name</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">City</th>
+            <th className="py-3.5 px-4 min-w-[120px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">State</th>
+            <th className="py-3.5 px-4 min-w-[120px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Country</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Source</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Email Status</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Seniority</th>
+            <th className="py-3.5 px-4 min-w-[130px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Department</th>
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Industry</th>
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Employee Size</th>
+            <th className="py-3.5 px-4 min-w-[160px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Person Linkedin Url</th>
+            <th className="py-3.5 px-4 min-w-[140px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Website</th>
+            <th className="py-3.5 px-4 min-w-[170px] border-r border-[var(--border-subtle)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer">Company Linkedin Url</th>
+            <th className="py-3.5 px-4 w-32 text-right bg-[var(--surface-card-elevated)] text-[var(--text-primary)] font-black">Actions</th>
           </tr>
         </thead>
 
         {/* Table Body */}
-        <tbody className="divide-y divide-gray-150">
+        <tbody className="divide-y divide-[var(--border-subtle)]">
           {leads.length === 0 ? (
             <tr>
               <td colSpan={19} className="py-20 text-center">
@@ -364,10 +364,10 @@ export default function LeadsTable({
                   <div className="w-16 h-16 rounded-2xl bg-blue-100/70 text-blue-600 flex items-center justify-center mx-auto mb-4 shadow-3xs">
                     <HelpCircle className="w-8 h-8" />
                   </div>
-                  <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                  <h3 className="text-base font-bold text-[var(--text-primary)] tracking-tight">
                     No contacts match your search filters.
                   </h3>
-                  <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
                     Try adjusting your filters on the left panel or importing new data to populate this list.
                   </p>
                 </div>
@@ -383,9 +383,9 @@ export default function LeadsTable({
                 <React.Fragment key={lead.id}>
                   {/* Lead Main Row */}
                   <tr
-                    className={`text-xs text-gray-700 hover:bg-indigo-50/20 transition-colors ${
+                    className={`text-xs text-[var(--text-secondary)] hover:bg-indigo-50/20 transition-colors ${
                       isSelected ? 'bg-indigo-50/10' : ''
-                    } ${isExpanded ? 'border-b-0 bg-gray-50/20' : ''}`}
+                    } ${isExpanded ? 'border-b-0 bg-[var(--surface-hover)]' : ''}`}
                   >
                     {/* Checkbox column */}
                     <td className="py-3.5 px-4 text-center">
@@ -393,17 +393,17 @@ export default function LeadsTable({
                         type="checkbox"
                         checked={isSelected}
                         onChange={(e) => handleSelectOne(lead.id, e.target.checked)}
-                        className="w-4 h-4 rounded-md text-indigo-600 border-gray-300 focus:ring-indigo-500 transition-colors cursor-pointer"
+                        className="w-4 h-4 rounded-md text-indigo-600 border-[var(--border-input)] focus:ring-indigo-500 transition-colors cursor-pointer"
                       />
                     </td>
 
                     {/* 1. First Name */}
-                    <td className="py-3.5 px-4 font-semibold text-gray-900">
+                    <td className="py-3.5 px-4 font-semibold text-[var(--text-primary)]">
                       {lead.firstName && lead.firstName !== '-' ? lead.firstName : '-'}
                     </td>
 
                     {/* 2. Last Name */}
-                    <td className="py-3.5 px-4 font-semibold text-gray-900">
+                    <td className="py-3.5 px-4 font-semibold text-[var(--text-primary)]">
                       {lead.lastName && lead.lastName !== '-' ? lead.lastName : '-'}
                     </td>
 
@@ -418,16 +418,16 @@ export default function LeadsTable({
                     </td>
 
                     {/* 5. Job Title */}
-                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.jobTitle && lead.jobTitle !== '-' ? (
                         <div className="flex items-center space-x-1.5 max-w-[190px]">
-                          <Briefcase className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <Briefcase className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
                           <span className="truncate" title={lead.jobTitle}>
                             {lead.jobTitle}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
@@ -438,55 +438,55 @@ export default function LeadsTable({
                           <div className={`w-6 h-6 rounded-md border flex items-center justify-center text-3xs font-bold shrink-0 shadow-3xs ${companyColor}`}>
                             {lead.organization[0].toUpperCase()}
                           </div>
-                          <span className="font-semibold text-gray-800 truncate max-w-[140px]" title={lead.organization}>
+                          <span className="font-semibold text-[var(--text-secondary)] truncate max-w-[140px]" title={lead.organization}>
                             {lead.organization}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
                     {/* 7. City */}
-                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.city && lead.city !== '-' ? (
-                        <div className="flex items-center space-x-1 text-gray-650">
-                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <div className="flex items-center space-x-1 text-[var(--text-secondary)]">
+                          <MapPin className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
                           <span className="truncate max-w-[130px]" title={lead.city}>
                             {lead.city}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
                     {/* 8. State */}
-                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.state && lead.state !== '-' ? (
                         <span className="truncate max-w-[110px] inline-block">{lead.state}</span>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
                     {/* 9. Country */}
-                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.country && lead.country !== '-' ? (
                         <span className="truncate max-w-[110px] inline-block">{lead.country}</span>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
                     {/* 10. Source */}
-                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.sourceName && lead.sourceName !== '-' ? (
                         <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold">
                           {lead.sourceName}
                         </span>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
@@ -498,40 +498,40 @@ export default function LeadsTable({
                     </td>
 
                     {/* 12. Seniority */}
-                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.seniority && lead.seniority !== '-' ? (
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-semibold">
+                        <span className="px-2 py-0.5 rounded-md bg-[var(--surface-card-header)] text-[var(--text-secondary)] border border-[var(--border-subtle)] text-[11px] font-semibold">
                           {lead.seniority}
                         </span>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
                     {/* 13. Department */}
-                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.department && lead.department !== '-' ? (
                         <span className="truncate max-w-[120px] inline-block">{lead.department}</span>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
                     {/* 14. Industry */}
-                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.industry && lead.industry !== '-' ? (
                         <span className="truncate max-w-[130px] inline-block">{lead.industry}</span>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
                     {/* 15. Employee Size */}
-                    <td className="py-3.5 px-4 font-medium text-gray-700">
+                    <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.companySize && lead.companySize !== '-' ? (
                         <span className="truncate max-w-[130px] inline-block">{lead.companySize}</span>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
@@ -547,7 +547,7 @@ export default function LeadsTable({
                           LinkedIn
                         </a>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
@@ -558,12 +558,12 @@ export default function LeadsTable({
                           href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-bold hover:bg-slate-200 transition-colors text-[10px]"
+                          className="px-2 py-0.5 rounded-md bg-[var(--surface-card-header)] text-[var(--text-secondary)] border border-[var(--border-subtle)] font-bold hover:bg-[var(--surface-hover)] transition-colors text-[10px]"
                         >
                           Website
                         </a>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
@@ -579,7 +579,7 @@ export default function LeadsTable({
                           Company LinkedIn
                         </a>
                       ) : (
-                        <span className="text-gray-400 font-medium">-</span>
+                        <span className="text-[var(--text-muted)] font-medium">-</span>
                       )}
                     </td>
 
@@ -596,7 +596,7 @@ export default function LeadsTable({
                             className={`p-1.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-3xs ${
                               lead.isSaved
                                 ? 'text-amber-600 bg-amber-50 border-amber-300 shadow-2xs hover:scale-110 active:scale-95 ring-2 ring-amber-400/40 animate-pulseSlow'
-                                : 'text-gray-400 bg-white border-gray-200/90 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 hover:scale-110 active:scale-90 active:ring-2 active:ring-amber-300'
+                                : 'text-[var(--text-muted)] bg-[var(--surface-card)] border-[var(--border-subtle)] hover:bg-amber-50 hover:text-amber-600 hover:border-amber-300 hover:scale-110 active:scale-90 active:ring-2 active:ring-amber-300'
                             }`}
                           >
                             {lead.isSaved ? <BookmarkCheck className="w-4 h-4 text-amber-500" /> : <Bookmark className="w-4 h-4" />}
@@ -616,7 +616,7 @@ export default function LeadsTable({
                         <button
                           onClick={() => onEdit(lead)}
                           title="Edit Lead"
-                          className="p-1.5 rounded-xl border text-gray-400 bg-white border-gray-200/90 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 hover:scale-110 active:scale-90 active:ring-2 active:ring-indigo-300 transition-all duration-200 cursor-pointer shadow-3xs"
+                          className="p-1.5 rounded-xl border text-[var(--text-muted)] bg-[var(--surface-card)] border-[var(--border-subtle)] hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 hover:scale-110 active:scale-90 active:ring-2 active:ring-indigo-300 transition-all duration-200 cursor-pointer shadow-3xs"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
@@ -624,7 +624,7 @@ export default function LeadsTable({
                         <button
                           onClick={() => onDelete(lead)}
                           title="Delete Lead"
-                          className="p-1.5 rounded-xl border text-gray-400 bg-white border-gray-200/90 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-300 hover:scale-110 active:scale-90 active:ring-2 active:ring-rose-300 transition-all duration-200 cursor-pointer shadow-3xs"
+                          className="p-1.5 rounded-xl border text-[var(--text-muted)] bg-[var(--surface-card)] border-[var(--border-subtle)] hover:bg-rose-50 hover:text-rose-600 hover:border-rose-300 hover:scale-110 active:scale-90 active:ring-2 active:ring-rose-300 transition-all duration-200 cursor-pointer shadow-3xs"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -635,7 +635,7 @@ export default function LeadsTable({
                           className={`p-1.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-3xs ${
                             isExpanded
                               ? 'text-indigo-600 bg-indigo-50 border-indigo-300 ring-2 ring-indigo-200 scale-105'
-                              : 'text-gray-400 bg-white border-gray-200/90 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 hover:scale-110 active:scale-90'
+                              : 'text-[var(--text-muted)] bg-[var(--surface-card)] border-[var(--border-subtle)] hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 hover:scale-110 active:scale-90'
                           }`}
                         >
                           {isExpanded ? <ChevronUp className="w-4 h-4 transition-transform duration-300" /> : <ChevronDown className="w-4 h-4 transition-transform duration-300" />}
@@ -646,36 +646,36 @@ export default function LeadsTable({
 
                   {/* Expanded Row for Speaker Questions / Details */}
                   {isExpanded && (
-                    <tr className="bg-indigo-50/5/50 border-b border-gray-200">
+                    <tr className="bg-[var(--surface-card-header)] border-b border-[var(--border-subtle)]">
                       <td colSpan={16} className="p-0">
-                        <div className="px-16 py-4 space-y-3 text-xs text-gray-700 bg-gray-50/50">
+                        <div className="px-16 py-4 space-y-3 text-xs text-[var(--text-secondary)] bg-[var(--surface-card-header)]">
                           {lead.questions ? (
                             <div className="bg-amber-50/40 border border-amber-100/50 p-4 rounded-xl flex items-start space-x-3 max-w-3xl shadow-3xs">
                               <MessageSquare className="w-4.5 h-4.5 text-amber-500 shrink-0 mt-0.5" />
                               <div>
                                 <span className="font-semibold text-amber-800 block mb-1">Question to Speaker:</span>
-                                <p className="text-gray-700 italic leading-relaxed font-medium">"{lead.questions}"</p>
+                                <p className="text-[var(--text-secondary)] italic leading-relaxed font-medium">"{lead.questions}"</p>
                               </div>
                             </div>
                           ) : (
-                            <p className="text-gray-400 italic">No questions requested for this registrant.</p>
+                            <p className="text-[var(--text-muted)] italic">No questions requested for this registrant.</p>
                           )}
-                          <div className="flex flex-wrap gap-x-8 gap-y-2 text-gray-500 mt-2 text-2xs pt-2 border-t border-gray-100">
+                          <div className="flex flex-wrap gap-x-8 gap-y-2 text-[var(--text-muted)] mt-2 text-2xs pt-2 border-t border-[var(--border-subtle)]">
                             <div>
-                              <span className="font-semibold text-gray-400 uppercase tracking-wider block mb-0.5">Registration Time</span>
-                              <span className="font-medium text-gray-750">{lead.registrationTime || 'N/A'}</span>
+                              <span className="font-semibold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Registration Time</span>
+                              <span className="font-medium text-[var(--text-secondary)]">{lead.registrationTime || 'N/A'}</span>
                             </div>
                             <div>
-                              <span className="font-semibold text-gray-400 uppercase tracking-wider block mb-0.5">Attendee Email</span>
-                              <span className="font-medium text-gray-750">{lead.email}</span>
+                              <span className="font-semibold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Attendee Email</span>
+                              <span className="font-medium text-[var(--text-secondary)]">{lead.email}</span>
                             </div>
                             <div>
-                              <span className="font-semibold text-gray-400 uppercase tracking-wider block mb-0.5">Contact Phone</span>
-                              <span className="font-medium text-gray-750">{lead.phone || 'N/A'}</span>
+                              <span className="font-semibold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Contact Phone</span>
+                              <span className="font-medium text-[var(--text-secondary)]">{lead.phone || 'N/A'}</span>
                             </div>
                             <div>
-                              <span className="font-semibold text-gray-400 uppercase tracking-wider block mb-0.5">Assigned ID</span>
-                              <span className="font-mono text-gray-750">#LEAD-{lead.id}</span>
+                              <span className="font-semibold text-[var(--text-muted)] uppercase tracking-wider block mb-0.5">Assigned ID</span>
+                              <span className="font-mono text-[var(--text-secondary)]">#LEAD-{lead.id}</span>
                             </div>
                           </div>
                         </div>

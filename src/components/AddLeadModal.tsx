@@ -77,17 +77,17 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: 'spring', duration: 0.4 }}
-            className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
+            className="w-full max-w-2xl glass-modal overflow-hidden"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-b border-gray-100">
-              <div className="flex items-center space-x-2 text-gray-800">
+            <div className="flex items-center justify-between px-6 py-4 bg-[var(--surface-card-header)] border-b border-[var(--border-subtle)]">
+              <div className="flex items-center space-x-2 text-[var(--text-primary)]">
                 <UserPlus className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-lg font-semibold tracking-tight">Create New Lead</h3>
               </div>
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-[var(--surface-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -104,7 +104,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* First Name */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                     First Name <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -114,14 +114,14 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       placeholder="e.g. John"
-                      className="w-full pl-3 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-gray-50/50"
+                      className="w-full pl-3 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
                     />
                   </div>
                 </div>
 
                 {/* Last Name */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                     Last Name
                   </label>
                   <input
@@ -129,17 +129,17 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="e.g. Doe"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-gray-50/50"
+                    className="w-full px-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
                   />
                 </div>
 
                 {/* Email */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                     Email Address <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
                       <Mail className="w-4 h-4" />
                     </span>
                     <input
@@ -148,18 +148,18 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="e.g. john.doe@company.com"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-gray-50/50"
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
                     />
                   </div>
                 </div>
 
                 {/* Phone */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                     Phone Number
                   </label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
                       <Phone className="w-4 h-4" />
                     </span>
                     <input
@@ -167,18 +167,18 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="e.g. +91 98765 43210"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-gray-50/50"
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
                     />
                   </div>
                 </div>
 
                 {/* Company / Organization */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                     Company / Organization
                   </label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
                       <Building className="w-4 h-4" />
                     </span>
                     <input
@@ -186,18 +186,18 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={organization}
                       onChange={(e) => setOrganization(e.target.value)}
                       placeholder="e.g. TrilliantDigital"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-gray-50/50"
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
                     />
                   </div>
                 </div>
 
                 {/* Job Title */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                     Job Title
                   </label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
                       <Briefcase className="w-4 h-4" />
                     </span>
                     <input
@@ -205,18 +205,18 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={jobTitle}
                       onChange={(e) => setJobTitle(e.target.value)}
                       placeholder="e.g. Digital Marketing Manager"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-gray-50/50"
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
                     />
                   </div>
                 </div>
 
                 {/* City / Location */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                     Location / City
                   </label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
                       <MapPin className="w-4 h-4" />
                     </span>
                     <input
@@ -224,24 +224,24 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       placeholder="e.g. Bangalore"
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-gray-50/50"
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)]"
                     />
                   </div>
                 </div>
 
                 {/* Source Name */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                     Lead Source
                   </label>
                   <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
                       <Tag className="w-4 h-4" />
                     </span>
                     <select
                       value={sourceName}
                       onChange={(e) => setSourceName(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-gray-50/50 appearance-none cursor-pointer"
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)] appearance-none cursor-pointer"
                     >
                       <option value="Manual Entry">Manual Entry</option>
                       <option value="Facebook Ads">Facebook Ads</option>
@@ -255,12 +255,12 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
 
               {/* Approval Status */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                   Approval Status
                 </label>
                 <div className="flex items-center space-x-4">
                   {['approved', 'pending', 'denied'].map((status) => (
-                    <label key={status} className="flex items-center space-x-2 text-sm font-medium text-gray-700 capitalize cursor-pointer">
+                    <label key={status} className="flex items-center space-x-2 text-sm font-medium text-[var(--text-secondary)] capitalize cursor-pointer">
                       <input
                         type="radio"
                         name="approvalStatus"
@@ -277,11 +277,11 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
 
               {/* Questions */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
                   Questions to Speaker
                 </label>
                 <div className="relative">
-                  <span className="absolute top-3 left-3 pointer-events-none text-gray-400">
+                  <span className="absolute top-3 left-3 pointer-events-none text-[var(--text-muted)]">
                     <MessageSquare className="w-4 h-4" />
                   </span>
                   <textarea
@@ -289,17 +289,17 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                     value={questions}
                     onChange={(e) => setQuestions(e.target.value)}
                     placeholder="Describe any questions or custom inquiries..."
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-gray-50/50 resize-none"
+                    className="w-full pl-9 pr-3 py-2 text-sm border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-shadow bg-[var(--surface-input)] text-[var(--text-primary)] resize-none"
                   />
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-[var(--border-subtle)]">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 focus:outline-hidden transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--surface-hover)] focus:outline-hidden transition-colors"
                 >
                   Cancel
                 </button>

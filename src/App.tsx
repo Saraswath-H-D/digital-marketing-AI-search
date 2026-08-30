@@ -22,6 +22,7 @@ import {
   removeCsvTag,
   bulkImportLeads,
   getActiveHeaders,
+  getFixedHeaderValue,
   getTrashLeads,
   deleteAllLeads
 } from './data/leadStorage.ts';
@@ -31,6 +32,7 @@ import LeadsTable from './components/LeadsTable.tsx';
 import AddLeadModal from './components/AddLeadModal.tsx';
 import EditLeadModal from './components/EditLeadModal.tsx';
 import CsvImporter from './components/CsvImporter.tsx';
+import SupabaseModal from './components/SupabaseModal.tsx';
 import OperonNavigationDrawer from './components/OperonNavigationDrawer.tsx';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal.tsx';
 import { AICopilotDrawer } from './components/AICopilotDrawer.tsx';
@@ -526,81 +528,10 @@ export default function App() {
       return;
     }
 
-    const activeHeaders = getActiveHeaders();
-    let headers: string[];
-    let rows: string[][];
-
-    const cleanExportVal = (val: any) => {
-      if (val === undefined || val === null) return '-';
-      const str = String(val).trim();
-      return (str === '' || str === 'undefined' || str === 'null') ? '-' : str;
-    };
-
-    if (activeHeaders && Array.isArray(activeHeaders) && activeHeaders.length > 0) {
-      headers = activeHeaders;
-      rows = leadsToExport.map(l => {
-        const leadObj = l as any;
-        return activeHeaders.map(h => {
-          if (leadObj[h] !== undefined && leadObj[h] !== null && String(leadObj[h]).trim() !== '') {
-            return String(leadObj[h]).trim();
-          }
-          const cleanH = h.toLowerCase().trim();
-          if (cleanH.includes('source')) return cleanExportVal(l.sourceName);
-          if (cleanH.includes('first name') || cleanH === 'fname') return cleanExportVal(l.firstName);
-          if (cleanH.includes('last name') || cleanH === 'lname') return cleanExportVal(l.lastName);
-          if (cleanH === 'name' || cleanH === 'full name' || cleanH === 'contact name' || cleanH === 'contacts' || cleanH === 'contact' || cleanH === 'attendee' || cleanH.includes('attendee name')) {
-            const f = l.firstName && l.firstName !== '-' ? l.firstName : '';
-            const last = l.lastName && l.lastName !== '-' ? l.lastName : '';
-            const full = `${f} ${last}`.trim();
-            return full || '-';
-          }
-          if (cleanH.includes('email') || cleanH.includes('mail')) return cleanExportVal(l.email);
-          if (cleanH.includes('company') || cleanH.includes('organization') || cleanH.includes('org')) return cleanExportVal(l.organization);
-          if (cleanH.includes('title') || cleanH.includes('role') || cleanH.includes('designation')) return cleanExportVal(l.jobTitle);
-          if (cleanH.includes('city') || cleanH.includes('location')) return cleanExportVal(l.city);
-          if (cleanH.includes('phone') || cleanH.includes('mobile')) return cleanExportVal(l.phone);
-          if (cleanH.includes('status')) return cleanExportVal(l.approvalStatus);
-          if (cleanH.includes('time') || cleanH.includes('date')) return cleanExportVal(l.registrationTime);
-          if (cleanH.includes('question')) return cleanExportVal(l.questions);
-          return '-';
-        });
-      });
-    } else {
-      headers = [
-        'Contact Name',
-        'First Name',
-        'Last Name',
-        'Email Address',
-        'Phone Number',
-        'Organization/Company',
-        'Job Title',
-        'Location/City',
-        'Source',
-        'Approval Status',
-        'Registration Time',
-        'Speaker Questions'
-      ];
-
-      rows = leadsToExport.map(l => {
-        const f = l.firstName && l.firstName !== '-' ? l.firstName : '';
-        const last = l.lastName && l.lastName !== '-' ? l.lastName : '';
-        const full = `${f} ${last}`.trim() || '-';
-        return [
-          full,
-          cleanExportVal(l.firstName),
-          cleanExportVal(l.lastName),
-          cleanExportVal(l.email),
-          cleanExportVal(l.phone),
-          cleanExportVal(l.organization),
-          cleanExportVal(l.jobTitle),
-          cleanExportVal(l.city),
-          cleanExportVal(l.sourceName),
-          cleanExportVal(l.approvalStatus),
-          cleanExportVal(l.registrationTime),
-          cleanExportVal(l.questions)
-        ];
-      });
-    }
+    // Headers are permanently fixed (see FIXED_HEADERS in leadStorage.ts) so exports
+    // always have the exact same columns, correctly mapped, no matter what was imported.
+    const headers: string[] = getActiveHeaders();
+    const rows: string[][] = leadsToExport.map(l => headers.map(h => getFixedHeaderValue(l, h)));
 
     const csvContent = "data:text/csv;charset=utf-8," 
       + [headers.join(','), ...rows.map(e => e.map(val => `"${val.replace(/"/g, '""')}"`).join(','))].join('\n');
@@ -792,6 +723,12 @@ export default function App() {
             </div>
           </div>
 
+          {/* Scrollable content area — also the hook for index.css's dark-mode text
+              safety net ([data-theme="dark"] .app-main ...), which forces readable
+              text color on plain elements here while padding is neutralized below so
+              every section keeps its own existing spacing unchanged. */}
+          <div className="app-main" style={{ padding: 0 }}>
+
           {/* Executive KPI Overview Cards Bar */}
           <div className="px-6 py-4 border-b border-[var(--border-subtle)] shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -870,7 +807,7 @@ export default function App() {
                   <button
                     disabled={page === 1}
                     onClick={() => setPage(p => Math.max(1, p - 1))}
-                    className="p-1.5 rounded-xl bg-white border border-purple-200 text-purple-900 hover:bg-purple-50 disabled:opacity-40 super-3d-white-btn cursor-pointer"
+                    className="p-1.5 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40 super-3d-white-btn cursor-pointer"
                     title="Previous Page"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
@@ -883,7 +820,7 @@ export default function App() {
                   <button
                     disabled={totalLeadsCount === 0 || pageEndCount >= totalLeadsCount}
                     onClick={() => setPage(p => p + 1)}
-                    className="p-1.5 rounded-xl bg-white border border-purple-200 text-purple-900 hover:bg-purple-50 disabled:opacity-40 super-3d-white-btn cursor-pointer"
+                    className="p-1.5 rounded-xl bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] disabled:opacity-40 super-3d-white-btn cursor-pointer"
                     title="Next Page"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -891,7 +828,7 @@ export default function App() {
                 </div>
 
                 {/* 25 per page dropdown */}
-                <div className="relative flex items-center text-xs font-bold text-purple-950 bg-white border border-purple-200 rounded-xl px-3 py-1.5 super-3d-white-btn">
+                <div className="relative flex items-center text-xs font-bold text-[var(--text-primary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl px-3 py-1.5 super-3d-white-btn">
                   <label htmlFor="top-rows-per-page-select" className="sr-only">Rows per page</label>
                   <select
                     id="top-rows-per-page-select"
@@ -900,7 +837,7 @@ export default function App() {
                       setLimit(Number(e.target.value));
                       setPage(1);
                     }}
-                    className="bg-transparent pr-2 focus:outline-none cursor-pointer text-xs font-black text-purple-950"
+                    className="bg-transparent pr-2 focus:outline-none cursor-pointer text-xs font-black text-[var(--text-primary)]"
                   >
                     <option value={25}>25 per page</option>
                     <option value={50}>50 per page</option>
@@ -917,7 +854,7 @@ export default function App() {
               <div className="relative">
                 <button 
                   onClick={() => setViewDropdownOpen(!viewDropdownOpen)}
-                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white shadow-3xs cursor-pointer text-gray-700 font-medium transition-colors"
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--surface-hover)] bg-[var(--surface-card)] shadow-3xs cursor-pointer text-[var(--text-secondary)] font-medium transition-colors"
                 >
                   <Table className="w-3.5 h-3.5 text-gray-500" />
                   <span>{getCurrentViewName()}</span>
@@ -930,8 +867,8 @@ export default function App() {
                       className="fixed inset-0 z-40" 
                       onClick={() => setViewDropdownOpen(false)}
                     />
-                    <div className="absolute left-0 mt-1.5 w-56 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 z-45 animate-fadeIn">
-                      <div className="px-3 py-1 text-4xs font-bold uppercase tracking-wider text-gray-450 border-b border-gray-100 mb-1">
+                    <div className="absolute left-0 mt-1.5 w-56 bg-[var(--surface-card-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-1.5 z-45 animate-fadeIn">
+                      <div className="px-3 py-1 text-4xs font-bold uppercase tracking-wider text-[var(--text-muted)] border-b border-[var(--border-subtle)] mb-1">
                         System Views
                       </div>
                       
@@ -1076,8 +1013,8 @@ export default function App() {
               {/* Hide / Show Filters button (Screenshot 1) */}
               <button 
                 onClick={() => setShowFiltersSidebar(!showFiltersSidebar)}
-                className={`inline-flex items-center space-x-1.5 px-3 py-1.5 border rounded-lg hover:bg-gray-50 bg-white shadow-3xs cursor-pointer text-gray-750 font-medium transition-all ${
-                  !showFiltersSidebar ? 'border-indigo-200 text-indigo-700 bg-indigo-50/40' : 'border-gray-200'
+                className={`inline-flex items-center space-x-1.5 px-3 py-1.5 border rounded-lg hover:bg-[var(--surface-hover)] bg-[var(--surface-card)] shadow-3xs cursor-pointer text-[var(--text-secondary)] font-medium transition-all ${
+                  !showFiltersSidebar ? 'border-indigo-200 text-indigo-700 bg-indigo-50/40' : 'border-[var(--border-subtle)]'
                 }`}
               >
                 <Filter className="w-3.5 h-3.5 text-gray-500" />
@@ -1096,7 +1033,7 @@ export default function App() {
                   await fetchLeads();
                   showStatus('Contact data synchronized successfully!', 'success');
                 }}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 bg-white shadow-3xs cursor-pointer text-gray-700 font-medium transition-colors"
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--surface-hover)] bg-[var(--surface-card)] shadow-3xs cursor-pointer text-[var(--text-secondary)] font-medium transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5 text-gray-500" />
                 <span>Data Sync</span>
@@ -1111,7 +1048,7 @@ export default function App() {
                 className={`inline-flex items-center space-x-1.5 px-3 py-1.5 border rounded-lg transition-all shadow-3xs cursor-pointer font-extrabold text-xs ${
                   showAICopilot 
                     ? 'bg-gradient-to-r from-indigo-600 to-violet-600 border-indigo-500 text-white shadow-md shadow-indigo-150' 
-                    : 'bg-white hover:bg-indigo-50/30 border-indigo-200 text-indigo-700'
+                    : 'bg-[var(--surface-card)] hover:bg-indigo-50/30 border-indigo-200 text-indigo-700'
                 }`}
               >
                 <Sparkles className={`w-3.5 h-3.5 ${showAICopilot ? 'text-white' : 'text-indigo-600 animate-pulse'}`} />
@@ -1125,7 +1062,7 @@ export default function App() {
           </div>
 
           {/* Search, metrics and actions control panel */}
-          <div className="p-4 border-b border-gray-200 flex flex-col space-y-3 shrink-0 bg-gray-50/20">
+          <div className="p-4 border-b border-[var(--border-subtle)] flex flex-col space-y-3 shrink-0 bg-[var(--surface-card-header)]">
             
             {/* Top row controls */}
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
@@ -1156,7 +1093,7 @@ export default function App() {
                         setMainSearchDropdownOpen(true);
                       }}
                       placeholder="Search contacts by name, company, title, location..."
-                      className="w-full pl-9 pr-8 py-2 text-xs border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all bg-white font-medium text-gray-900 placeholder-gray-500 shadow-2xs"
+                      className="w-full pl-9 pr-8 py-2 text-xs border border-[var(--border-input)] rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all bg-[var(--surface-input)] font-medium text-[var(--text-primary)] placeholder-gray-500 shadow-2xs"
                     />
                     {searchInput && (
                       <button
@@ -1223,7 +1160,7 @@ export default function App() {
                             className="fixed inset-0 z-40" 
                             onClick={() => setMainSearchDropdownOpen(false)}
                           />
-                          <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl py-2 z-45 max-h-72 overflow-y-auto animate-fadeIn">
+                          <div className="absolute left-0 right-0 mt-1 bg-[var(--surface-card-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-2 z-45 max-h-72 overflow-y-auto animate-fadeIn">
                             {/* Contact Names */}
                             {nameList.length > 0 && (
                               <div className="mb-2">
@@ -1350,7 +1287,7 @@ export default function App() {
                           setPage(1);
                         }}
                         placeholder="Search CSV Tag (e.g. Q3-Marketing)..."
-                        className="w-full pl-8.5 pr-8 py-2 text-xs font-bold border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all bg-purple-50/30 text-purple-950 placeholder-purple-400 shadow-2xs"
+                        className="w-full pl-8.5 pr-8 py-2 text-xs font-bold border border-[var(--border-input)] rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all bg-purple-50/30 dark:bg-purple-500/10 text-[var(--text-primary)] placeholder-purple-400 shadow-2xs"
                       />
                       {tagSearchInput && (
                         <button
@@ -1370,28 +1307,48 @@ export default function App() {
                     {/* CSV Tag Autocomplete Suggestions Dropdown */}
                     {tagDropdownOpen && (() => {
                       // ONLY show custom tags explicitly created by the user during CSV uploads!
-                      const storedTags = getStoredCsvTags();
+                      // Derive suggestions straight from the actual current lead data (not the
+                      // separate, per-browser-only getStoredCsvTags() registry) — that registry
+                      // only gets written when a CSV is imported in *this* browser, so a fresh
+                      // session or a different device pulling the same data from Supabase would
+                      // otherwise see zero suggestions, even for genuine tags.
+                      const normalizeTag = (s: string) => s.trim().toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ');
                       const mockSourcesToIgnore = new Set([
-                        'facebook ads', 
-                        'old registrants email campaign', 
+                        'facebook ads',
+                        'old registrants email campaign',
                         'whatsapp invitation',
-                        'registration-report', 
-                        'registration report', 
-                        'manual-entry', 
-                        'contacts', 
-                        'leads', 
-                        'export', 
-                        'data', 
-                        'file', 
-                        'sheet', 
-                        'supabase', 
-                        'null', 
+                        'registration report',
+                        'manual entry',
+                        'contacts',
+                        'leads',
+                        'export',
+                        'data',
+                        'file',
+                        'sheet',
+                        'supabase',
+                        'null',
                         'undefined'
                       ]);
 
-                      const csvImportTags = storedTags.filter(t => {
+                      // A genuine CSV upload tag is assigned to a whole batch of contacts at
+                      // once, never just one — so also require more than a single contact to
+                      // actually carry it. This catches junk the ignore-list can't name up
+                      // front, like a data-quality bug where a contact's own name ended up in
+                      // their own sourceName field (one contact each, never a real "tag").
+                      const tagUsageCount = new Map<string, number>();
+                      getStoredLeads().forEach(l => {
+                        const src = (l.sourceName || '').trim();
+                        if (src && src !== '-') {
+                          tagUsageCount.set(src, (tagUsageCount.get(src) || 0) + 1);
+                        }
+                      });
+
+                      const combinedTags = new Set([...getStoredCsvTags(), ...Array.from(tagUsageCount.keys())]);
+
+                      const csvImportTags = Array.from(combinedTags).filter(t => {
                         if (!t || t === '-' || t.trim() === '') return false;
-                        return !mockSourcesToIgnore.has(t.trim().toLowerCase());
+                        if (mockSourcesToIgnore.has(normalizeTag(t))) return false;
+                        return (tagUsageCount.get(t) || 0) > 1;
                       });
 
                       if (csvImportTags.length === 0) return null;
@@ -1402,7 +1359,7 @@ export default function App() {
                             className="fixed inset-0 z-40" 
                             onClick={() => setTagDropdownOpen(false)}
                           />
-                          <div className="absolute left-0 right-0 mt-1 bg-white border border-purple-150 rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
+                          <div className="absolute left-0 right-0 mt-1 bg-[var(--surface-card-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
                             <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-purple-600 border-b border-purple-100 mb-1 flex items-center justify-between">
                               <span>Your Uploaded CSV Tags</span>
                               <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-bold">{csvImportTags.length} active</span>
@@ -1490,7 +1447,7 @@ export default function App() {
                 <button
                   onClick={handleExportCsv}
                   title="Export contacts to CSV"
-                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-black text-slate-800 bg-white rounded-xl cursor-pointer super-3d-white-btn"
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-black text-[var(--text-primary)] bg-[var(--surface-card)] rounded-xl cursor-pointer super-3d-white-btn"
                 >
                   <Download className="w-3.5 h-3.5 text-purple-600" />
                   <span>Download CSV</span>
@@ -1499,7 +1456,7 @@ export default function App() {
                 {/* Import CSV */}
                 <button
                   onClick={() => setIsImportOpen(true)}
-                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-black text-slate-800 bg-white rounded-xl cursor-pointer super-3d-white-btn"
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-black text-[var(--text-primary)] bg-[var(--surface-card)] rounded-xl cursor-pointer super-3d-white-btn"
                 >
                   <Upload className="w-3.5 h-3.5 text-purple-600" />
                   <span>Upload CSV</span>
@@ -1535,7 +1492,7 @@ export default function App() {
                     </button>
                     
                     {bulkMenuOpen && (
-                      <div className="absolute right-0 bottom-full mb-1.5 w-48 bg-white border border-gray-150 rounded-xl shadow-xl py-1.5 z-40">
+                      <div className="absolute right-0 bottom-full mb-1.5 w-48 bg-[var(--surface-card-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-1.5 z-40">
                         {/* Bulk save */}
                         <button
                           onClick={handleBulkSave}
@@ -1649,7 +1606,7 @@ export default function App() {
           </div>
 
           {/* Footer Pagination bar */}
-          <div className="h-12 border-t border-gray-200 px-6 flex items-center justify-between bg-white shrink-0 select-none">
+          <div className="h-12 border-t border-[var(--border-subtle)] px-6 flex items-center justify-between bg-[var(--surface-card)] shrink-0 select-none">
             
             {/* Counts info */}
             <div className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest font-mono">
@@ -1691,7 +1648,7 @@ export default function App() {
               </div>
 
               {/* Per page selector */}
-              <div className="relative flex items-center text-xs font-semibold text-gray-700 border border-gray-200 rounded-lg px-2.5 py-1 bg-white hover:bg-gray-50 transition-colors shadow-3xs">
+              <div className="relative flex items-center text-xs font-semibold text-[var(--text-secondary)] border border-[var(--border-subtle)] rounded-lg px-2.5 py-1 bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] transition-colors shadow-3xs">
                 <label htmlFor="rows-per-page-select" className="sr-only">Rows per page</label>
                 <select
                   id="rows-per-page-select"
@@ -1700,7 +1657,7 @@ export default function App() {
                     setLimit(Number(e.target.value));
                     setPage(1);
                   }}
-                  className="bg-transparent font-semibold text-gray-700 cursor-pointer focus:outline-none appearance-none pr-5 text-xs py-0.5"
+                  className="bg-transparent font-semibold text-[var(--text-secondary)] cursor-pointer focus:outline-none appearance-none pr-5 text-xs py-0.5"
                 >
                   <option value={10}>10 per page</option>
                   <option value={25}>25 per page</option>
@@ -1714,6 +1671,8 @@ export default function App() {
               </div>
 
             </div>
+
+          </div>
 
           </div>
 
@@ -1773,6 +1732,18 @@ export default function App() {
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         onImport={handleImportLeads}
+      />
+
+      <SupabaseModal
+        isOpen={isSupabaseOpen}
+        onClose={() => setIsSupabaseOpen(false)}
+        leads={getStoredLeads()}
+        onLeadsUpdated={(updatedLeads) => {
+          saveStoredLeads(updatedLeads);
+          setPage(1);
+          fetchLeads();
+          fetchFilterOptions();
+        }}
       />
 
       <ConfirmDeleteModal

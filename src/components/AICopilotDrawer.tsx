@@ -417,10 +417,10 @@ Operon AI Growth Team`;
   if (!isOpen) return null;
 
   return (
-    <div className="w-[430px] shrink-0 border-l border-gray-200 bg-white flex flex-col h-full shadow-2xl relative z-30 animate-slideIn">
+    <div className="w-[430px] shrink-0 border-l border-[var(--border-subtle)] bg-[var(--surface-card)] flex flex-col h-full shadow-2xl relative z-30 animate-slideIn">
       
       {/* Drawer Header */}
-      <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-indigo-50/40 via-white to-white">
+      <div className="px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-gradient-to-r from-indigo-50/40 via-[var(--surface-card)] to-[var(--surface-card)] dark:from-indigo-500/10">
         <div className="flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-100">
             <Sparkles className="w-4.5 h-4.5 text-white" />
@@ -434,20 +434,20 @@ Operon AI Growth Team`;
         </div>
         <button 
           onClick={onClose}
-          className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-650 transition-colors"
+          className="p-1.5 hover:bg-[var(--surface-hover)] rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
       {/* Tabs Row */}
-      <div className="flex border-b border-gray-200 p-1 bg-gray-50/50 shrink-0 select-none">
+      <div className="flex border-b border-[var(--border-subtle)] p-1 bg-[var(--surface-card-header)] shrink-0 select-none">
         <button
           onClick={() => setActiveTab('assistant')}
           className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center space-x-1 transition-all ${
             activeTab === 'assistant' 
-              ? 'bg-white text-indigo-700 shadow-3xs border border-gray-200/50' 
-              : 'text-gray-500 hover:text-gray-800'
+              ? 'bg-[var(--surface-card)] text-indigo-700 shadow-3xs border border-[var(--border-subtle)]' 
+              : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
           }`}
         >
           <Terminal className="w-3.5 h-3.5" />
@@ -457,8 +457,8 @@ Operon AI Growth Team`;
           onClick={() => setActiveTab('pitch')}
           className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center space-x-1 transition-all ${
             activeTab === 'pitch' 
-              ? 'bg-white text-indigo-700 shadow-3xs border border-gray-200/50' 
-              : 'text-gray-500 hover:text-gray-800'
+              ? 'bg-[var(--surface-card)] text-indigo-700 shadow-3xs border border-[var(--border-subtle)]' 
+              : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
           }`}
         >
           <Mail className="w-3.5 h-3.5" />
@@ -468,8 +468,8 @@ Operon AI Growth Team`;
           onClick={() => setActiveTab('matcher')}
           className={`flex-1 py-2 text-xs font-bold rounded-lg flex items-center justify-center space-x-1 transition-all ${
             activeTab === 'matcher' 
-              ? 'bg-white text-indigo-700 shadow-3xs border border-gray-200/50' 
-              : 'text-gray-500 hover:text-gray-800'
+              ? 'bg-[var(--surface-card)] text-indigo-700 shadow-3xs border border-[var(--border-subtle)]' 
+              : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
           }`}
         >
           <Target className="w-3.5 h-3.5" />
@@ -485,7 +485,7 @@ Operon AI Growth Team`;
           <div className="flex flex-col h-full space-y-3 animate-fadeIn">
             
             {/* Conversational Chat Log */}
-            <div className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-3 min-h-[300px] overflow-y-auto font-sans">
+            <div className="flex-1 bg-[var(--surface-card-header)] border border-[var(--border-subtle)] rounded-xl p-3 space-y-3 min-h-[300px] overflow-y-auto font-sans">
               {chatLogs.map((msg) => (
                 <div
                   key={msg.id}
@@ -497,14 +497,14 @@ Operon AI Growth Team`;
                     className={`max-w-[90%] rounded-xl p-3 text-xs leading-relaxed font-medium ${
                       msg.sender === 'user'
                         ? 'bg-indigo-600 text-white rounded-br-none shadow-sm font-semibold'
-                        : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-3xs'
+                        : 'bg-[var(--surface-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)] rounded-bl-none shadow-3xs'
                     }`}
                   >
                     <p className="whitespace-pre-wrap">{msg.text}</p>
 
                     {/* Result Details Card */}
                     {msg.result && msg.result.action === 'create' && msg.result.newLeadData && (
-                      <div className="mt-2 pt-2 border-t border-gray-150 text-2xs text-gray-700 space-y-1 bg-emerald-50/50 p-2 rounded-lg">
+                      <div className="mt-2 pt-2 border-t border-[var(--border-subtle)] text-2xs text-[var(--text-secondary)] space-y-1 bg-emerald-50/50 p-2 rounded-lg">
                         <div className="font-bold text-emerald-800 flex items-center space-x-1">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                           <span>Inserted Record</span>
@@ -516,7 +516,7 @@ Operon AI Growth Team`;
                     )}
 
                     {msg.result && msg.result.action === 'update' && (
-                      <div className="mt-2 pt-2 border-t border-gray-150 text-2xs text-gray-700 space-y-1 bg-amber-50/50 p-2 rounded-lg">
+                      <div className="mt-2 pt-2 border-t border-[var(--border-subtle)] text-2xs text-[var(--text-secondary)] space-y-1 bg-amber-50/50 p-2 rounded-lg">
                         <div className="font-bold text-amber-800 flex items-center space-x-1">
                           <CheckCircle2 className="w-3 h-3 text-amber-600" />
                           <span>Updated Record #{msg.result.targetLeadId}</span>
@@ -529,12 +529,12 @@ Operon AI Growth Team`;
                       </div>
                     )}
                   </div>
-                  <span className="text-[9px] text-gray-400 mt-1 px-1 font-mono">{msg.timestamp}</span>
+                  <span className="text-[9px] text-[var(--text-muted)] mt-1 px-1 font-mono">{msg.timestamp}</span>
                 </div>
               ))}
 
               {isProcessingCommand && (
-                <div className="flex items-center space-x-2 text-xs text-indigo-600 font-semibold bg-white p-2.5 rounded-xl border border-gray-200">
+                <div className="flex items-center space-x-2 text-xs text-indigo-600 font-semibold bg-[var(--surface-card)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
                   <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
                   <span>AI Assistant is understanding and executing payload...</span>
                 </div>
@@ -554,7 +554,7 @@ Operon AI Growth Team`;
                 }}
                 placeholder="Type natural language command... e.g. 'Search Procurement Managers' or 'Add lead VP Sales at Acme Corp' or 'Update lead #1 email to contact@acme.com'"
                 rows={2}
-                className="w-full text-xs p-3 pr-10 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 resize-none bg-white font-medium shadow-3xs"
+                className="w-full text-xs p-3 pr-10 border border-[var(--border-subtle)] rounded-xl focus:outline-hidden focus:border-indigo-500 resize-none bg-[var(--surface-card)] font-medium shadow-3xs"
               />
               <button
                 onClick={() => handleExecuteNLCommand()}
@@ -574,8 +574,8 @@ Operon AI Growth Team`;
           <div className="space-y-4 animate-fadeIn">
             
             {/* Selected Lead Profile Panel */}
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-150 relative">
-              <h3 className="text-2xs font-extrabold text-gray-400 uppercase tracking-wider mb-2.5 flex items-center space-x-1">
+            <div className="bg-[var(--surface-card-header)] rounded-xl p-4 border border-[var(--border-subtle)] relative">
+              <h3 className="text-2xs font-extrabold text-[var(--text-muted)] uppercase tracking-wider mb-2.5 flex items-center space-x-1">
                 <User className="w-3.5 h-3.5" />
                 <span>Target Lead Profile</span>
               </h3>
@@ -584,7 +584,7 @@ Operon AI Growth Team`;
                 <div className="space-y-3">
                   {selectedLeads.length > 1 && (
                     <div className="mb-2">
-                      <label className="block text-4xs font-extrabold text-gray-400 uppercase mb-1">
+                      <label className="block text-4xs font-extrabold text-[var(--text-muted)] uppercase mb-1">
                         Select Lead to Target ({selectedLeads.length} Selected)
                       </label>
                       <select
@@ -597,7 +597,7 @@ Operon AI Growth Team`;
                             setPitchResult(null);
                           }
                         }}
-                        className="w-full text-xs font-bold text-gray-700 py-1 px-2 border border-gray-200 rounded-lg bg-white focus:outline-hidden focus:border-indigo-500"
+                        className="w-full text-xs font-bold text-[var(--text-secondary)] py-1 px-2 border border-[var(--border-subtle)] rounded-lg bg-[var(--surface-card)] focus:outline-hidden focus:border-indigo-500"
                       >
                         {selectedLeads.map(l => (
                           <option key={l.id} value={l.id}>
@@ -610,26 +610,26 @@ Operon AI Growth Team`;
 
                   {selectedLeadForPitch && (
                     <div>
-                      <div className="font-extrabold text-sm text-neutral-900">
+                      <div className="font-extrabold text-sm text-[var(--text-primary)]">
                         {selectedLeadForPitch.firstName} {selectedLeadForPitch.lastName || ''}
                       </div>
                       
                       <div className="space-y-1.5 mt-2.5">
                         {selectedLeadForPitch.jobTitle && (
-                          <div className="flex items-center text-xs text-gray-600 font-medium">
-                            <Briefcase className="w-3.5 h-3.5 text-gray-400 mr-2 shrink-0" />
+                          <div className="flex items-center text-xs text-[var(--text-secondary)] font-medium">
+                            <Briefcase className="w-3.5 h-3.5 text-[var(--text-muted)] mr-2 shrink-0" />
                             <span>{selectedLeadForPitch.jobTitle}</span>
                           </div>
                         )}
                         {selectedLeadForPitch.organization && (
-                          <div className="flex items-center text-xs text-gray-600 font-medium">
-                            <Building className="w-3.5 h-3.5 text-gray-400 mr-2 shrink-0" />
+                          <div className="flex items-center text-xs text-[var(--text-secondary)] font-medium">
+                            <Building className="w-3.5 h-3.5 text-[var(--text-muted)] mr-2 shrink-0" />
                             <span className="font-bold text-indigo-650">{selectedLeadForPitch.organization}</span>
                           </div>
                         )}
                         {selectedLeadForPitch.city && (
-                          <div className="flex items-center text-xs text-gray-600 font-medium">
-                            <MapPin className="w-3.5 h-3.5 text-gray-400 mr-2 shrink-0" />
+                          <div className="flex items-center text-xs text-[var(--text-secondary)] font-medium">
+                            <MapPin className="w-3.5 h-3.5 text-[var(--text-muted)] mr-2 shrink-0" />
                             <span>{selectedLeadForPitch.city}</span>
                           </div>
                         )}
@@ -639,7 +639,7 @@ Operon AI Growth Team`;
                 </div>
               ) : (
                 <div className="text-center py-4 px-2">
-                  <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                  <p className="text-xs text-[var(--text-muted)] font-medium leading-relaxed">
                     No lead selected. Check the checkbox next to any lead in the directory table to load their context.
                   </p>
                 </div>
@@ -650,13 +650,13 @@ Operon AI Growth Team`;
               <div className="space-y-3 pt-1">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-4xs font-extrabold text-gray-400 uppercase tracking-wider mb-1">
+                    <label className="block text-4xs font-extrabold text-[var(--text-muted)] uppercase tracking-wider mb-1">
                       Outreach Angle
                     </label>
                     <select
                       value={outreachAngle}
                       onChange={(e) => setOutreachAngle(e.target.value)}
-                      className="w-full text-xs font-semibold text-gray-700 py-1.5 px-2.5 border border-gray-200 rounded-lg bg-white focus:outline-hidden focus:border-indigo-500 cursor-pointer shadow-3xs"
+                      className="w-full text-xs font-semibold text-[var(--text-secondary)] py-1.5 px-2.5 border border-[var(--border-subtle)] rounded-lg bg-[var(--surface-card)] focus:outline-hidden focus:border-indigo-500 cursor-pointer shadow-3xs"
                     >
                       <option value="Value-First Pitch">Value-First Pitch</option>
                       <option value="Quick Intro">Quick Intro</option>
@@ -666,13 +666,13 @@ Operon AI Growth Team`;
                   </div>
 
                   <div>
-                    <label className="block text-4xs font-extrabold text-gray-400 uppercase tracking-wider mb-1">
+                    <label className="block text-4xs font-extrabold text-[var(--text-muted)] uppercase tracking-wider mb-1">
                       Pitch Tone
                     </label>
                     <select
                       value={tone}
                       onChange={(e) => setTone(e.target.value)}
-                      className="w-full text-xs font-semibold text-gray-700 py-1.5 px-2.5 border border-gray-200 rounded-lg bg-white focus:outline-hidden focus:border-indigo-500 cursor-pointer shadow-3xs"
+                      className="w-full text-xs font-semibold text-[var(--text-secondary)] py-1.5 px-2.5 border border-[var(--border-subtle)] rounded-lg bg-[var(--surface-card)] focus:outline-hidden focus:border-indigo-500 cursor-pointer shadow-3xs"
                     >
                       <option value="Professional">Professional</option>
                       <option value="Casual">Casual</option>
@@ -703,39 +703,39 @@ Operon AI Growth Team`;
             )}
 
             {pitchResult && selectedLeadForPitch && (
-              <div className="space-y-4 pt-3 border-t border-gray-200/80 animate-fadeIn">
-                <div className="space-y-1 bg-gray-50/50 border border-gray-150 rounded-xl p-3">
+              <div className="space-y-4 pt-3 border-t border-[var(--border-subtle)] animate-fadeIn">
+                <div className="space-y-1 bg-[var(--surface-card-header)] border border-[var(--border-subtle)] rounded-xl p-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-4xs font-extrabold text-gray-400 uppercase tracking-wider">
+                    <span className="text-4xs font-extrabold text-[var(--text-muted)] uppercase tracking-wider">
                       Subject Line
                     </span>
                     <button
                       onClick={() => handleCopy(pitchResult.subject, 'subject')}
-                      className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center space-x-1"
+                      className="p-1 text-[var(--text-muted)] hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center space-x-1"
                     >
                       {copiedSubject ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                       <span className="text-4xs font-bold">{copiedSubject ? 'Copied' : 'Copy'}</span>
                     </button>
                   </div>
-                  <div className="text-xs font-extrabold text-neutral-900 bg-white border border-gray-200/50 rounded-lg p-2 mt-1">
+                  <div className="text-xs font-extrabold text-[var(--text-primary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-lg p-2 mt-1">
                     {pitchResult.subject}
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-4xs font-extrabold text-gray-400 uppercase tracking-wider">
+                    <span className="text-4xs font-extrabold text-[var(--text-muted)] uppercase tracking-wider">
                       Personalized Pitch Body
                     </span>
                     <button
                       onClick={() => handleCopy(pitchResult.body, 'body')}
-                      className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center space-x-1"
+                      className="p-1 text-[var(--text-muted)] hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors flex items-center space-x-1"
                     >
                       {copiedBody ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                       <span className="text-4xs font-bold">{copiedBody ? 'Copied' : 'Copy'}</span>
                     </button>
                   </div>
-                  <div className="text-xs text-gray-750 font-medium bg-white border border-gray-200 rounded-xl p-3.5 mt-1 leading-relaxed whitespace-pre-wrap font-sans">
+                  <div className="text-xs text-[var(--text-secondary)] font-medium bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl p-3.5 mt-1 leading-relaxed whitespace-pre-wrap font-sans">
                     {pitchResult.body}
                   </div>
                 </div>
@@ -765,7 +765,7 @@ Operon AI Growth Team`;
                   onChange={(e) => setIcpQuery(e.target.value)}
                   placeholder="e.g. 'Founders or CEOs based in Boston or SF interested in marketing tech'"
                   rows={3}
-                  className="w-full text-xs p-3 pr-10 border border-gray-200 rounded-xl focus:outline-hidden focus:border-indigo-500 resize-none bg-white font-medium"
+                  className="w-full text-xs p-3 pr-10 border border-[var(--border-subtle)] rounded-xl focus:outline-hidden focus:border-indigo-500 resize-none bg-[var(--surface-card)] font-medium"
                 />
                 <button
                   onClick={handleIcpMatch}
@@ -780,7 +780,7 @@ Operon AI Growth Team`;
             {matchResults && !isMatching && (
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-3xs font-extrabold text-gray-400 uppercase tracking-wider">
+                  <h4 className="text-3xs font-extrabold text-[var(--text-muted)] uppercase tracking-wider">
                     Scored Matches ({matchResults.length})
                   </h4>
                   {matchResults.length > 0 && (
@@ -803,13 +803,13 @@ Operon AI Growth Team`;
                     <div 
                       key={match.leadId}
                       onClick={() => onSelectLeadInTable(match.leadId)}
-                      className="group bg-white hover:bg-indigo-50/20 border border-gray-200 hover:border-indigo-150 rounded-xl p-3 cursor-pointer transition-all flex items-start justify-between"
+                      className="group bg-[var(--surface-card)] hover:bg-indigo-50/20 border border-[var(--border-subtle)] hover:border-indigo-150 rounded-xl p-3 cursor-pointer transition-all flex items-start justify-between"
                     >
                       <div className="space-y-1 flex-1 pr-3">
-                        <span className="font-extrabold text-xs text-neutral-900 group-hover:text-indigo-900 block">
+                        <span className="font-extrabold text-xs text-[var(--text-primary)] group-hover:text-indigo-900 block">
                           Lead #{match.leadId}
                         </span>
-                        <p className="text-xs font-semibold text-gray-700 italic">
+                        <p className="text-xs font-semibold text-[var(--text-secondary)] italic">
                           "{match.explanation}"
                         </p>
                       </div>
@@ -827,7 +827,7 @@ Operon AI Growth Team`;
       </div>
 
       {/* Drawer Footer Status */}
-      <div className="p-4 border-t border-gray-150 bg-gray-50 shrink-0 text-center flex items-center justify-between text-3xs font-black text-gray-400 uppercase tracking-widest select-none font-mono">
+      <div className="p-4 border-t border-[var(--border-subtle)] bg-[var(--surface-card-header)] shrink-0 text-center flex items-center justify-between text-3xs font-black text-[var(--text-muted)] uppercase tracking-widest select-none font-mono">
         <span>Credits Remaining</span>
         <span className="text-indigo-700 text-xs font-black font-mono">{creditBalance} Cr</span>
       </div>

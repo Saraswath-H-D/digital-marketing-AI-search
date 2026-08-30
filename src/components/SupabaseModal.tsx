@@ -149,7 +149,7 @@ export default function SupabaseModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: 'spring', duration: 0.35 }}
-            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]"
+            className="w-full max-w-2xl glass-modal overflow-hidden flex flex-col max-h-[90vh]"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white">
@@ -176,13 +176,13 @@ export default function SupabaseModal({
             </div>
 
             {/* Navigation Tabs */}
-            <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-3 space-x-6 text-xs font-semibold">
+            <div className="flex border-b border-[var(--border-subtle)] bg-[var(--surface-card-header)] px-6 pt-3 space-x-6 text-xs font-semibold">
               <button
                 onClick={() => setActiveTab('connect')}
                 className={`pb-3 flex items-center space-x-2 transition-all border-b-2 ${
                   activeTab === 'connect'
                     ? 'border-emerald-600 text-emerald-700'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <Server className="w-4 h-4" />
@@ -193,7 +193,7 @@ export default function SupabaseModal({
                 className={`pb-3 flex items-center space-x-2 transition-all border-b-2 ${
                   activeTab === 'sql'
                     ? 'border-emerald-600 text-emerald-700'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <Code2 className="w-4 h-4" />
@@ -204,7 +204,7 @@ export default function SupabaseModal({
                 className={`pb-3 flex items-center space-x-2 transition-all border-b-2 ${
                   activeTab === 'guide'
                     ? 'border-emerald-600 text-emerald-700'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                    : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <HelpCircle className="w-4 h-4" />
@@ -217,8 +217,8 @@ export default function SupabaseModal({
               {activeTab === 'connect' && (
                 <div className="space-y-5">
                   {/* Credentials Input */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3.5">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                  <div className="bg-[var(--surface-card-header)] border border-[var(--border-subtle)] rounded-xl p-4 space-y-3.5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center justify-between">
                       <span>Supabase Connection Settings</span>
                       <a
                         href="https://supabase.com/dashboard"
@@ -232,7 +232,7 @@ export default function SupabaseModal({
                     </h4>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                         Supabase Project URL
                       </label>
                       <input
@@ -240,12 +240,12 @@ export default function SupabaseModal({
                         value={config.url}
                         onChange={(e) => setConfig({ ...config, url: e.target.value })}
                         placeholder="https://your-project-id.supabase.co"
-                        className="w-full px-3.5 py-2 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        className="w-full px-3.5 py-2 text-xs font-mono bg-[var(--surface-input)] text-[var(--text-primary)] border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                         Supabase Anon / API Key
                       </label>
                       <input
@@ -253,12 +253,12 @@ export default function SupabaseModal({
                         value={config.anonKey}
                         onChange={(e) => setConfig({ ...config, anonKey: e.target.value })}
                         placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                        className="w-full px-3.5 py-2 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        className="w-full px-3.5 py-2 text-xs font-mono bg-[var(--surface-input)] text-[var(--text-primary)] border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                         Database Table Name
                       </label>
                       <input
@@ -266,7 +266,7 @@ export default function SupabaseModal({
                         value={config.tableName}
                         onChange={(e) => setConfig({ ...config, tableName: e.target.value })}
                         placeholder="registration_contacts"
-                        className="w-full px-3.5 py-2 text-xs font-mono bg-white border border-slate-300 rounded-lg focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                        className="w-full px-3.5 py-2 text-xs font-mono bg-[var(--surface-input)] text-[var(--text-primary)] border border-[var(--border-input)] rounded-lg focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                       />
                     </div>
 
@@ -294,7 +294,7 @@ export default function SupabaseModal({
                       <button
                         type="button"
                         onClick={handleSaveConfig}
-                        className="px-3.5 py-2 text-xs font-medium text-slate-700 hover:text-slate-900 underline"
+                        className="px-3.5 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] underline"
                       >
                         Save Configuration
                       </button>
@@ -320,13 +320,13 @@ export default function SupabaseModal({
                   </div>
 
                   {/* Sync Actions Box */}
-                  <div className="border border-slate-200 rounded-xl p-4 bg-white space-y-3">
+                  <div className="border border-[var(--border-subtle)] rounded-xl p-4 bg-[var(--surface-card)] space-y-3">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider flex items-center gap-1.5">
                         <Sparkles className="w-4 h-4 text-indigo-600" />
                         Excel Data Synchronization
                       </h4>
-                      <span className="text-xs text-slate-500 font-semibold">{leads.length} contacts loaded in Operon</span>
+                      <span className="text-xs text-[var(--text-muted)] font-semibold">{leads.length} contacts loaded in Operon</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
@@ -396,10 +396,10 @@ export default function SupabaseModal({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      <h4 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
                         Supabase SQL Setup Query
                       </h4>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <p className="text-xs text-[var(--text-muted)] mt-0.5">
                         Run this SQL query in your Supabase SQL Editor to create the exact table schema for this Registration Excel Report.
                       </p>
                     </div>
@@ -434,7 +434,7 @@ export default function SupabaseModal({
                       <Sparkles className="w-3.5 h-3.5 text-blue-600" />
                       Tip: Where to run this in Supabase?
                     </p>
-                    <p className="text-slate-600 leading-relaxed">
+                    <p className="text-[var(--text-secondary)] leading-relaxed">
                       1. Go to your Supabase Project Dashboard → click <strong>SQL Editor</strong> in the left navigation sidebar.<br />
                       2. Click <strong>+ New query</strong>, paste the script above, and click <strong>Run</strong>.<br />
                       3. Return here and click <strong>Push Excel to Supabase</strong>!
@@ -444,38 +444,38 @@ export default function SupabaseModal({
               )}
 
               {activeTab === 'guide' && (
-                <div className="space-y-4 text-xs text-slate-700">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                <div className="space-y-4 text-xs text-[var(--text-secondary)]">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)]">
                     How to connect Operon with Supabase (3 Simple Steps)
                   </h4>
 
                   <div className="space-y-3">
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                      <div className="font-bold text-slate-900 flex items-center space-x-2">
+                    <div className="p-3.5 bg-[var(--surface-card-header)] rounded-xl border border-[var(--border-subtle)] space-y-1">
+                      <div className="font-bold text-[var(--text-primary)] flex items-center space-x-2">
                         <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">1</span>
                         <span>Create or select a Supabase Project</span>
                       </div>
-                      <p className="text-slate-600 pl-7 leading-relaxed">
+                      <p className="text-[var(--text-secondary)] pl-7 leading-relaxed">
                         Go to <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-emerald-600 font-semibold underline">supabase.com</a> and sign in. Create a new free project or select an existing project.
                       </p>
                     </div>
 
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                      <div className="font-bold text-slate-900 flex items-center space-x-2">
+                    <div className="p-3.5 bg-[var(--surface-card-header)] rounded-xl border border-[var(--border-subtle)] space-y-1">
+                      <div className="font-bold text-[var(--text-primary)] flex items-center space-x-2">
                         <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">2</span>
                         <span>Get your Project URL & Anon Key</span>
                       </div>
-                      <p className="text-slate-600 pl-7 leading-relaxed">
+                      <p className="text-[var(--text-secondary)] pl-7 leading-relaxed">
                         In your Supabase project dashboard, navigate to <strong>Project Settings → API</strong>. Copy your <strong>Project URL</strong> and <strong>anon / public API key</strong> and paste them into the credentials tab above.
                       </p>
                     </div>
 
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                      <div className="font-bold text-slate-900 flex items-center space-x-2">
+                    <div className="p-3.5 bg-[var(--surface-card-header)] rounded-xl border border-[var(--border-subtle)] space-y-1">
+                      <div className="font-bold text-[var(--text-primary)] flex items-center space-x-2">
                         <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">3</span>
                         <span>Create the table & push Excel Sheet</span>
                       </div>
-                      <p className="text-slate-600 pl-7 leading-relaxed">
+                      <p className="text-[var(--text-secondary)] pl-7 leading-relaxed">
                         Copy the SQL query from the <strong>SQL Schema Generator</strong> tab, run it in Supabase SQL Editor, then click <strong>Push Excel to Supabase</strong> to sync all 51+ registrants!
                       </p>
                     </div>
@@ -485,14 +485,14 @@ export default function SupabaseModal({
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-              <span className="text-xs text-slate-500 font-medium">
+            <div className="px-6 py-3.5 bg-[var(--surface-card-header)] border-t border-[var(--border-subtle)] flex items-center justify-between">
+              <span className="text-xs text-[var(--text-muted)] font-medium">
                 {leads.length} contacts available for Supabase sync
               </span>
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors shadow-xs"
+                className="px-4 py-2 text-xs font-semibold text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-input)] rounded-lg hover:bg-[var(--surface-hover)] transition-colors shadow-xs"
               >
                 Close
               </button>

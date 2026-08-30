@@ -75,7 +75,7 @@ export default function SavedSearchesModal({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-      <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+      <div className="relative w-full max-w-xl bg-[var(--surface-card-elevated)] rounded-3xl shadow-2xl overflow-hidden border border-[var(--border-subtle)]" style={{ backdropFilter: 'blur(40px) saturate(180%)' }}>
         
         {/* Header */}
         <div className="px-6 py-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-indigo-900/50">
@@ -100,16 +100,16 @@ export default function SavedSearchesModal({
         {/* List Body */}
         <div className="p-6 space-y-3 max-h-96 overflow-y-auto scrollbar-thin">
           {savedSearches.length === 0 ? (
-            <p className="text-xs text-slate-400 py-6 text-center italic">No saved searches stored yet.</p>
+            <p className="text-xs text-[var(--text-muted)] py-6 text-center italic">No saved searches stored yet.</p>
           ) : (
             savedSearches.map((s) => (
-              <div 
-                key={s.id} 
-                className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between hover:bg-indigo-50/40 hover:border-indigo-200 transition-all group"
+              <div
+                key={s.id}
+                className="p-4 bg-[var(--surface-card-header)] border border-[var(--border-subtle)] rounded-2xl flex items-center justify-between hover:bg-indigo-50/40 hover:border-indigo-200 transition-all group"
               >
                 <div>
-                  <h4 className="text-xs font-extrabold text-slate-900 group-hover:text-indigo-900">{s.name}</h4>
-                  <div className="flex items-center space-x-2 text-3xs font-semibold text-slate-500 mt-1">
+                  <h4 className="text-xs font-extrabold text-[var(--text-primary)] group-hover:text-indigo-600">{s.name}</h4>
+                  <div className="flex items-center space-x-2 text-3xs font-semibold text-[var(--text-muted)] mt-1">
                     <span className="text-indigo-600 font-bold">{s.count} Matching Contacts</span>
                     <span>•</span>
                     <span>Updated {s.lastUpdated}</span>
@@ -119,7 +119,7 @@ export default function SavedSearchesModal({
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handleDelete(s.id)}
-                    className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                    className="p-2 rounded-xl text-[var(--text-muted)] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                     title="Delete Saved Search"
                   >
                     <Trash2 className="w-4 h-4" />

@@ -30,6 +30,9 @@ const SYSTEM_FIELDS = [
   { key: 'linkedinUrl', label: 'Person Linkedin Url', required: false, aliases: ['person linkdin url', 'person linkedin url', 'linkedin', 'linkedin url', 'linkedin_url', 'person linkedin', 'linkedin profile', 'profile url'] },
   { key: 'website', label: 'Website', required: false, aliases: ['website', 'company website', 'url', 'web', 'domain', 'company url', 'site'] },
   { key: 'companyLinkedinUrl', label: 'Company Linkedin Url', required: false, aliases: ['company linkdin url', 'company linkedin url', 'company linkedin', 'company_linkedin_url', 'org linkedin', 'organization linkedin'] },
+  { key: 'registrationTime', label: 'Registration Time', required: false, aliases: ['registration time', 'registrationtime', 'registration_time', 'reg time', 'registered at', 'registered on', 'submitted at', 'timestamp', 'created time', 'date registered'] },
+  { key: 'approvalStatus', label: 'Approval Status', required: false, aliases: ['approval status', 'approvalstatus', 'approval_status', 'registration status', 'rsvp status', 'attendee status'] },
+  { key: 'questions', label: 'Questions to Speaker', required: false, aliases: ['questions', 'question', 'questions to speaker', 'attendee questions', 'comments', 'remarks'] },
 ];
 
 export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterProps) {
@@ -55,23 +58,78 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     }
   };
 
-  // Helper to find best matching CSV column for a system field
-  const autoDetectColumn = (field: typeof SYSTEM_FIELDS[0], csvHeaders: string[]): string => {
-    // 1. Exact match first
-    for (const csvH of csvHeaders) {
-      const cleanH = csvH.toLowerCase().trim();
-      if (field.aliases.some(alias => cleanH === alias.toLowerCase().trim())) {
-        return csvH;
+  // Scan every system field against every CSV column and produce a collision-free
+  // mapping: all fields get a shot at an EXACT synonym match first (so e.g. an "Email
+  // Status" column is claimed by the emailStatus field before the email field's looser
+  // substring match can steal it), then any still-unmapped fields fall back to substring
+  // matching against whatever columns remain unclaimed.
+  const autoDetectAllColumns = (fields: typeof SYSTEM_FIELDS, csvHeaders: string[]): Record<string, string> => {
+    const mapping: Record<string, string> = {};
+    const usedHeaders = new Set<string>();
+
+    // Pass 1: exact (whole-header) synonym match
+    fields.forEach(field => {
+      for (const csvH of csvHeaders) {
+        if (usedHeaders.has(csvH)) continue;
+        const cleanH = csvH.toLowerCase().trim();
+        if (field.aliases.some(alias => cleanH === alias.toLowerCase().trim())) {
+          mapping[field.key] = csvH;
+          usedHeaders.add(csvH);
+          break;
+        }
       }
-    }
-    // 2. Substring match
-    for (const csvH of csvHeaders) {
-      const cleanH = csvH.toLowerCase().trim();
-      if (field.aliases.some(alias => cleanH.includes(alias.toLowerCase().trim()))) {
-        return csvH;
+    });
+
+    // Pass 2: substring synonym match, only among columns no other field has claimed yet.
+    // Skip question-phrased headers here (e.g. "Do Have A Source Name" — a yes/no
+    // attendee question, not an actual source value) since a long free-text sentence
+    // can coincidentally contain a short alias as a substring; only an exact match
+    // (pass 1) should ever claim those.
+    const looksLikeQuestion = (h: string): boolean => {
+      const words = h.trim().split(/\s+/);
+      if (words.length > 5) return true;
+      return /^(do|did|does|have|has|are|is|will|would|can|could|should)\s/i.test(h.trim()) || /\?\s*$/.test(h.trim());
+    };
+    fields.forEach(field => {
+      if (mapping[field.key]) return;
+      for (const csvH of csvHeaders) {
+        if (usedHeaders.has(csvH)) continue;
+        const cleanH = csvH.toLowerCase().trim();
+        if (looksLikeQuestion(cleanH)) continue;
+        if (field.aliases.some(alias => cleanH.includes(alias.toLowerCase().trim()))) {
+          mapping[field.key] = csvH;
+          usedHeaders.add(csvH);
+          break;
+        }
       }
-    }
-    return '';
+    });
+
+    return mapping;
+  };
+
+  // Score how strongly a raw row looks like the real header row — how many of its
+  // cells match a known field alias. Report-style exports (Zoom webinar registration
+  // reports, event platform exports, etc.) prepend several title/summary rows before
+  // the actual attendee table, e.g.:
+  //   Registration Report
+  //   Report generated on ...
+  //   Topic | ID | Scheduled | Duration | # Registrants | # Cancelled | ...
+  //   <summary values for the row above>
+  //   Attendee Details
+  //   First Name | Last Name | Email | Registration Time | Approval Status | ...   <- real header
+  // Papa.parse's header:true assumes row 1 is always the header, which would treat
+  // that preamble as columns and silently mis-map every field.
+  const scoreHeaderRow = (row: string[]): number => {
+    let score = 0;
+    row.forEach(cell => {
+      const clean = (cell || '').toLowerCase().trim();
+      if (!clean) return;
+      const isMatch = SYSTEM_FIELDS.some(f =>
+        f.aliases.some(alias => clean === alias || clean.includes(alias))
+      );
+      if (isMatch) score += 1;
+    });
+    return score;
   };
 
   const processFile = (selectedFile: File) => {
@@ -87,16 +145,18 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     setError('');
     setFile(selectedFile);
 
+    // Parse as raw rows first (no assumed header row) so we can locate the real
+    // header row ourselves — see scoreHeaderRow above.
     Papa.parse(selectedFile, {
-      header: true,
+      header: false,
       skipEmptyLines: true,
       complete: (results) => {
         if (results.errors.length > 0) {
           console.warn('CSV parse warnings:', results.errors);
         }
 
-        const data = results.data as any[];
-        if (data.length === 0) {
+        const rows = results.data as string[][];
+        if (rows.length === 0) {
           setError('The uploaded CSV file is empty.');
           setRawHeaders([]);
           setRawRows([]);
@@ -104,22 +164,65 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
           return;
         }
 
-        const headers = (results.meta.fields || (data[0] ? Object.keys(data[0]) : []))
-          .map(h => h.trim())
-          .filter(Boolean);
+        // Scan the first rows for the strongest header-row candidate. Require at
+        // least 2 recognizable field names before trusting it over row 0, so a
+        // normal, single-header-row CSV (whose column names might not hit our
+        // aliases strongly) still falls back to the standard row-0 assumption.
+        const SCAN_LIMIT = Math.min(20, rows.length);
+        let bestIdx = 0;
+        let bestScore = -1;
+        for (let i = 0; i < SCAN_LIMIT; i++) {
+          const row = rows[i];
+          const nonEmptyCount = row.filter(c => (c || '').trim()).length;
+          if (nonEmptyCount < 2) continue;
+          const score = scoreHeaderRow(row);
+          if (score > bestScore) {
+            bestScore = score;
+            bestIdx = i;
+          }
+        }
+        const headerRowIdx = bestScore >= 2 ? bestIdx : 0;
 
-        if (headers.length > 0) {
-          setActiveHeaders(headers);
+        const headerRow = rows[headerRowIdx].map(h => (h || '').trim());
+        const headers = headerRow.filter(Boolean);
+
+        if (headers.length === 0) {
+          setError('Could not find a valid header row in this CSV file.');
+          setRawHeaders([]);
+          setRawRows([]);
+          setParsedData([]);
+          return;
         }
 
+        const data = rows
+          .slice(headerRowIdx + 1)
+          .filter(r => r.some(c => (c || '').trim()))
+          .map(r => {
+            const obj: Record<string, string> = {};
+            headerRow.forEach((h, idx) => {
+              if (h) obj[h] = r[idx] !== undefined ? r[idx] : '';
+            });
+            return obj;
+          });
+
+        if (data.length === 0) {
+          setError('No contact rows found below the header row in this CSV file.');
+          setRawHeaders([]);
+          setRawRows([]);
+          setParsedData([]);
+          return;
+        }
+
+        if (headerRowIdx > 0) {
+          console.info(`Detected ${headerRowIdx} report/summary row(s) above the real header row — skipped them.`);
+        }
+
+        setActiveHeaders(headers);
         setRawHeaders(headers);
         setRawRows(data);
 
-        // Auto-detect initial header mapping
-        const initialMapping: Record<string, string> = {};
-        SYSTEM_FIELDS.forEach(field => {
-          initialMapping[field.key] = autoDetectColumn(field, headers);
-        });
+        // Auto-detect initial header mapping (collision-free across all fields at once)
+        const initialMapping: Record<string, string> = autoDetectAllColumns(SYSTEM_FIELDS, headers);
 
         // Special handling for full name if separate first/last name columns aren't found
         if (!initialMapping.firstName) {
@@ -284,22 +387,22 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
             transition={{ type: 'spring', duration: 0.4 }}
-            className="w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden my-6 flex flex-col max-h-[90vh]"
+            className="w-full max-w-4xl glass-modal overflow-hidden my-6 flex flex-col max-h-[90vh]"
           >
             {/* Modal Top Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-purple-50 via-indigo-50/50 to-white border-b border-gray-150 shrink-0">
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-purple-50 via-indigo-50/50 to-transparent dark:from-purple-500/10 dark:via-transparent dark:to-transparent border-b border-[var(--border-subtle)] shrink-0">
               <div className="flex items-center space-x-3">
                 <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md">
                   <FileSpreadsheet className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-purple-950 tracking-tight">Bulk Import Contacts & Mapping</h3>
-                  <p className="text-2xs text-purple-700/80 font-medium">Upload CSV, map header columns, and import into Operon directory & Supabase</p>
+                  <h3 className="text-base font-extrabold text-[var(--text-primary)] tracking-tight">Bulk Import Contacts & Mapping</h3>
+                  <p className="text-2xs text-[var(--text-muted)] font-medium">Upload CSV, map header columns, and import into Operon directory & Supabase</p>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-xl hover:bg-purple-100/80 text-gray-400 hover:text-gray-700 transition-colors"
+                className="p-1.5 rounded-xl hover:bg-[var(--surface-hover)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -338,11 +441,11 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                   <div className="w-14 h-14 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center mx-auto mb-3.5 shadow-sm">
                     <Upload className="w-7 h-7" />
                   </div>
-                  <p className="text-base font-bold text-purple-950">Drag & drop your CSV file here</p>
-                  <p className="text-xs text-purple-700/70 font-medium mt-1">or click to browse your computer files (CSV only)</p>
+                  <p className="text-base font-bold text-[var(--text-primary)]">Drag & drop your CSV file here</p>
+                  <p className="text-xs text-[var(--text-muted)] font-medium mt-1">or click to browse your computer files (CSV only)</p>
 
-                  <div className="mt-6 flex items-center justify-center flex-wrap gap-2 text-2xs font-bold text-gray-500">
-                    <span className="text-gray-400 uppercase tracking-widest">Supported Headers:</span>
+                  <div className="mt-6 flex items-center justify-center flex-wrap gap-2 text-2xs font-bold text-[var(--text-muted)]">
+                    <span className="text-[var(--text-muted)] uppercase tracking-widest">Supported Headers:</span>
                     <span className="bg-purple-100/80 text-purple-900 px-2.5 py-1 rounded-lg">First Name</span>
                     <span className="bg-purple-100/80 text-purple-900 px-2.5 py-1 rounded-lg">Last Name</span>
                     <span className="bg-purple-100/80 text-purple-900 px-2.5 py-1 rounded-lg">Email</span>
@@ -355,19 +458,19 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
               ) : (
                 <div className="space-y-4">
                   {/* File Metadata Header Bar */}
-                  <div className="flex items-center justify-between p-3.5 bg-purple-50/70 border border-purple-200/90 rounded-xl">
+                  <div className="flex items-center justify-between p-3.5 bg-purple-50/70 dark:bg-purple-500/10 border border-purple-200/90 dark:border-purple-400/20 rounded-xl">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
                         <Table className="w-5 h-5" />
                       </div>
                       <div>
                         <div className="flex items-center space-x-2">
-                          <p className="text-sm font-extrabold text-purple-950 truncate max-w-sm">{file.name}</p>
+                          <p className="text-sm font-extrabold text-[var(--text-primary)] truncate max-w-sm">{file.name}</p>
                           <span className="px-2 py-0.5 text-3xs font-extrabold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-300">
                             {rawRows.length} Rows Detected
                           </span>
                         </div>
-                        <p className="text-xs text-purple-700 font-medium">
+                        <p className="text-xs text-[var(--text-secondary)] font-medium">
                           {rawHeaders.length} CSV Columns • {parsedData.length} Valid Leads Mapped
                         </p>
                       </div>
@@ -375,7 +478,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
 
                     <div className="flex items-center space-x-2">
                       {/* View Tabs */}
-                      <div className="bg-white p-1 rounded-xl border border-purple-200 flex items-center space-x-1 shadow-2xs">
+                      <div className="bg-[var(--surface-card-elevated)] p-1 rounded-xl border border-[var(--border-subtle)] flex items-center space-x-1 shadow-2xs">
                         <button
                           type="button"
                           onClick={() => setActiveTab('mapping')}
@@ -422,13 +525,13 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
 
                   {/* TAB 1: INTERACTIVE HEADER MAPPING TABLE */}
                   {activeTab === 'mapping' && (
-                    <div className="border border-purple-200 rounded-xl overflow-hidden shadow-xs bg-white">
+                    <div className="border border-[var(--border-subtle)] rounded-xl overflow-hidden shadow-xs bg-[var(--surface-card)]">
                       <div className="bg-purple-100/70 px-4 py-2.5 border-b border-purple-200 flex items-center justify-between">
-                        <div className="flex items-center space-x-2 text-purple-950">
-                          <SlidersHorizontal className="w-4 h-4 text-purple-700" />
+                        <div className="flex items-center space-x-2 text-[var(--text-primary)]">
+                          <SlidersHorizontal className="w-4 h-4 text-[var(--text-secondary)]" />
                           <span className="text-xs font-black uppercase tracking-wider">CSV Header Mapping & Real Data Preview</span>
                         </div>
-                        <span className="text-2xs font-bold text-purple-800 bg-white px-2.5 py-0.5 rounded-full border border-purple-300">
+                        <span className="text-2xs font-bold text-purple-600 bg-[var(--surface-card)] px-2.5 py-0.5 rounded-full border border-purple-300">
                           Row 1 Live Sample Values Shown Below
                         </span>
                       </div>
@@ -443,7 +546,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                             <div
                               key={field.key}
                               className={`p-3 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3 transition-colors ${
-                                isMapped ? 'bg-white hover:bg-purple-50/30' : 'bg-gray-50/50 hover:bg-gray-100/50 opacity-80'
+                                isMapped ? 'bg-[var(--surface-card)] hover:bg-purple-50/30 dark:hover:bg-purple-500/10' : 'bg-[var(--surface-card-header)] hover:bg-[var(--surface-hover)] opacity-80'
                               }`}
                             >
                               {/* Left: System Field Label */}
@@ -455,12 +558,12 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                                 )}
                                 <div>
                                   <div className="flex items-center space-x-1.5">
-                                    <span className="font-extrabold text-purple-950">{field.label}</span>
+                                    <span className="font-extrabold text-[var(--text-primary)]">{field.label}</span>
                                     {field.required && (
                                       <span className="text-3xs font-extrabold bg-rose-100 text-rose-800 px-1.5 py-0.2 rounded uppercase">Required</span>
                                     )}
                                   </div>
-                                  <p className="text-3xs text-gray-400 font-mono">Field Key: {field.key}</p>
+                                  <p className="text-3xs text-[var(--text-muted)] font-mono">Field Key: {field.key}</p>
                                 </div>
                               </div>
 
@@ -471,8 +574,8 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                                   onChange={(e) => handleMappingChange(field.key, e.target.value)}
                                   className={`w-full py-1.5 px-3 text-xs font-semibold rounded-xl border focus:outline-none transition-all cursor-pointer ${
                                     isMapped
-                                      ? 'border-purple-300 bg-purple-50/40 text-purple-950 font-bold focus:ring-2 focus:ring-purple-500/20'
-                                      : 'border-gray-200 bg-white text-gray-400 focus:border-purple-400'
+                                      ? 'border-purple-300 bg-purple-50/40 text-[var(--text-primary)] font-bold focus:ring-2 focus:ring-purple-500/20'
+                                      : 'border-[var(--border-subtle)] bg-[var(--surface-card)] text-[var(--text-muted)] focus:border-purple-400'
                                   }`}
                                 >
                                   <option value="">-- (Do Not Import / Unmapped) --</option>
@@ -487,8 +590,8 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                               {/* Right: Sample Data Preview Pill */}
                               <div className="w-full md:w-64 shrink-0 text-right">
                                 <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-gray-100/80 border border-gray-200 max-w-full truncate">
-                                  <span className="text-3xs font-extrabold text-gray-400 uppercase tracking-wider shrink-0">Row 1:</span>
-                                  <span className={`text-2xs font-extrabold truncate ${sampleVal !== '-' ? 'text-slate-800 font-mono' : 'text-gray-400 italic'}`}>
+                                  <span className="text-3xs font-extrabold text-[var(--text-muted)] uppercase tracking-wider shrink-0">Row 1:</span>
+                                  <span className={`text-2xs font-extrabold truncate ${sampleVal !== '-' ? 'text-[var(--text-primary)] font-mono' : 'text-[var(--text-muted)] italic'}`}>
                                     {sampleVal}
                                   </span>
                                 </div>
@@ -502,18 +605,18 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
 
                   {/* TAB 2: PARSED LEAD RECORD PREVIEW */}
                   {activeTab === 'preview' && (
-                    <div className="border border-purple-200 rounded-xl overflow-hidden shadow-xs bg-white">
+                    <div className="border border-[var(--border-subtle)] rounded-xl overflow-hidden shadow-xs bg-[var(--surface-card)]">
                       <div className="bg-purple-100/70 px-4 py-2.5 border-b border-purple-200 flex items-center justify-between">
-                        <span className="text-xs font-black text-purple-950 uppercase tracking-wider">Processed Lead Objects Preview (First 5)</span>
-                        <Eye className="w-4 h-4 text-purple-700" />
+                        <span className="text-xs font-black text-[var(--text-primary)] uppercase tracking-wider">Processed Lead Objects Preview (First 5)</span>
+                        <Eye className="w-4 h-4 text-[var(--text-secondary)]" />
                       </div>
                       <div className="divide-y divide-purple-100 max-h-80 overflow-y-auto">
                         {parsedData.slice(0, 5).map((item, idx) => (
                           <div key={idx} className="p-3.5 text-xs flex justify-between items-center hover:bg-purple-50/20 transition-colors">
                             <div className="space-y-0.5">
-                              <p className="font-extrabold text-purple-950 text-sm">{item.firstName} {item.lastName}</p>
-                              <p className="text-purple-700 font-semibold">{item.email}</p>
-                              <div className="flex items-center space-x-3 text-3xs text-gray-500 font-medium pt-1">
+                              <p className="font-extrabold text-[var(--text-primary)] text-sm">{item.firstName} {item.lastName}</p>
+                              <p className="text-[var(--text-secondary)] font-semibold">{item.email}</p>
+                              <div className="flex items-center space-x-3 text-3xs text-[var(--text-muted)] font-medium pt-1">
                                 <span>Phone: {item.phone || '-'}</span>
                                 <span>•</span>
                                 <span>City: {item.city || '-'}</span>
@@ -523,7 +626,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                             </div>
                             <div className="text-right space-y-0.5">
                               <p className="font-bold text-gray-800">{item.jobTitle || 'No Title'}</p>
-                              <p className="text-gray-500 font-medium">{item.organization || 'No Company'}</p>
+                              <p className="text-[var(--text-muted)] font-medium">{item.organization || 'No Company'}</p>
                               <p className="text-3xs text-purple-600 font-semibold">{item.industry || 'General Industry'}</p>
                             </div>
                           </div>
@@ -546,7 +649,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                     value={importTag}
                     onChange={(e) => setImportTag(e.target.value)}
                     placeholder="Tag this CSV import (e.g. Q3-Marketing, Event-Leads)..."
-                    className="w-full pl-9 pr-3 py-2 text-xs font-bold border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 bg-purple-50/30 text-purple-950 placeholder-purple-400 transition-all shadow-2xs"
+                    className="w-full pl-9 pr-3 py-2 text-xs font-bold border border-purple-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 bg-purple-50/30 text-[var(--text-primary)] placeholder-purple-400 transition-all shadow-2xs"
                   />
                 </div>
 
@@ -554,7 +657,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2.5 text-xs font-extrabold text-purple-950 bg-white border border-purple-200 rounded-xl hover:bg-purple-50 focus:outline-none transition-colors cursor-pointer"
+                    className="px-4 py-2.5 text-xs font-extrabold text-[var(--text-primary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-hover)] focus:outline-none transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>

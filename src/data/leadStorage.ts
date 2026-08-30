@@ -76,57 +76,58 @@ export const removeCsvTag = (tag: string): void => {
   }
 })();
 
-export const getActiveHeaders = (): string[] | null => {
-  try {
-    const raw = localStorage.getItem(HEADERS_KEY) || localStorage.getItem(LEGACY_HEADERS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (err) {
-    console.error('Error reading active headers:', err);
-  }
-  return null;
-};
+// Fixed, canonical column schema for the app. This NEVER changes based on what CSV is
+// uploaded — every incoming file's own column names are synonym-mapped onto this exact
+// list (see CsvImporter's SYSTEM_FIELDS + autoDetectColumn), so the table columns, CSV
+// export, and Supabase header metadata stay identical no matter which file was imported.
+export const FIXED_HEADERS: string[] = [
+  'First Name', 'Last Name', 'Email', 'Phone Number', 'Job Title', 'Company Name',
+  'City', 'State', 'Country', 'Source', 'Email Status', 'Seniority', 'Department',
+  'Industry', 'Employee Size', 'Person Linkedin Url', 'Website', 'Company Linkedin Url'
+];
 
-export const replaceActiveHeaders = (headers: string[]): void => {
-  try {
-    const clean = Array.from(new Set(headers.map(h => h.trim()).filter(Boolean)));
-    localStorage.setItem(HEADERS_KEY, JSON.stringify(clean));
-  } catch (err) {
-    console.error('Error replacing active headers:', err);
-  }
-};
-
-export const setActiveHeaders = (headers: string[], forceReplace: boolean = false): void => {
-  try {
-    const current = getActiveHeaders();
-    if (forceReplace || !current || current.length === 0) {
-      replaceActiveHeaders(headers);
-      return;
-    }
-
-    const mergedSet = new Set<string>();
-    
-    // Preserve existing headers first
-    current.forEach(h => {
-      if (h && h.trim()) mergedSet.add(h.trim());
-    });
-
-    // Add new unique headers from new CSV file (skip if already present)
-    headers.forEach(h => {
-      if (h && h.trim()) {
-        const lowerH = h.trim().toLowerCase();
-        const exists = Array.from(mergedSet).some(existing => existing.toLowerCase() === lowerH);
-        if (!exists) {
-          mergedSet.add(h.trim());
-        }
-      }
-    });
-
-    const finalHeaders = Array.from(mergedSet);
-    localStorage.setItem(HEADERS_KEY, JSON.stringify(finalHeaders));
-  } catch (err) {
-    console.error('Error writing active headers:', err);
+// Exact 1:1 mapping from a fixed header label to its Lead field value (used by CSV
+// export & Supabase header metadata so columns can never drift or be mis-mapped).
+export const getFixedHeaderValue = (lead: Lead, header: string): string => {
+  const v = (val: any) => {
+    if (val === undefined || val === null) return '-';
+    const str = String(val).trim();
+    return (str === '' || str === 'undefined' || str === 'null') ? '-' : str;
+  };
+  switch (header) {
+    case 'First Name': return v(lead.firstName);
+    case 'Last Name': return v(lead.lastName);
+    case 'Email': return v(lead.email);
+    case 'Phone Number': return v(lead.phone);
+    case 'Job Title': return v(lead.jobTitle);
+    case 'Company Name': return v(lead.organization);
+    case 'City': return v(lead.city);
+    case 'State': return v(lead.state);
+    case 'Country': return v(lead.country);
+    case 'Source': return v(lead.sourceName);
+    case 'Email Status': return v(lead.emailStatus);
+    case 'Seniority': return v(lead.seniority);
+    case 'Department': return v(lead.department);
+    case 'Industry': return v(lead.industry);
+    case 'Employee Size': return v(lead.companySize);
+    case 'Person Linkedin Url': return v(lead.linkedinUrl);
+    case 'Website': return v(lead.website);
+    case 'Company Linkedin Url': return v(lead.companyLinkedinUrl);
+    default: return '-';
   }
 };
+
+// Headers are permanently fixed to FIXED_HEADERS (see above) — this always returns the
+// same schema regardless of what was uploaded, so table columns / CSV export / Supabase
+// metadata never drift between imports.
+export const getActiveHeaders = (): string[] => {
+  return FIXED_HEADERS;
+};
+
+// Kept as no-ops so existing call sites (CSV import, Supabase pull) don't need to change:
+// the header schema is fixed by design and can no longer be overwritten by an upload.
+export const replaceActiveHeaders = (_headers: string[]): void => {};
+export const setActiveHeaders = (_headers: string[], _forceReplace: boolean = false): void => {};
 
 const cleanVal = (val: any) => {
   if (val === undefined || val === null) return '-';
@@ -581,13 +582,21 @@ export const getFilterOptions = (): FilterOptions => {
     return Array.from(set).sort();
   };
 
-  const activeHeaders = getActiveHeaders();
   const customFilterMap: Record<string, string[]> = {};
 
-  // Gather all columns from uploaded CSV headers OR stored lead keys
-  const allCsvColumns = (activeHeaders && activeHeaders.length > 0)
-    ? activeHeaders
-    : (leads.length > 0 ? Object.keys(leads[0]).filter(k => !['id', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked', '_csvHeaders'].includes(k)) : []);
+  // Fixed schema fields are already covered by dedicated filter arrays above; only
+  // surface genuinely extra/custom CSV columns (beyond FIXED_HEADERS) as ad-hoc filters.
+  const KNOWN_LEAD_KEYS = new Set([
+    'id', 'firstName', 'lastName', 'email', 'phone', 'organization', 'jobTitle', 'city',
+    'state', 'country', 'sourceName', 'emailStatus', 'seniority', 'department', 'industry',
+    'companySize', 'linkedinUrl', 'website', 'companyLinkedinUrl', 'registrationTime',
+    'approvalStatus', 'questions', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked',
+    '_csvHeaders', 'intent', 'technologies', 'tags', 'notes', 'aiScore', 'aiValueReasons',
+    'revenue', 'funding'
+  ]);
+  const allCsvColumns = leads.length > 0
+    ? Object.keys(leads[0]).filter(k => !KNOWN_LEAD_KEYS.has(k))
+    : [];
 
   allCsvColumns.forEach(col => {
     const valSet = new Set<string>();

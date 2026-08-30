@@ -40,6 +40,7 @@ export const getSupabaseConfig = (): SupabaseConfig => {
 
 export const saveSupabaseConfig = (config: SupabaseConfig): void => {
   localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify(config));
+  knownMissingColumns = new Set<string>();
 };
 
 let supabaseInstance: SupabaseClient | null = null;
@@ -105,6 +106,11 @@ const safeAtob = (b64: string): string => {
   }
 };
 
+// Columns confirmed missing from the live table's schema cache, learned during this
+// browser session. Reset on saveSupabaseConfig() since a different project/table may
+// have a different (or freshly-fixed) schema.
+let knownMissingColumns = new Set<string>();
+
 export const pushLeadsToSupabase = async (
   leads: Lead[],
   config?: SupabaseConfig
@@ -138,6 +144,27 @@ export const pushLeadsToSupabase = async (
     // Ignore error
   }
 
+  // 1b. Look up existing ids for any of these emails so a contact that already exists
+  // remotely never gets reassigned a fresh id: reusing its real id keeps the primary
+  // key stable across re-pushes (instead of drifting upward every time) and avoids a
+  // freshly-assigned id ever landing on a *different* row's actual primary key.
+  const existingIdByEmail = new Map<string, number>();
+  try {
+    const candidateEmails = Array.from(new Set(
+      leads.map(l => (l.email || '').trim().toLowerCase()).filter(e => e && e !== '-' && e.includes('@'))
+    ));
+    const LOOKUP_CHUNK = 200;
+    for (let i = 0; i < candidateEmails.length; i += LOOKUP_CHUNK) {
+      const chunk = candidateEmails.slice(i, i + LOOKUP_CHUNK);
+      const { data } = await client.from(tableName).select('id, email').in('email', chunk);
+      (data || []).forEach((row: any) => {
+        if (row.email && row.id) existingIdByEmail.set(String(row.email).trim().toLowerCase(), Number(row.id));
+      });
+    }
+  } catch (e) {
+    // Non-fatal — falls back to assigning fresh ids for everything below
+  }
+
   // 2. Identify custom columns present on lead objects
   const internalKeys = new Set(['_csvHeaders', 'id', 'firstName', 'lastName', 'email', 'registrationTime', 'approvalStatus', 'city', 'phone', 'organization', 'jobTitle', 'questions', 'sourceName', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked']);
 
@@ -162,9 +189,11 @@ export const pushLeadsToSupabase = async (
       }
     }
 
-    // Always assign a fresh incremental primary key ID starting strictly at dbMaxId + index + 1
-    // Deleted lead IDs are NEVER considered for primary key allocation!
-    const assignedId = dbMaxId + index + 1;
+    // Reuse the row's existing real id if this email already exists remotely;
+    // otherwise assign a fresh incremental primary key strictly at dbMaxId + index + 1
+    // (deleted lead ids are never considered for allocation).
+    const existingId = hasValidEmail ? existingIdByEmail.get(rawEmail) : undefined;
+    const assignedId = existingId || (dbMaxId + index + 1);
 
     // Extract custom/extra key-values for flexible CSV header support
     const customMeta: Record<string, string> = {};
@@ -231,61 +260,92 @@ export const pushLeadsToSupabase = async (
     return row;
   });
 
+  // The email column carries the table's actual UNIQUE constraint
+  // (registration_contacts_email_key) — id does not. Upserting on 'id' means any
+  // contact re-pushed under a freshly-computed local id (new session, re-import,
+  // different device) collides with its own earlier row's email and is rejected
+  // outright (23505). Upserting on 'email' lets Supabase correctly update that
+  // existing row instead.
+  const UPSERT_CONFLICT_TARGET = 'email';
+
+  // A Supabase/PostgREST "schema cache" error names exactly one missing column at a
+  // time, e.g. "Could not find the 'company_linkedin_url' column of ... in the schema
+  // cache". Parse it out so we can drop just that one column and retry, instead of
+  // collapsing the whole batch down to a bare core set and losing every other field.
+  const parseMissingColumn = (message: string | undefined): string | null => {
+    if (!message) return null;
+    const match = message.match(/Could not find the '([^']+)' column/);
+    return match ? match[1] : null;
+  };
+
+  const omitColumn = (rows: Record<string, any>[], col: string): Record<string, any>[] =>
+    rows.map(row => {
+      const { [col]: _omitted, ...rest } = row;
+      return rest;
+    });
+
+  // Pre-strip columns this session has already learned are missing from the live
+  // table, so a table that's out of date by many columns doesn't repeat the same
+  // discover-one-column-per-round-trip dance on every subsequent push.
+  let batchStart = rowsToInsert;
+  if (knownMissingColumns.size > 0) {
+    batchStart = rowsToInsert.map(row => {
+      const clean = { ...row };
+      knownMissingColumns.forEach(col => { delete clean[col]; });
+      return clean;
+    });
+  }
+
   const BATCH_SIZE = 500;
   let totalPushed = 0;
   let lastError = '';
 
-  for (let i = 0; i < rowsToInsert.length; i += BATCH_SIZE) {
-    const batch = rowsToInsert.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < batchStart.length; i += BATCH_SIZE) {
+    let batch = batchStart.slice(i, i + BATCH_SIZE);
+    const droppedColumns = new Set<string>();
+    let settled = false;
 
-    try {
-      // High-Speed Bulk Upsert for 100,000+ records
-      const { error } = await client
-        .from(tableName)
-        .upsert(batch, { onConflict: 'id' });
+    // Retry loop: on a "missing column" schema-cache error, drop just that column and
+    // try again — the live table may simply be a version or two behind the columns
+    // this app knows how to write. Bounded by the column count so it can't spin forever.
+    for (let attempt = 0; attempt < 25 && !settled; attempt++) {
+      try {
+        const { error } = await client
+          .from(tableName)
+          .upsert(batch, { onConflict: UPSERT_CONFLICT_TARGET });
 
-      if (error) {
+        if (!error) {
+          totalPushed += batch.length;
+          settled = true;
+          break;
+        }
+
+        const missingCol = parseMissingColumn(error.message);
+        if (missingCol && batch[0] && Object.prototype.hasOwnProperty.call(batch[0], missingCol) && !droppedColumns.has(missingCol)) {
+          console.warn(`Supabase table '${tableName}' is missing column '${missingCol}' — retrying without it. Re-run the SQL Schema Generator in the Supabase modal to add it permanently.`);
+          droppedColumns.add(missingCol);
+          knownMissingColumns.add(missingCol);
+          batch = omitColumn(batch, missingCol);
+          continue;
+        }
+
+        // Not a recognizable/fixable "missing column" error — fall back to row-by-row
+        // so at least the valid rows in this batch still make it through.
         console.warn(`Supabase upsert chunk at index ${i} warning:`, error.message);
         lastError = error.message;
-
-        // Fallback Tier 2: Strip optional extended columns if schema cache missing column error occurs
-        const coreBatch = batch.map(row => ({
-          id: row.id,
-          first_name: row.first_name,
-          last_name: row.last_name,
-          email: row.email,
-          phone: row.phone || row.phone_number || '',
-          registration_time: row.registration_time,
-          approval_status: row.approval_status,
-          organization: row.organization || row.company_name || '',
-          job_title: row.job_title,
-          city: row.city,
-          questions: row.questions,
-          source_name: row.source_name || row.source || '-',
-          created_at: row.created_at
-        }));
-
-        const { error: coreErr } = await client
-          .from(tableName)
-          .upsert(coreBatch, { onConflict: 'id' });
-
-        if (!coreErr) {
-          totalPushed += coreBatch.length;
-        } else {
-          // Fallback Tier 3: Row-by-row upsert so valid rows succeed regardless
-          for (const singleRow of coreBatch) {
-            const { error: rowErr } = await client
-              .from(tableName)
-              .upsert([singleRow], { onConflict: 'id' });
-            if (!rowErr) totalPushed += 1;
-          }
+        for (const singleRow of batch) {
+          const { error: rowErr } = await client
+            .from(tableName)
+            .upsert([singleRow], { onConflict: UPSERT_CONFLICT_TARGET });
+          if (!rowErr) totalPushed += 1;
+          else lastError = rowErr.message;
         }
-      } else {
-        totalPushed += batch.length;
+        settled = true;
+      } catch (err: any) {
+        console.warn(`Exception during chunk push at index ${i}:`, err);
+        lastError = err?.message || 'Push error';
+        settled = true;
       }
-    } catch (err: any) {
-      console.warn(`Exception during chunk push at index ${i}:`, err);
-      lastError = err?.message || 'Push error';
     }
   }
 
@@ -470,27 +530,30 @@ export const deleteLeadFromSupabase = async (
 ): Promise<{ success: boolean; error?: string }> => {
   const activeConfig = config || getSupabaseConfig();
   const client = getSupabaseClient(activeConfig);
-  
+
   if (!client) {
     return { success: false, error: 'Supabase client missing' };
   }
 
   const tableName = activeConfig.tableName || 'registration_contacts';
   const cleanEmail = (identifier.email || '').trim();
-  const leadId = identifier.id;
 
+  // NEVER delete by `id` here: pullLeadsFromSupabase() renumbers every lead's local
+  // `id` to 1..N by list position on every pull, completely disconnected from the row's
+  // real Supabase primary key. Deleting `WHERE id = <local id>` deletes whatever
+  // unrelated real row happens to hold that small number as its actual primary key.
+  // Email carries the table's real unique constraint and is the only identifier that's
+  // safe to delete by.
   try {
-    // 1. Delete by Primary Key ID in Supabase
-    if (leadId && Number(leadId) > 0) {
-      const { error: idErr } = await client.from(tableName).delete().eq('id', Number(leadId));
-      if (idErr) console.warn('Supabase delete by ID warn:', idErr);
-    }
-    // 2. Also delete by email if valid
     if (cleanEmail && cleanEmail !== '-' && cleanEmail !== 'undefined' && cleanEmail !== 'null') {
       const { error: emailErr } = await client.from(tableName).delete().eq('email', cleanEmail);
       if (emailErr) console.warn('Supabase delete by email warn:', emailErr);
+      return { success: !emailErr, error: emailErr?.message };
     }
-    return { success: true };
+    // No usable email to delete by (e.g. a blank-contact row whose real, synthetic
+    // email was scrubbed to '-' on pull) — skip the remote delete rather than guess.
+    console.warn('Skipped Supabase delete: no reliable email identifier for this lead.');
+    return { success: false, error: 'No reliable email identifier to delete by' };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Delete operation failed' };
   }
@@ -508,22 +571,15 @@ export const bulkDeleteLeadsFromSupabase = async (
   }
 
   const tableName = activeConfig.tableName || 'registration_contacts';
-  const idsToDelete = leads.map(l => l.id).filter(id => id && Number(id) > 0);
+  // Deliberately NOT deleting by `id` here — see deleteLeadFromSupabase's comment.
+  // Local ids are a display-order renumbering (1..N per pull), not the real primary
+  // key, so `.in('id', ...)` would delete arbitrary unrelated rows.
   const emailsToDelete = leads
     .map(l => (l.email || '').trim())
     .filter(e => e && e !== '-' && e !== 'undefined' && e !== 'null');
 
   try {
     let deletedCount = 0;
-    if (idsToDelete.length > 0) {
-      const { data } = await client
-        .from(tableName)
-        .delete()
-        .in('id', idsToDelete)
-        .select();
-
-      if (data) deletedCount += data.length;
-    }
     if (emailsToDelete.length > 0) {
       const { data } = await client
         .from(tableName)
@@ -579,17 +635,15 @@ export const deleteLeadsByTagFromSupabase = async (
   try {
     let deletedCount = 0;
 
-    // Tier 1: Delete by IDs & Emails of matching leads if provided
+    // Tier 1: Delete by email of matching leads if provided. Deliberately NOT deleting
+    // by `id` — see deleteLeadFromSupabase's comment: local ids are a display-order
+    // renumbering, not the real primary key, so `.in('id', ...)` would delete
+    // arbitrary unrelated rows.
     if (targetLeads && targetLeads.length > 0) {
-      const ids = targetLeads.map(l => l.id).filter(id => id && Number(id) > 0);
       const emails = targetLeads
         .map(l => (l.email || '').trim())
         .filter(e => e && e !== '-' && e !== 'undefined' && e !== 'null');
 
-      if (ids.length > 0) {
-        const { data } = await client.from(tableName).delete().in('id', ids).select();
-        if (data) deletedCount += data.length;
-      }
       if (emails.length > 0) {
         const { data } = await client.from(tableName).delete().in('email', emails).select();
         if (data) deletedCount += data.length;
@@ -655,18 +709,32 @@ ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS last_name TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS phone_number TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS job_title TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS company_name TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS organization TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS city TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS state TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS country TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS source_name TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS email_status TEXT DEFAULT 'Verified';
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS seniority TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS department TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS industry TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS employee_size TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS person_linkedin_url TEXT;
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS website TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS company_linkedin_url TEXT;
+
+-- 2b. Make sure email actually carries the unique constraint the app upserts against
+-- (safe to re-run; no-ops if it's already there under this name)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = '${tableName}_email_key'
+  ) THEN
+    ALTER TABLE public.${tableName} ADD CONSTRAINT ${tableName}_email_key UNIQUE (email);
+  END IF;
+END $$;
 
 -- 3. Allow explicit ID insertion starting from 1
 ALTER TABLE public.${tableName} ALTER COLUMN id DROP IDENTITY IF EXISTS;
@@ -678,10 +746,12 @@ ALTER TABLE public.${tableName} ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public read access" ON public.${tableName};
 DROP POLICY IF EXISTS "Allow public insert access" ON public.${tableName};
 DROP POLICY IF EXISTS "Allow public update access" ON public.${tableName};
+DROP POLICY IF EXISTS "Allow public delete access" ON public.${tableName};
 
 CREATE POLICY "Allow public read access" ON public.${tableName} FOR SELECT USING (true);
 CREATE POLICY "Allow public insert access" ON public.${tableName} FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update access" ON public.${tableName} FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete access" ON public.${tableName} FOR DELETE USING (true);
 
 -- OPTIONAL: If your existing table in Supabase has rows with old IDs (e.g. 1000+),
 -- run this single line to re-number all existing rows starting from 1 (1, 2, 3...):

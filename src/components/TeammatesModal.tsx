@@ -29,7 +29,7 @@ export default function TeammatesModal({ isOpen, onClose, onShowMessage }: Teamm
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200">
+      <div className="relative w-full max-w-lg bg-[var(--surface-card-elevated)] rounded-3xl shadow-2xl overflow-hidden border border-[var(--border-subtle)]" style={{ backdropFilter: 'blur(40px) saturate(180%)' }}>
         
         {/* Header */}
         <div className="px-6 py-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-indigo-900/50">
@@ -54,7 +54,7 @@ export default function TeammatesModal({ isOpen, onClose, onShowMessage }: Teamm
         {/* Form Body */}
         <form onSubmit={handleInvite} className="p-6 space-y-4">
           <div>
-            <label className="text-3xs font-extrabold text-slate-600 uppercase tracking-wider block mb-1.5">
+            <label className="text-3xs font-extrabold text-[var(--text-muted)] uppercase tracking-wider block mb-1.5">
               Teammate Email Addresses (Comma or Newline separated)
             </label>
             <textarea
@@ -62,13 +62,13 @@ export default function TeammatesModal({ isOpen, onClose, onShowMessage }: Teamm
               value={emailsText}
               onChange={(e) => setEmailsText(e.target.value)}
               placeholder="e.g. sarah.rep@company.com, mike.manager@company.com"
-              className="w-full text-xs font-medium p-3.5 border border-slate-200 rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-slate-50/50"
+              className="w-full text-xs font-medium p-3.5 border border-[var(--border-input)] rounded-2xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-[var(--surface-input)] text-[var(--text-primary)]"
               required
             />
           </div>
 
           <div>
-            <label className="text-3xs font-extrabold text-slate-600 uppercase tracking-wider block mb-1.5">
+            <label className="text-3xs font-extrabold text-[var(--text-muted)] uppercase tracking-wider block mb-1.5">
               Select Enterprise Access Role
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -84,11 +84,11 @@ export default function TeammatesModal({ isOpen, onClose, onShowMessage }: Teamm
                   className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                     role === r.name
                       ? 'border-indigo-600 bg-indigo-50/80 text-indigo-900 ring-2 ring-indigo-500/20 font-bold'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      : 'border-[var(--border-subtle)] bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   <span className="text-xs font-extrabold block">{r.name}</span>
-                  <span className="text-[10px] text-slate-500 font-medium leading-tight block mt-0.5">{r.desc}</span>
+                  <span className="text-[10px] text-[var(--text-muted)] font-medium leading-tight block mt-0.5">{r.desc}</span>
                 </button>
               ))}
             </div>
@@ -98,7 +98,7 @@ export default function TeammatesModal({ isOpen, onClose, onShowMessage }: Teamm
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 text-xs font-extrabold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-2.5 text-xs font-extrabold text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] rounded-xl transition-colors cursor-pointer"
             >
               Cancel
             </button>

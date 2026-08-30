@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Theme is toggled via [data-theme="dark"] on <html>, not the OS color-scheme, so
+   Tailwind's dark: variant must key off that attribute instead of its default
+   prefers-color-scheme media query — otherwise every dark: utility class in the app
+   is inert against the in-app toggle. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @layer base {
   :root {
     --text-primary: #1E1B4B;
@@ -489,13 +495,17 @@
   background: rgba(148, 163, 184, 0.7);
 }
 
-/* Dark mode safety net */
-[data-theme="dark"] .app-main p,
-[data-theme="dark"] .app-main span,
-[data-theme="dark"] .app-main div,
-[data-theme="dark"] .app-main h1,
-[data-theme="dark"] .app-main h2,
-[data-theme="dark"] .app-main h3,
-[data-theme="dark"] .app-main h4 {
-  color: inherit;
+/* Dark mode safety net (Design.md §1): force readable light text on plain elements
+   inside .app-main, but never on badges/buttons or anything that sets its own
+   background (inline `style`, or a Tailwind `bg-*`/`bg-[...]` class) — those already
+   carry a colour designed to stay put, and forcing it here would make coloured
+   badge/button/pill text unreadable against its own background. */
+[data-theme="dark"] .app-main p:not([class*="badge"]):not([class*="btn"]):not([class*="bg-"]):not([style*="background"]),
+[data-theme="dark"] .app-main span:not([class*="badge"]):not([class*="btn"]):not([class*="bg-"]):not([style*="background"]),
+[data-theme="dark"] .app-main div:not([class*="badge"]):not([class*="btn"]):not([class*="bg-"]):not([style*="background"]),
+[data-theme="dark"] .app-main h1:not([class*="badge"]):not([class*="btn"]):not([class*="bg-"]),
+[data-theme="dark"] .app-main h2:not([class*="badge"]):not([class*="btn"]):not([class*="bg-"]),
+[data-theme="dark"] .app-main h3:not([class*="badge"]):not([class*="btn"]):not([class*="bg-"]),
+[data-theme="dark"] .app-main h4:not([class*="badge"]):not([class*="btn"]):not([class*="bg-"]) {
+  color: var(--text-primary);
 }
