@@ -660,88 +660,100 @@ export const deleteLeadsByTagFromSupabase = async (
 ): Promise<{ success: boolean; count: number; error?: string }> => {
   const activeConfig = config || getSupabaseConfig();
   const client = getSupabaseClient(activeConfig);
-  
+
   if (!client || !tag || !tag.trim()) {
     return { success: false, count: 0, error: 'Tag missing or Supabase client unconfigured' };
   }
 
   const tableName = activeConfig.tableName || 'registration_contacts';
   const rawTag = tag.trim();
-  const cleanTagHyphen = rawTag.replace(/\s+/g, '-');
-  const cleanTagSpace = rawTag.replace(/-/g, ' ');
+  const normalizedTag = rawTag.toLowerCase().replace(/[-_\s]+/g, '-');
 
   lastConfirmedDeletedEmails = new Set();
-  let deletedCount = 0;
-  let lastError: string | undefined;
-  let expectedFromEmails = 0;
 
   try {
-    // Tier 1: Delete by email of matching leads if provided. Deliberately NOT deleting
-    // by `id` — see deleteLeadFromSupabase's comment: local ids are a display-order
-    // renumbering, not the real primary key, so `.in('id', ...)` would delete
-    // arbitrary unrelated rows. Chunked with per-chunk error checking — a single
-    // request listing hundreds of emails builds an extremely long filter URL that can
-    // silently fail (proxy/URL-length limits, timeouts); the previous version never
-    // checked `error` at all, so a failed delete here still reported success while
-    // Supabase quietly kept every row, which is exactly what made deleted leads (and
-    // now-empty tags) reappear after a reload.
-    if (targetLeads && targetLeads.length > 0) {
-      const emails = targetLeads
-        .map(l => (l.email || '').trim())
-        .filter(e => e && e !== '-' && e !== 'undefined' && e !== 'null');
-      expectedFromEmails = emails.length;
-
-      const DELETE_CHUNK_SIZE = 100;
-      for (let i = 0; i < emails.length; i += DELETE_CHUNK_SIZE) {
-        const chunk = emails.slice(i, i + DELETE_CHUNK_SIZE);
-        try {
-          const { data, error } = await client.from(tableName).delete().in('email', chunk).select();
-          if (error) {
-            console.error(`Delete by tag '${rawTag}' email chunk at index ${i} failed:`, error.message);
-            lastError = error.message;
-            continue;
-          }
-          (data || []).forEach((row: any) => {
-            if (row.email) lastConfirmedDeletedEmails.add(String(row.email).toLowerCase());
-          });
-          deletedCount += (data || []).length;
-        } catch (chunkErr: any) {
-          console.error(`Delete by tag '${rawTag}' email chunk at index ${i} threw:`, chunkErr);
-          lastError = chunkErr?.message || 'Delete operation failed';
-        }
-      }
-    }
-
-    // Tier 2: Flexible case-insensitive query on source_name column ONLY for specific non-generic tags
-    const isGenericTag = !rawTag || rawTag === '-' || rawTag === 'all' || rawTag === 'default' || rawTag === 'contacts' || rawTag === 'export' || rawTag === 'leads';
-    if (!isGenericTag) {
-      const filterQuery = `source_name.ilike.${cleanTagHyphen},source_name.ilike.${cleanTagSpace},source_name.ilike.${rawTag}`;
+    // Authoritative sweep — query Supabase directly for every row and decide the tag
+    // match fresh against what's actually there right now, rather than trusting the
+    // caller's local `targetLeads`. That local list only reflects whatever this
+    // browser last pulled; if it's even slightly stale (another session added more
+    // tagged rows, or this session just hasn't re-synced), rows genuinely carrying the
+    // tag in Supabase but missing from local knowledge were never included in the old
+    // email-based delete at all — which is exactly how a tag delete could look
+    // complete yet leave real rows behind, reappearing after reload. `targetLeads` is
+    // kept in the signature for backward compatibility but is no longer relied on.
+    const PAGE_SIZE = 1000;
+    const allRows: any[] = [];
+    let from = 0;
+    while (true) {
       const { data, error } = await client
         .from(tableName)
-        .delete()
-        .or(filterQuery)
-        .select();
-
+        .select('id, email, source_name, questions')
+        .range(from, from + PAGE_SIZE - 1);
       if (error) {
-        console.error(`Delete by tag '${rawTag}' source_name sweep failed:`, error.message);
-        lastError = lastError || error.message;
-      } else if (data) {
-        data.forEach((row: any) => {
+        return { success: false, count: 0, error: error.message };
+      }
+      if (!data || data.length === 0) break;
+      allRows.push(...data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    const matchesTag = (row: any): boolean => {
+      const src = (row.source_name || '').toLowerCase().replace(/[-_\s]+/g, '-');
+      if (src === normalizedTag) return true;
+      const q = row.questions || '';
+      const m = q.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
+      if (!m) return false;
+      try {
+        const meta = JSON.parse(safeAtob(m[1]));
+        const csvTag = String(meta.csvTag || '').toLowerCase().replace(/[-_\s]+/g, '-');
+        return csvTag === normalizedTag;
+      } catch {
+        return false;
+      }
+    };
+
+    const matchingEmails = allRows
+      .filter(matchesTag)
+      .map((r: any) => (r.email || '').trim())
+      .filter((e: string) => e && e !== '-' && e !== 'undefined' && e !== 'null');
+
+    if (matchingEmails.length === 0) {
+      return { success: true, count: 0 };
+    }
+
+    const DELETE_CHUNK_SIZE = 100;
+    let deletedCount = 0;
+    let lastError: string | undefined;
+
+    for (let i = 0; i < matchingEmails.length; i += DELETE_CHUNK_SIZE) {
+      const chunk = matchingEmails.slice(i, i + DELETE_CHUNK_SIZE);
+      try {
+        const { data, error } = await client.from(tableName).delete().in('email', chunk).select();
+        if (error) {
+          console.error(`Delete by tag '${rawTag}' chunk at index ${i} failed:`, error.message);
+          lastError = error.message;
+          continue;
+        }
+        (data || []).forEach((row: any) => {
           if (row.email) lastConfirmedDeletedEmails.add(String(row.email).toLowerCase());
         });
-        deletedCount += data.length;
+        deletedCount += (data || []).length;
+      } catch (chunkErr: any) {
+        console.error(`Delete by tag '${rawTag}' chunk at index ${i} threw:`, chunkErr);
+        lastError = chunkErr?.message || 'Delete operation failed';
       }
     }
 
-    const allConfirmed = !lastError && deletedCount >= expectedFromEmails;
+    const allConfirmed = !lastError && deletedCount === matchingEmails.length;
     return {
       success: allConfirmed,
       count: deletedCount,
-      error: allConfirmed ? undefined : lastError
+      error: allConfirmed ? undefined : (lastError || `Only ${deletedCount} of ${matchingEmails.length} matching records were confirmed deleted — some may remain.`)
     };
   } catch (err: any) {
     console.error(`Delete by tag '${rawTag}' failed:`, err);
-    return { success: false, count: deletedCount, error: err?.message || 'Delete operation failed' };
+    return { success: false, count: 0, error: err?.message || 'Delete operation failed' };
   }
 };
 
