@@ -1070,9 +1070,11 @@ export const deleteLeadsByTag = async (tag: string): Promise<{ count: number; er
   let supabaseError: string | undefined;
   let confirmedEmails = new Set<string>();
   try {
-    const result = targetLeads.length > 0
-      ? await deleteLeadsByTagFromSupabase(tag, targetLeads)
-      : await deleteLeadsByTagFromSupabase(tag); // no local matches — still sweep Supabase directly in case it has rows this session never pulled
+    // deleteLeadsByTagFromSupabase now queries Supabase directly for every row
+    // carrying this tag — it doesn't need (or trust) targetLeads to know what to
+    // delete, so there's no longer a distinct "no local matches" branch: the
+    // authoritative sweep runs the same way either way.
+    const result = await deleteLeadsByTagFromSupabase(tag);
     confirmedEmails = getLastConfirmedDeletedEmails();
     if (!result.success) supabaseError = result.error || 'Some records could not be confirmed deleted from Supabase.';
   } catch (err: any) {
@@ -1080,15 +1082,17 @@ export const deleteLeadsByTag = async (tag: string): Promise<{ count: number; er
     supabaseError = err?.message || 'Delete leads by tag failed';
   }
 
-  const isConfirmedRemoved = (l: Lead) => {
-    const email = (l.email || '').trim().toLowerCase();
-    return email && email !== '-' && confirmedEmails.has(email);
-  };
-
-  // A target lead with no usable email (a blank-contact row) can never be confirmed
-  // by email — fall back to removing it locally whenever the Supabase call as a whole
-  // reported success, since there's nothing more specific to reconcile it against.
-  const removedLeads = targetLeads.filter(l => isConfirmedRemoved(l) || (!supabaseError && (!l.email || l.email === '-')));
+  // On full success, trust the authoritative Supabase sweep completely and clear every
+  // locally-tag-matching lead — it queried the live table itself, independent of
+  // whatever this local list happens to contain, so it's the more trustworthy source.
+  // Only fall back to precise per-email reconciliation when something went wrong, so a
+  // partial failure doesn't locally remove rows that weren't actually confirmed gone.
+  const removedLeads = !supabaseError
+    ? targetLeads
+    : targetLeads.filter(l => {
+        const email = (l.email || '').trim().toLowerCase();
+        return email && email !== '-' && confirmedEmails.has(email);
+      });
   const updatedLeads = allLeads.filter(l => !removedLeads.includes(l));
 
   saveStoredLeads(updatedLeads);
