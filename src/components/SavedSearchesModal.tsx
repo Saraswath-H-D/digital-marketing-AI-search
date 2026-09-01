@@ -85,7 +85,7 @@ export default function SavedSearchesModal({
             </div>
             <div>
               <h3 className="text-base font-extrabold tracking-tight">Saved Targeting Searches</h3>
-              <p className="text-2xs text-purple-200">Quickly rerun segment filters across lead directory</p>
+              <p className="text-2xs text-violet-200">Quickly rerun segment filters across lead directory</p>
             </div>
           </div>
 

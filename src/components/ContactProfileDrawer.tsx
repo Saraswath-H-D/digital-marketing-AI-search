@@ -151,7 +151,7 @@ export default function ContactProfileDrawer({
           <div className="flex items-start justify-between">
             <div className="flex items-start space-x-4">
               <div className="relative">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-lg shadow-indigo-200 ring-4 ring-[var(--surface-card)]">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-lg shadow-indigo-200 ring-4 ring-[var(--surface-card)]">
                   {initials}
                 </div>
                 <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-[var(--surface-card)] flex items-center justify-center">
@@ -184,8 +184,8 @@ export default function ContactProfileDrawer({
                   )}
                   {lead.organization && (
                     <div className="flex items-center space-x-1">
-                      <Building className="w-3.5 h-3.5 text-purple-500" />
-                      <span className="text-purple-700 font-bold">{lead.organization}</span>
+                      <Building className="w-3.5 h-3.5 text-violet-500" />
+                      <span className="text-violet-700 font-bold">{lead.organization}</span>
                     </div>
                   )}
                   {lead.city && (
@@ -216,7 +216,7 @@ export default function ContactProfileDrawer({
           <div className="grid grid-cols-4 gap-2 mt-5">
             <button
               onClick={() => onUnlockEmail(lead)}
-              className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 text-2xs font-extrabold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl transition-all shadow-md cursor-pointer active:scale-95"
+              className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 text-2xs font-extrabold text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 rounded-xl transition-all shadow-md cursor-pointer active:scale-95"
             >
               <Mail className="w-3.5 h-3.5" />
               <span>{lead.emailUnlocked ? 'Copy Email' : 'Unlock Email'}</span>
@@ -240,9 +240,9 @@ export default function ContactProfileDrawer({
 
             <button
               onClick={() => setActiveTab('ai')}
-              className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 text-2xs font-extrabold text-purple-900 bg-purple-100 hover:bg-purple-200 border border-purple-200 rounded-xl transition-all cursor-pointer active:scale-95"
+              className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 text-2xs font-extrabold text-violet-900 bg-violet-100 hover:bg-violet-200 border border-violet-200 rounded-xl transition-all cursor-pointer active:scale-95"
             >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+              <Sparkles className="w-3.5 h-3.5 text-violet-600" />
               <span>AI Insights</span>
             </button>
           </div>
@@ -273,7 +273,7 @@ export default function ContactProfileDrawer({
                 <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-600' : 'text-[var(--text-muted)]'}`} />
                 <span>{tab.label}</span>
                 {tab.badge && (
-                  <span className="px-1.5 py-0.5 text-3xs font-extrabold bg-purple-600 text-white rounded-full">
+                  <span className="px-1.5 py-0.5 text-3xs font-extrabold bg-violet-600 text-white rounded-full">
                     {tab.badge}
                   </span>
                 )}
@@ -344,9 +344,9 @@ export default function ContactProfileDrawer({
 
               {/* Account Metadata */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="p-3.5 bg-purple-50/50 border border-purple-100 rounded-xl text-center">
-                  <span className="text-3xs font-bold text-purple-600 uppercase tracking-wider block mb-0.5">Contact Origin</span>
-                  <span className="text-xs font-extrabold text-purple-950 truncate block">#{lead.sourceName || 'CSV-Import'}</span>
+                <div className="p-3.5 bg-violet-50/50 border border-violet-100 rounded-xl text-center">
+                  <span className="text-3xs font-bold text-violet-600 uppercase tracking-wider block mb-0.5">Contact Origin</span>
+                  <span className="text-xs font-extrabold text-violet-950 truncate block">#{lead.sourceName || 'CSV-Import'}</span>
                 </div>
 
                 <div className="p-3.5 bg-blue-50/50 border border-blue-100 rounded-xl text-center">
@@ -393,7 +393,7 @@ export default function ContactProfileDrawer({
                 </div>
 
                 <div className="relative flex items-start space-x-3 bg-[var(--surface-card)] p-3.5 border border-[var(--border-subtle)] rounded-xl shadow-2xs">
-                  <div className="absolute -left-6 top-4 w-3.5 h-3.5 rounded-full bg-purple-500 border-2 border-[var(--surface-card)] ring-2 ring-purple-100" />
+                  <div className="absolute -left-6 top-4 w-3.5 h-3.5 rounded-full bg-violet-500 border-2 border-[var(--surface-card)] ring-2 ring-violet-100" />
                   <div>
                     <span className="text-xs font-bold text-[var(--text-secondary)] block">Contact Created via #{lead.sourceName || 'CSV Upload'}</span>
                     <span className="text-3xs text-[var(--text-muted)] block mt-0.5">{lead.registrationTime || 'Today'}</span>
@@ -408,7 +408,7 @@ export default function ContactProfileDrawer({
             <div className="space-y-4 animate-fadeIn">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-extrabold text-[var(--text-secondary)] uppercase tracking-wider">AI Sales Pitch Generator</h3>
-                <span className="text-3xs font-extrabold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Tailored to {lead.organization || 'Lead'}</span>
+                <span className="text-3xs font-extrabold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">Tailored to {lead.organization || 'Lead'}</span>
               </div>
 
               <div className="space-y-3 bg-[var(--surface-card-header)] border border-[var(--border-subtle)] p-4 rounded-2xl">
@@ -470,7 +470,7 @@ export default function ContactProfileDrawer({
 
               <button
                 onClick={handleSaveNotes}
-                className="w-full py-2.5 text-xs font-extrabold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-xl shadow-md cursor-pointer"
+                className="w-full py-2.5 text-xs font-extrabold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 rounded-xl shadow-md cursor-pointer"
               >
                 Save Notes
               </button>
@@ -480,12 +480,12 @@ export default function ContactProfileDrawer({
           {/* TAB 5: COMPANY INFO */}
           {activeTab === 'company' && (
             <div className="space-y-4 animate-fadeIn">
-              <div className="p-4 bg-gradient-to-r from-slate-900 to-purple-950 text-white rounded-2xl flex items-center justify-between">
+              <div className="p-4 bg-gradient-to-r from-slate-900 to-violet-950 text-white rounded-2xl flex items-center justify-between">
                 <div>
                   <h4 className="text-base font-extrabold">{lead.organization || 'Organization Account'}</h4>
-                  <span className="text-2xs text-purple-200 block mt-0.5">Enterprise SaaS & Tech Business</span>
+                  <span className="text-2xs text-violet-200 block mt-0.5">Enterprise SaaS & Tech Business</span>
                 </div>
-                <span className="px-2.5 py-1 text-3xs font-extrabold bg-purple-500/30 text-purple-200 rounded-full border border-purple-400/30">501-1000 Employees</span>
+                <span className="px-2.5 py-1 text-3xs font-extrabold bg-violet-500/30 text-violet-200 rounded-full border border-violet-400/30">501-1000 Employees</span>
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
@@ -515,21 +515,21 @@ export default function ContactProfileDrawer({
           {/* TAB 6: AI INSIGHTS */}
           {activeTab === 'ai' && (
             <div className="space-y-4 animate-fadeIn">
-              <div className="p-4 bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 text-white rounded-2xl shadow-lg relative overflow-hidden">
+              <div className="p-4 bg-gradient-to-br from-violet-900 via-indigo-900 to-slate-900 text-white rounded-2xl shadow-lg relative overflow-hidden">
                 <div className="relative z-10 flex items-center justify-between">
                   <div>
-                    <span className="text-3xs font-extrabold uppercase tracking-wider text-purple-300 block">AI Lead Value Score</span>
+                    <span className="text-3xs font-extrabold uppercase tracking-wider text-violet-300 block">AI Lead Value Score</span>
                     <span className="text-3xl font-black text-white block mt-1">92 / 100</span>
                   </div>
-                  <div className="w-14 h-14 rounded-2xl bg-purple-500/30 border border-purple-400/40 flex items-center justify-center text-yellow-300">
+                  <div className="w-14 h-14 rounded-2xl bg-violet-500/30 border border-violet-400/40 flex items-center justify-center text-yellow-300">
                     <Zap className="w-8 h-8 fill-yellow-300" />
                   </div>
                 </div>
               </div>
 
-              <div className="p-4 bg-purple-50/60 border border-purple-200/80 rounded-2xl space-y-3">
-                <h4 className="text-xs font-extrabold text-purple-950 uppercase tracking-wider">Why This Lead is Valuable:</h4>
-                <div className="space-y-2 text-xs text-purple-900">
+              <div className="p-4 bg-violet-50/60 border border-violet-200/80 rounded-2xl space-y-3">
+                <h4 className="text-xs font-extrabold text-violet-950 uppercase tracking-wider">Why This Lead is Valuable:</h4>
+                <div className="space-y-2 text-xs text-violet-900">
                   <div className="flex items-center space-x-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     <span><strong>Senior Decision Maker:</strong> Holds active purchasing authority at {lead.organization || 'company'}.</span>

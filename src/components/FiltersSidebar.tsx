@@ -151,7 +151,7 @@ export default function FiltersSidebar({
     options: string[],
     selectedItems: string[],
     onToggle: (val: string) => void,
-    badgeColor: string = 'bg-purple-600'
+    badgeColor: string = 'bg-violet-600'
   ) => {
     const isOpen = !!openSections[id];
     const query = (optionSearches[id] || filterSearch || '').trim().toLowerCase();
@@ -169,13 +169,13 @@ export default function FiltersSidebar({
           onClick={() => toggleSection(id)}
           className={`w-full flex items-center justify-between py-2.5 px-3 rounded-2xl border transition-all duration-200 text-left cursor-pointer group super-3d-card ${
             selectedItems.length > 0
-              ? 'bg-[var(--accent-primary-soft)] border-purple-300 text-[var(--accent-section)] font-black shadow-xs'
+              ? 'bg-[var(--accent-primary-soft)] border-violet-300 text-[var(--accent-section)] font-black shadow-xs'
               : 'bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] font-bold'
           }`}
         >
           <div className="flex items-center space-x-2.5 min-w-0">
             <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border ${
-              selectedItems.length > 0 ? 'bg-purple-600 text-white border-purple-700' : 'bg-[var(--accent-primary-soft)] text-purple-600 border-[var(--border-subtle)]'
+              selectedItems.length > 0 ? 'bg-violet-600 text-white border-violet-700' : 'bg-[var(--accent-primary-soft)] text-violet-600 border-[var(--border-subtle)]'
             }`}>
               {icon}
             </div>
@@ -189,7 +189,7 @@ export default function FiltersSidebar({
               </span>
             )}
             <div className="w-5 h-5 rounded-full bg-[var(--accent-primary-soft)] border border-[var(--border-subtle)] flex items-center justify-center">
-              {isOpen ? <ChevronUp className="w-3 h-3 text-purple-700" /> : <ChevronDown className="w-3 h-3 text-purple-700" />}
+              {isOpen ? <ChevronUp className="w-3 h-3 text-violet-700" /> : <ChevronDown className="w-3 h-3 text-violet-700" />}
             </div>
           </div>
         </button>
@@ -198,7 +198,7 @@ export default function FiltersSidebar({
           <div className="p-3 bg-[var(--surface-card-elevated)] rounded-2xl border border-[var(--border-subtle)] shadow-xs space-y-2 mt-1 animate-fadeIn super-3d-card">
             {options.length > 5 && (
               <div className="relative mb-1">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-purple-400">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-violet-400">
                   <Search className="w-3 h-3" />
                 </span>
                 <input
@@ -206,13 +206,13 @@ export default function FiltersSidebar({
                   value={optionSearches[id] || ''}
                   onChange={(e) => setOptionSearches(prev => ({ ...prev, [id]: e.target.value }))}
                   placeholder={`Search ${title.toLowerCase()}...`}
-                  className="glass-input pl-7 pr-6 !py-1 !text-xs focus:!border-purple-500 font-bold"
+                  className="glass-input pl-7 pr-6 !py-1 !text-xs focus:!border-violet-500 font-bold"
                 />
                 {optionSearches[id] && (
                   <button
                     type="button"
                     onClick={() => setOptionSearches(prev => ({ ...prev, [id]: '' }))}
-                    className="absolute inset-y-0 right-0 flex items-center pr-2 text-[var(--text-muted)] hover:text-purple-600"
+                    className="absolute inset-y-0 right-0 flex items-center pr-2 text-[var(--text-muted)] hover:text-violet-600"
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
@@ -231,7 +231,7 @@ export default function FiltersSidebar({
                       key={val} 
                       className={`flex items-center space-x-2 py-1 px-2 rounded-xl cursor-pointer text-xs transition-colors border ${
                         isChecked 
-                          ? 'bg-[var(--accent-primary-soft)] border-purple-300 text-[var(--accent-section)] font-black shadow-2xs' 
+                          ? 'bg-[var(--accent-primary-soft)] border-violet-300 text-[var(--accent-section)] font-black shadow-2xs' 
                           : 'hover:bg-[var(--surface-hover)] border-transparent text-[var(--text-secondary)] font-semibold'
                       }`}
                     >
@@ -239,7 +239,7 @@ export default function FiltersSidebar({
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => onToggle(val)}
-                        className="w-3.5 h-3.5 rounded-sm text-purple-600 border-purple-300 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                        className="w-3.5 h-3.5 rounded-sm text-violet-600 border-violet-300 focus:ring-violet-500 cursor-pointer accent-violet-600"
                       />
                       <span className="truncate">{val}</span>
                     </label>
@@ -257,16 +257,16 @@ export default function FiltersSidebar({
     <aside id="filters-sidebar" className="w-80 border-r border-[var(--border-subtle)] bg-[var(--surface-card)] flex flex-col h-full overflow-hidden select-none shrink-0">
       
       {/* Sidebar Top Header & Reset Button */}
-      <div className="p-3.5 bg-gradient-to-r from-purple-100 via-pink-50 to-purple-100 dark:from-purple-500/10 dark:via-transparent dark:to-purple-500/10 border-b border-[var(--border-subtle)] shrink-0 flex items-center justify-between">
+      <div className="p-3.5 bg-gradient-to-r from-violet-100 via-pink-50 to-violet-100 dark:from-violet-500/10 dark:via-transparent dark:to-violet-500/10 border-b border-[var(--border-subtle)] shrink-0 flex items-center justify-between">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 text-white flex items-center justify-center shadow-xs">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-pink-500 text-white flex items-center justify-center shadow-xs">
             <SlidersHorizontal className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center space-x-1.5">
               <span className="font-black text-xs tracking-tight uppercase text-[var(--text-primary)] font-display">Filters</span>
               {activeCounts > 0 && (
-                <span className="px-2 py-0.5 text-[9px] font-black text-white bg-purple-600 rounded-full shadow-2xs">
+                <span className="px-2 py-0.5 text-[9px] font-black text-white bg-violet-600 rounded-full shadow-2xs">
                   {activeCounts} Active
                 </span>
               )}
@@ -278,10 +278,10 @@ export default function FiltersSidebar({
         {hasActiveFilters && (
           <button
             onClick={handleClearAll}
-            className="text-2xs font-black text-[var(--text-primary)] flex items-center space-x-1 px-2.5 py-1 bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] border border-purple-300 rounded-xl transition-all cursor-pointer shadow-2xs"
+            className="text-2xs font-black text-[var(--text-primary)] flex items-center space-x-1 px-2.5 py-1 bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] border border-violet-300 rounded-xl transition-all cursor-pointer shadow-2xs"
             title="Reset all active search filters"
           >
-            <RotateCcw className="w-3 h-3 text-purple-600" />
+            <RotateCcw className="w-3 h-3 text-violet-600" />
             <span>Reset</span>
           </button>
         )}
@@ -290,7 +290,7 @@ export default function FiltersSidebar({
       {/* Global Filter Search Input */}
       <div className="p-3 border-b border-[var(--border-subtle)] bg-[var(--surface-card-header)] shrink-0">
         <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-purple-500">
+          <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-violet-500">
             <Search className="w-4 h-4" />
           </span>
           <input
@@ -304,7 +304,7 @@ export default function FiltersSidebar({
             <button
               type="button"
               onClick={() => setFilterSearch('')}
-              className="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-muted)] hover:text-purple-600 cursor-pointer"
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-muted)] hover:text-violet-600 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -330,13 +330,13 @@ export default function FiltersSidebar({
               onClick={() => toggleSection('jobTitles')}
               className={`w-full flex items-center justify-between py-2.5 px-3 rounded-2xl border transition-all duration-200 text-left cursor-pointer group super-3d-card ${
                 filters.jobTitles && filters.jobTitles.length > 0
-                  ? 'bg-[var(--accent-primary-soft)] border-purple-300 text-[var(--accent-section)] font-black shadow-xs'
+                  ? 'bg-[var(--accent-primary-soft)] border-violet-300 text-[var(--accent-section)] font-black shadow-xs'
                   : 'bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] font-bold'
               }`}
             >
               <div className="flex items-center space-x-2.5 min-w-0">
                 <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border ${
-                  filters.jobTitles && filters.jobTitles.length > 0 ? 'bg-purple-600 text-white border-purple-700' : 'bg-[var(--accent-primary-soft)] text-purple-600 border-[var(--border-subtle)]'
+                  filters.jobTitles && filters.jobTitles.length > 0 ? 'bg-violet-600 text-white border-violet-700' : 'bg-[var(--accent-primary-soft)] text-violet-600 border-[var(--border-subtle)]'
                 }`}>
                   <Briefcase className="w-3.5 h-3.5" />
                 </div>
@@ -345,12 +345,12 @@ export default function FiltersSidebar({
 
               <div className="flex items-center space-x-1.5 shrink-0">
                 {filters.jobTitles && filters.jobTitles.length > 0 && (
-                  <span className="px-2 py-0.5 text-[9px] font-black text-white bg-purple-600 rounded-full shadow-2xs">
+                  <span className="px-2 py-0.5 text-[9px] font-black text-white bg-violet-600 rounded-full shadow-2xs">
                     {filters.jobTitles.length} Active
                   </span>
                 )}
                 <div className="w-5 h-5 rounded-full bg-[var(--accent-primary-soft)] border border-[var(--border-subtle)] flex items-center justify-center">
-                  {openSections.jobTitles ? <ChevronUp className="w-3 h-3 text-purple-700" /> : <ChevronDown className="w-3 h-3 text-purple-700" />}
+                  {openSections.jobTitles ? <ChevronUp className="w-3 h-3 text-violet-700" /> : <ChevronDown className="w-3 h-3 text-violet-700" />}
                 </div>
               </div>
             </button>
@@ -375,7 +375,7 @@ export default function FiltersSidebar({
                   className="relative flex items-center space-x-1.5"
                 >
                   <div className="relative flex-1">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-purple-500">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-violet-500">
                       <Search className="w-3.5 h-3.5" />
                     </span>
                     <input
@@ -383,13 +383,13 @@ export default function FiltersSidebar({
                       value={jobTitleInput}
                       onChange={(e) => setJobTitleInput(e.target.value)}
                       placeholder="Type or search job title (e.g. CEO)..."
-                      className="glass-input pl-8 pr-7 !py-1.5 !text-xs focus:!border-purple-500 font-bold placeholder-slate-400"
+                      className="glass-input pl-8 pr-7 !py-1.5 !text-xs focus:!border-violet-500 font-bold placeholder-slate-400"
                     />
                     {jobTitleInput && (
                       <button
                         type="button"
                         onClick={() => setJobTitleInput('')}
-                        className="absolute inset-y-0 right-0 flex items-center pr-2 text-[var(--text-muted)] hover:text-purple-600 cursor-pointer"
+                        className="absolute inset-y-0 right-0 flex items-center pr-2 text-[var(--text-muted)] hover:text-violet-600 cursor-pointer"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -398,7 +398,7 @@ export default function FiltersSidebar({
                   <button
                     type="submit"
                     disabled={!jobTitleInput.trim()}
-                    className="px-2.5 py-1.5 text-xs font-black bg-purple-600 hover:bg-purple-700 text-white rounded-xl disabled:opacity-40 transition-all cursor-pointer shrink-0 shadow-2xs"
+                    className="px-2.5 py-1.5 text-xs font-black bg-violet-600 hover:bg-violet-700 text-white rounded-xl disabled:opacity-40 transition-all cursor-pointer shrink-0 shadow-2xs"
                   >
                     + Add
                   </button>
@@ -406,17 +406,17 @@ export default function FiltersSidebar({
 
                 {/* Active Selected Job Title Chips */}
                 {filters.jobTitles && filters.jobTitles.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1 pb-1 border-b border-purple-100">
+                  <div className="flex flex-wrap gap-1.5 pt-1 pb-1 border-b border-violet-100">
                     {filters.jobTitles.map(t => (
                       <span
                         key={t}
-                        className="inline-flex items-center space-x-1 px-2 py-0.5 text-[10px] font-black bg-purple-100 text-purple-950 border border-purple-300 rounded-lg shadow-2xs"
+                        className="inline-flex items-center space-x-1 px-2 py-0.5 text-[10px] font-black bg-violet-100 text-violet-950 border border-violet-300 rounded-lg shadow-2xs"
                       >
                         <span className="truncate max-w-[140px]">{t}</span>
                         <button
                           type="button"
                           onClick={() => toggleArrayFilter('jobTitles', t)}
-                          className="hover:text-purple-600 focus:outline-none cursor-pointer"
+                          className="hover:text-violet-600 focus:outline-none cursor-pointer"
                         >
                           <X className="w-2.5 h-2.5" />
                         </button>
@@ -441,7 +441,7 @@ export default function FiltersSidebar({
                           key={val} 
                           className={`flex items-center space-x-2 py-1 px-2 rounded-xl cursor-pointer text-xs transition-colors border ${
                             isChecked 
-                              ? 'bg-[var(--accent-primary-soft)] border-purple-300 text-[var(--accent-section)] font-black shadow-2xs' 
+                              ? 'bg-[var(--accent-primary-soft)] border-violet-300 text-[var(--accent-section)] font-black shadow-2xs' 
                               : 'hover:bg-[var(--surface-hover)] border-transparent text-[var(--text-secondary)] font-semibold'
                           }`}
                         >
@@ -449,7 +449,7 @@ export default function FiltersSidebar({
                             type="checkbox"
                             checked={isChecked}
                             onChange={() => toggleArrayFilter('jobTitles', val)}
-                            className="w-3.5 h-3.5 rounded-sm text-purple-600 border-purple-300 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                            className="w-3.5 h-3.5 rounded-sm text-violet-600 border-violet-300 focus:ring-violet-500 cursor-pointer accent-violet-600"
                           />
                           <span className="truncate">{val}</span>
                         </label>
@@ -467,13 +467,13 @@ export default function FiltersSidebar({
               onClick={() => toggleSection('persona')}
               className={`w-full flex items-center justify-between py-2.5 px-3 rounded-2xl border transition-all text-left cursor-pointer super-3d-card ${
                 filters.persona
-                  ? 'bg-[var(--accent-primary-soft)] border-purple-300 text-[var(--accent-section)] font-black shadow-xs'
+                  ? 'bg-[var(--accent-primary-soft)] border-violet-300 text-[var(--accent-section)] font-black shadow-xs'
                   : 'bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] font-bold'
               }`}
             >
               <div className="flex items-center space-x-2.5 min-w-0">
                 <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border ${
-                  filters.persona ? 'bg-purple-600 text-white border-purple-700' : 'bg-[var(--accent-primary-soft)] text-purple-600 border-[var(--border-subtle)]'
+                  filters.persona ? 'bg-violet-600 text-white border-violet-700' : 'bg-[var(--accent-primary-soft)] text-violet-600 border-[var(--border-subtle)]'
                 }`}>
                   <Sparkles className="w-3.5 h-3.5" />
                 </div>
@@ -481,12 +481,12 @@ export default function FiltersSidebar({
               </div>
               <div className="flex items-center space-x-1.5 shrink-0">
                 {filters.persona && (
-                  <span className="px-2 py-0.5 text-[9px] font-black text-white bg-purple-600 rounded-full">
+                  <span className="px-2 py-0.5 text-[9px] font-black text-white bg-violet-600 rounded-full">
                     1 Active
                   </span>
                 )}
                 <div className="w-5 h-5 rounded-full bg-[var(--accent-primary-soft)] border border-[var(--border-subtle)] flex items-center justify-center">
-                  {openSections.persona ? <ChevronUp className="w-3 h-3 text-purple-700" /> : <ChevronDown className="w-3 h-3 text-purple-700" />}
+                  {openSections.persona ? <ChevronUp className="w-3 h-3 text-violet-700" /> : <ChevronDown className="w-3 h-3 text-violet-700" />}
                 </div>
               </div>
             </button>
@@ -499,7 +499,7 @@ export default function FiltersSidebar({
                     onClick={() => setFilters(prev => ({ ...prev, persona: prev.persona === p ? null : p }))}
                     className={`w-full text-left px-3 py-1.5 rounded-xl text-xs flex items-center justify-between cursor-pointer transition-all ${
                       filters.persona === p
-                        ? 'bg-purple-600 text-white font-black shadow-xs'
+                        ? 'bg-violet-600 text-white font-black shadow-xs'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] font-semibold'
                     }`}
                   >
@@ -654,12 +654,12 @@ export default function FiltersSidebar({
               onClick={() => setFilters(prev => ({ ...prev, savedOnly: !prev.savedOnly, netNewOnly: false }))}
               className={`w-full flex items-center justify-between py-2.5 px-3 rounded-2xl border transition-all text-left cursor-pointer ${
                 filters.savedOnly
-                  ? 'bg-purple-600 text-white font-black border-purple-700 shadow-xs'
+                  ? 'bg-violet-600 text-white font-black border-violet-700 shadow-xs'
                   : 'bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] font-bold'
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <Bookmark className={`w-4 h-4 ${filters.savedOnly ? 'text-white' : 'text-purple-600'}`} />
+                <Bookmark className={`w-4 h-4 ${filters.savedOnly ? 'text-white' : 'text-violet-600'}`} />
                 <span className="text-xs">Saved Contacts Only</span>
               </div>
               {filters.savedOnly && <Check className="w-4 h-4 text-white" />}
@@ -711,8 +711,8 @@ export default function FiltersSidebar({
 
       {/* Sync / Loading Footer Overlay */}
       {isLoading && (
-        <div className="px-4 py-2 bg-[var(--accent-primary-soft)] border-t border-[var(--border-subtle)] flex items-center justify-center space-x-2 text-2xs font-extrabold text-purple-600 animate-pulse shrink-0">
-          <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-600" />
+        <div className="px-4 py-2 bg-[var(--accent-primary-soft)] border-t border-[var(--border-subtle)] flex items-center justify-center space-x-2 text-2xs font-extrabold text-violet-600 animate-pulse shrink-0">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin text-violet-600" />
           <span>Refreshing search filters...</span>
         </div>
       )}

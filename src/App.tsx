@@ -21,12 +21,15 @@ import {
   addCsvTag,
   removeCsvTag,
   bulkImportLeads,
+  addTagToExistingLead,
   getActiveHeaders,
   getFixedHeaderValue,
   getTrashLeads,
   deleteAllLeads
 } from './data/leadStorage.ts';
 import { pullLeadsFromSupabase, pushLeadsToSupabase } from './lib/supabase.ts';
+import { BulkImportResult } from './data/leadStorage.ts';
+import DuplicateLeadsModal from './components/DuplicateLeadsModal.tsx';
 import FiltersSidebar from './components/FiltersSidebar.tsx';
 import LeadsTable from './components/LeadsTable.tsx';
 import AddLeadModal from './components/AddLeadModal.tsx';
@@ -162,6 +165,9 @@ export default function App() {
   const [deleteConfirmData, setDeleteConfirmData] = useState<{ type: 'single'; lead: Lead } | { type: 'bulk' } | null>(null);
   const [sectionModal, setSectionModal] = useState<SectionModalKind | null>(null);
   const [isDataEnhancementOpen, setIsDataEnhancementOpen] = useState(false);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [lastImportResult, setLastImportResult] = useState<BulkImportResult | null>(null);
+  const [lastImportedTag, setLastImportedTag] = useState<string | null>(null);
 
   // General States
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
@@ -567,7 +573,15 @@ export default function App() {
       fetchLeads();
       fetchFilterOptions();
 
-      showStatus(`Imported ${result.count} new contacts & synced live to Supabase!`, 'success');
+      setLastImportResult(result);
+      setLastImportedTag(items[0]?.csvTag || null);
+
+      if (result.duplicatesSkipped > 0) {
+        setIsDuplicateModalOpen(true);
+        showStatus(`Imported ${result.count} new contact(s). ${result.duplicatesSkipped} exact duplicate cop${result.duplicatesSkipped === 1 ? 'y' : 'ies'} skipped.`, 'success');
+      } else {
+        showStatus(`Imported ${result.count} new contacts & synced live to Supabase!`, 'success');
+      }
       return true;
     } catch (err) {
       console.error('Import action failed:', err);
@@ -734,7 +748,7 @@ export default function App() {
           {/* Executive Topbar Command Header */}
           <div className="topbar">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-pink-500 p-0.5 flex items-center justify-center shadow-lg">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-pink-500 p-0.5 flex items-center justify-center shadow-lg">
                 <div className="w-full h-full bg-white dark:bg-slate-900 rounded-[14px] flex items-center justify-center">
                   <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 </div>
@@ -742,8 +756,8 @@ export default function App() {
               <div>
                 <div className="flex items-center space-x-2">
                   <h1 className="text-base font-black tracking-tight font-display text-[var(--text-primary)]">OPERON ENTERPRISE AI</h1>
-                  <span className="badge badge-priority-high">
-                    SUPER ADMIN
+                  <span className="role-badge-text super-admin text-xs tracking-tight uppercase">
+                    Super Admin
                   </span>
                 </div>
                 <p className="text-xs text-[var(--text-muted)] font-medium">Real-time Lead Intelligence & Supabase Database Sync</p>
@@ -833,10 +847,10 @@ export default function App() {
 
               {/* Card 3: Operon AI Copilot */}
               <div className="p-4 glass-card relative overflow-hidden group">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-600" />
+                <div className="absolute left-0 top-0 bottom-0 w-1 bg-violet-600" />
                 <div className="flex items-center justify-between mb-2">
                   <span className="micro-label">AI Outreach Copilot</span>
-                  <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-violet-50 dark:bg-violet-950 text-violet-600 dark:text-violet-400 flex items-center justify-center">
                     <Sparkles className="w-4 h-4" />
                   </div>
                 </div>
@@ -864,7 +878,7 @@ export default function App() {
               {/* TOP TABLE PAGINATION CONTROLS & "25 per page" DROPDOWN */}
               <div className="flex items-center space-x-3">
                 <span className="text-xs text-slate-600 font-extrabold hidden sm:inline">
-                  Showing <strong className="text-purple-950 font-black">{pageStartCount}-{pageEndCount}</strong> of <strong className="text-purple-950 font-black">{totalLeads}</strong>
+                  Showing <strong className="text-violet-950 font-black">{pageStartCount}-{pageEndCount}</strong> of <strong className="text-violet-950 font-black">{totalLeads}</strong>
                 </span>
 
                 {/* Prev / Next Buttons */}
@@ -878,7 +892,7 @@ export default function App() {
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
 
-                  <span className="px-2.5 py-1 text-xs font-black text-purple-950 bg-purple-100 border border-purple-200 rounded-xl shadow-2xs">
+                  <span className="px-2.5 py-1 text-xs font-black text-violet-950 bg-violet-100 border border-violet-200 rounded-xl shadow-2xs">
                     {page}
                   </span>
 
@@ -913,7 +927,7 @@ export default function App() {
             </div>
             
             {/* Operon Sub-toolbar row with high fidelity to Operon's controls (Screenshot 1) */}
-            <div className="flex items-center space-x-3 text-xs font-semibold text-gray-650 pt-1 select-none">
+            <div className="flex items-center space-x-3 text-xs font-semibold text-[var(--text-secondary)] pt-1 select-none">
               
               {/* Default view dropdown */}
               <div className="relative">
@@ -1112,13 +1126,13 @@ export default function App() {
                 onClick={() => setShowAICopilot(!showAICopilot)}
                 className={`inline-flex items-center space-x-1.5 px-3 py-1.5 border rounded-lg transition-all shadow-3xs cursor-pointer font-extrabold text-xs ${
                   showAICopilot 
-                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 border-indigo-500 text-white shadow-md shadow-indigo-150' 
+                    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 border-indigo-500 text-white shadow-md shadow-indigo-200'
                     : 'bg-[var(--surface-card)] hover:bg-indigo-50/30 border-indigo-200 text-indigo-700'
                 }`}
               >
                 <Sparkles className={`w-3.5 h-3.5 ${showAICopilot ? 'text-white' : 'text-indigo-600 animate-pulse'}`} />
                 <span>AI Assistant</span>
-                <span className="px-1.5 py-0.1 text-[9px] font-extrabold bg-indigo-100 text-indigo-750 rounded-full border border-indigo-200 scale-90">
+                <span className="px-1.5 py-0.1 text-[9px] font-extrabold bg-indigo-100 text-indigo-700 rounded-full border border-indigo-200 scale-90">
                   New
                 </span>
               </button>
@@ -1276,19 +1290,19 @@ export default function App() {
                             {/* Job Titles */}
                             {titleList.length > 0 && (
                               <div className="mb-2">
-                                <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-purple-600 bg-purple-50/60 border-y border-purple-100 flex items-center justify-between">
+                                <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-violet-600 bg-violet-50/60 border-y border-violet-100 flex items-center justify-between">
                                   <span>Job Titles</span>
-                                  <Briefcase className="w-3 h-3 text-purple-500" />
+                                  <Briefcase className="w-3 h-3 text-violet-500" />
                                 </div>
                                 {titleList.map(title => (
                                   <button
                                     key={title}
                                     type="button"
                                     onClick={() => handleSelect(title)}
-                                    className="w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-purple-50 text-slate-800 transition-colors cursor-pointer"
+                                    className="w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-violet-50 text-slate-800 transition-colors cursor-pointer"
                                   >
                                     <div className="flex items-center space-x-2 truncate">
-                                      <Briefcase className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                      <Briefcase className="w-3.5 h-3.5 text-violet-500 shrink-0" />
                                       <span className="font-bold text-slate-900 truncate">{title}</span>
                                     </div>
                                   </button>
@@ -1335,7 +1349,7 @@ export default function App() {
                 <div className="flex flex-col space-y-1.5 w-full sm:w-64 shrink-0">
                   <div className="relative w-full">
                     <div className="relative w-full">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-purple-600">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-violet-600">
                         <Tag className="w-3.5 h-3.5" />
                       </span>
                       <input
@@ -1352,7 +1366,7 @@ export default function App() {
                           setPage(1);
                         }}
                         placeholder="Search CSV Tag (e.g. Q3-Marketing)..."
-                        className="search-pill pr-8 text-xs font-bold placeholder-purple-400 !bg-purple-50/30 dark:!bg-purple-500/10 !border-purple-200"
+                        className="search-pill pr-8 text-xs font-bold placeholder-violet-400 !bg-violet-50/30 dark:!bg-violet-500/10 !border-violet-200"
                       />
                       {tagSearchInput && (
                         <button
@@ -1362,7 +1376,7 @@ export default function App() {
                             setFilters(prev => ({ ...prev, sources: [] }));
                             setPage(1);
                           }}
-                          className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-purple-400 hover:text-purple-700"
+                          className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-violet-400 hover:text-violet-700"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -1432,9 +1446,9 @@ export default function App() {
                             onClick={() => setTagDropdownOpen(false)}
                           />
                           <div className="absolute left-0 right-0 mt-1 bg-[var(--surface-card-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
-                            <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-purple-600 border-b border-purple-100 mb-1 flex items-center justify-between">
+                            <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-violet-600 border-b border-violet-100 mb-1 flex items-center justify-between">
                               <span>Your Uploaded CSV Tags</span>
-                              <span className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-bold">{csvImportTags.length} active</span>
+                              <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.2 rounded-full font-bold">{csvImportTags.length} active</span>
                             </div>
                             {csvImportTags
                               .filter(s => s.toLowerCase().includes(tagSearchInput.toLowerCase()))
@@ -1449,15 +1463,15 @@ export default function App() {
                                       setPage(1);
                                       setTagDropdownOpen(false);
                                     }}
-                                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-purple-50 transition-colors cursor-pointer ${
-                                      isSelected ? 'text-purple-700 bg-purple-50 font-extrabold' : 'text-slate-700'
+                                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-violet-50 transition-colors cursor-pointer ${
+                                      isSelected ? 'text-violet-700 bg-violet-50 font-extrabold' : 'text-slate-700'
                                     }`}
                                   >
                                     <div className="flex items-center space-x-2 truncate">
-                                      <Tag className="w-3 h-3 text-purple-500 shrink-0" />
+                                      <Tag className="w-3 h-3 text-violet-500 shrink-0" />
                                       <span className="truncate font-bold">#{tag}</span>
                                     </div>
-                                    {isSelected && <Check className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
+                                    {isSelected && <Check className="w-3.5 h-3.5 text-violet-600 shrink-0" />}
                                   </button>
                                 );
                               })}
@@ -1528,7 +1542,7 @@ export default function App() {
                   title="Export contacts to CSV"
                   className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-black text-[var(--text-primary)] bg-[var(--surface-card)] rounded-xl cursor-pointer super-3d-white-btn"
                 >
-                  <Download className="w-3.5 h-3.5 text-purple-600" />
+                  <Download className="w-3.5 h-3.5 text-violet-600" />
                   <span>Download CSV</span>
                 </button>
 
@@ -1537,7 +1551,7 @@ export default function App() {
                   onClick={() => setIsImportOpen(true)}
                   className="inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-black text-[var(--text-primary)] bg-[var(--surface-card)] rounded-xl cursor-pointer super-3d-white-btn"
                 >
-                  <Upload className="w-3.5 h-3.5 text-purple-600" />
+                  <Upload className="w-3.5 h-3.5 text-violet-600" />
                   <span>Upload CSV</span>
                 </button>
 
@@ -1630,7 +1644,7 @@ export default function App() {
               <div key="analytics-view" className="flex-1 overflow-y-auto page-enter">
                 <AnalyticsView leads={leads} />
               </div>
-            ) : activeView === 'Campaigns' || activeView === 'Messages' || activeView === 'Phone Calls' || activeView === 'Action Items' ? (
+            ) : activeView === 'Sequences' || activeView === 'Messages' || activeView === 'Phone Calls' || activeView === 'Tasks' ? (
               <div key="outreach-view" className="flex-1 overflow-y-auto page-enter">
                 <OutreachView leads={leads} onShowMessage={showStatus} />
               </div>
@@ -1764,6 +1778,8 @@ export default function App() {
           selectedLeads={leads.filter(l => selectedIds.includes(l.id))}
           allLeads={getStoredLeads()}
           filterOptions={filterOptions}
+          filters={filters}
+          onApplyFilters={(f) => { setFilters(f); setPage(1); }}
           onApplyLeadFilter={(leadIds) => setAiFilteredLeadIds(leadIds)}
           onSelectLeadInTable={(leadId) => {
             if (!selectedIds.includes(leadId)) {
@@ -1893,6 +1909,18 @@ export default function App() {
         leads={getStoredLeads()}
         creditBalance={creditBalance}
         onApplyEnrichment={handleApplyEnrichment}
+      />
+
+      <DuplicateLeadsModal
+        isOpen={isDuplicateModalOpen}
+        onClose={() => { setIsDuplicateModalOpen(false); fetchLeads(); }}
+        result={lastImportResult}
+        csvName={lastImportedTag ? `Tag: ${lastImportedTag}` : undefined}
+        onAddTag={async (email, tag) => {
+          const res = await addTagToExistingLead(email, tag);
+          if (!res.success) showStatus(`Couldn't add tag "${tag}": ${res.error || 'unknown error'}`, 'error');
+          return res.success;
+        }}
       />
 
     </div>

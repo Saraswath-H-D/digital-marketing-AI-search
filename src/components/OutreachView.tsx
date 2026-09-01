@@ -241,7 +241,7 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
             onClick={() => setActiveTab(tab)}
             className={`px-5 py-2.5 text-sm capitalize transition-colors cursor-pointer -mb-[1.5px] ${
               activeTab === tab
-                ? 'border-b-[2.5px] border-purple-600 text-purple-600 font-bold'
+                ? 'border-b-[2.5px] border-violet-600 text-violet-600 font-bold'
                 : 'border-b-[2.5px] border-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-secondary)]'
             }`}
           >
@@ -256,12 +256,12 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
           <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-card)] p-5 rounded-2xl border border-[var(--border-subtle)] shadow-2xs">
             <div>
               <div className="flex items-center space-x-2">
-                <span className="px-2.5 py-0.5 text-3xs font-extrabold bg-purple-100 text-purple-700 rounded-full border border-purple-200">
+                <span className="px-2.5 py-0.5 text-3xs font-extrabold bg-violet-100 text-violet-700 rounded-full border border-violet-200">
                   OUTREACH AUTOMATION
                 </span>
-                <span className="text-xs text-[var(--text-muted)] font-mono">Live Campaign Engine</span>
+                <span className="text-xs text-[var(--text-muted)] font-mono">Live Sequence Engine</span>
               </div>
-              <h2 className="text-xl font-extrabold text-[var(--text-primary)] tracking-tight mt-1">Multi-Channel Sales Campaigns</h2>
+              <h2 className="text-xl font-extrabold text-[var(--text-primary)] tracking-tight mt-1">Multi-Channel Outreach Sequences</h2>
               <p className="text-xs text-[var(--text-muted)] font-medium">Activate email sequences, track open rates & reply analytics in real time.</p>
             </div>
 
@@ -270,13 +270,13 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
               className="btn-primary !text-xs"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Create Campaign</span>
+              <span>+ Create Sequence</span>
             </button>
           </div>
 
           {/* New Campaign Form */}
           {isCreating && (
-            <form onSubmit={handleCreateCampaign} className="p-5 bg-purple-50/70 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-400/20 rounded-2xl space-y-3 animate-fadeIn">
+            <form onSubmit={handleCreateCampaign} className="p-5 bg-violet-50/70 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-400/20 rounded-2xl space-y-3 animate-fadeIn">
               <h3 className="text-xs font-extrabold text-[var(--text-primary)] uppercase tracking-wider">New Outreach Sequence</h3>
               <div className="flex space-x-3">
                 <input
@@ -284,7 +284,7 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
                   value={newCampName}
                   onChange={(e) => setNewCampName(e.target.value)}
                   placeholder="e.g. Q4 Executive Leadership Campaign..."
-                  className="glass-input flex-1 !text-xs font-semibold focus:!border-purple-500"
+                  className="glass-input flex-1 !text-xs font-semibold focus:!border-violet-500"
                   required
                 />
                 <button
@@ -311,7 +311,7 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-xs ${
-                      camp.status === 'Active' ? 'bg-gradient-to-tr from-purple-600 to-indigo-600' : 'bg-slate-400'
+                      camp.status === 'Active' ? 'bg-gradient-to-tr from-violet-600 to-indigo-600' : 'bg-slate-400'
                     }`}>
                       <Send className="w-5 h-5" />
                     </div>
@@ -343,23 +343,23 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
                 <div className="grid grid-cols-5 gap-3 pt-2 border-t border-[var(--border-subtle)]">
                   <div className="p-3 bg-[var(--surface-card-header)] rounded-xl border border-[var(--border-subtle)]">
                     <span className="text-3xs font-bold text-[var(--text-muted)] uppercase block mb-0.5">Enrolled Leads</span>
-                    <span className="text-sm font-extrabold text-[var(--text-secondary)]">{camp.contactsCount}</span>
+                    <span className="text-sm font-extrabold text-[var(--text-secondary)] tabular-nums">{camp.contactsCount}</span>
                   </div>
                   <div className="p-3 bg-[var(--surface-card-header)] rounded-xl border border-[var(--border-subtle)]">
                     <span className="text-3xs font-bold text-[var(--text-muted)] uppercase block mb-0.5">Emails Sent</span>
-                    <span className="text-sm font-extrabold text-indigo-600">{camp.emailsSent}</span>
+                    <span className="text-sm font-extrabold text-indigo-600 tabular-nums">{camp.emailsSent}</span>
                   </div>
-                  <div className="p-3 bg-purple-50/60 dark:bg-purple-500/10 rounded-xl border border-purple-200/60 dark:border-purple-400/20">
-                    <span className="text-3xs font-bold text-purple-600 uppercase block mb-0.5">Open Rate</span>
-                    <span className="text-sm font-extrabold text-purple-600">{camp.openRate}%</span>
+                  <div className="p-3 bg-violet-50/60 dark:bg-violet-500/10 rounded-xl border border-violet-200/60 dark:border-violet-400/20">
+                    <span className="text-3xs font-bold text-violet-600 uppercase block mb-0.5">Open Rate</span>
+                    <span className="text-sm font-extrabold text-violet-600 tabular-nums">{camp.openRate}%</span>
                   </div>
                   <div className="p-3 bg-emerald-50/60 dark:bg-emerald-500/10 rounded-xl border border-emerald-200/60 dark:border-emerald-400/20">
                     <span className="text-3xs font-bold text-emerald-700 dark:text-emerald-400 uppercase block mb-0.5">Reply Rate</span>
-                    <span className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400">{camp.replyRate}%</span>
+                    <span className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400 tabular-nums">{camp.replyRate}%</span>
                   </div>
                   <div className="p-3 bg-rose-50/60 dark:bg-rose-500/10 rounded-xl border border-rose-200/60 dark:border-rose-400/20">
                     <span className="text-3xs font-bold text-rose-700 dark:text-rose-400 uppercase block mb-0.5">Bounce Rate</span>
-                    <span className="text-sm font-extrabold text-rose-700 dark:text-rose-400">{camp.bounceRate}%</span>
+                    <span className="text-sm font-extrabold text-rose-700 dark:text-rose-400 tabular-nums">{camp.bounceRate}%</span>
                   </div>
                 </div>
               </div>
@@ -436,7 +436,7 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
                       <td className="py-3 px-4">
                         <button
                           onClick={() => setEditingTemplate(tpl)}
-                          className="text-xs font-bold text-[var(--text-primary)] hover:text-purple-600 cursor-pointer text-left"
+                          className="text-xs font-bold text-[var(--text-primary)] hover:text-violet-600 cursor-pointer text-left"
                         >
                           {tpl.name}
                         </button>
@@ -548,7 +548,7 @@ function TemplateEditor({
               value={template.name}
               onChange={(e) => onChange({ ...template, name: e.target.value })}
               placeholder="e.g. New Test Template"
-              className="glass-input !text-xs font-semibold focus:!border-purple-500"
+              className="glass-input !text-xs font-semibold focus:!border-violet-500"
             />
           </div>
 
@@ -573,7 +573,7 @@ function TemplateEditor({
             <label className="block text-3xs font-bold uppercase tracking-wider text-[var(--text-muted)] mb-1">Tags</label>
             <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 border border-[var(--border-input)] rounded-lg bg-[var(--surface-input)]">
               {template.tags.map(tag => (
-                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-bold bg-purple-100 text-purple-700 rounded-full">
+                <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 text-3xs font-bold bg-violet-100 text-violet-700 rounded-full">
                   <Tag className="w-2.5 h-2.5" />
                   {tag}
                   <button onClick={() => removeTag(tag)} className="cursor-pointer"><X className="w-2.5 h-2.5" /></button>
@@ -598,7 +598,7 @@ function TemplateEditor({
               value={template.subject}
               onChange={(e) => onChange({ ...template, subject: e.target.value })}
               placeholder="e.g. Improve Your Outbound Sales"
-              className="glass-input !text-xs font-semibold focus:!border-purple-500"
+              className="glass-input !text-xs font-semibold focus:!border-violet-500"
             />
           </div>
 
@@ -609,7 +609,7 @@ function TemplateEditor({
               value={template.body}
               onChange={(e) => onChange({ ...template, body: e.target.value })}
               placeholder="Hey {{first_name}} - ..."
-              className="glass-textarea !text-xs font-medium resize-none leading-relaxed focus:!border-purple-500"
+              className="glass-textarea !text-xs font-medium resize-none leading-relaxed focus:!border-violet-500"
             />
           </div>
         </div>
@@ -620,7 +620,7 @@ function TemplateEditor({
             <Eye className="w-3.5 h-3.5" /> Template Preview
           </h3>
           <p className="text-3xs text-[var(--text-muted)] leading-relaxed">
-            This is a preview for an example contact. <span className="text-purple-600 font-semibold cursor-pointer hover:underline">Click here</span> to generate the preview for a specific contact.
+            This is a preview for an example contact. <span className="text-violet-600 font-semibold cursor-pointer hover:underline">Click here</span> to generate the preview for a specific contact.
           </p>
 
           <div className="p-4 bg-[var(--surface-card-header)] border border-[var(--border-subtle)] rounded-xl space-y-2">

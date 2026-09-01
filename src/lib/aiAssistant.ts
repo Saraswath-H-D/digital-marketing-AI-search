@@ -23,6 +23,376 @@ export interface ChatHistoryItem {
   text: string;
 }
 
+// ==================== CSV UPLOAD TAG INTENT (chat-driven CSV import) ====================
+// Precise tag resolution for a CSV attached in the AI Assistant composer. Never invents
+// a tag: an unresolvable/absent reference always comes back as `tag: null`, exactly
+// like an unspecified tag — the caller is the only place a default (e.g. the filename)
+// may ever be applied, and even then only when the caller explicitly chooses to.
+
+export interface CsvTagResolution {
+  // explicit    — user named a real tag ("with the SaaS Founders tag")
+  // none        — user explicitly declined a tag ("without a tag")
+  // same        — user referred to a previous tag ("same tag as before")
+  // unspecified — tag wasn't mentioned at all; caller should default to null, never invent one
+  mode: 'explicit' | 'none' | 'same' | 'unspecified';
+  tag: string | null;
+  needsClarification: boolean;
+  clarificationQuestion?: string;
+}
+
+export const NO_TAG_RE = /\b(without\s+(?:a\s+|any\s+)?tag|no\s+tag|don'?t\s+(?:assign\s+(?:a\s+|any\s+)?tag|tag\s+(?:it|them|these|this)?)|dont\s+tag|leave\s+the\s+tag\s+empty|untagged|(?:import|upload)(?:ed)?\s+(?:them\s+|it\s+)?normally)\b/i;
+
+const SAME_TAG_RE = /\b(same\s+tag|previous\s+tag|last\s+tag|tag\s+(?:we|i)\s+used\s+(?:before|previously|last\s+time))\b/i;
+
+// Non-greedy value capture that stops at sentence-ending punctuation or a common
+// trailing conjunction/filler word, so "with the SaaS Founders tag, please" captures
+// just "SaaS Founders" rather than swallowing the rest of the sentence.
+const TAG_VALUE = `([A-Za-z0-9][A-Za-z0-9 &/'’_-]*?)(?=[.,!?]|\\s+(?:and|but|please|for|from|to|instead)\\b|$)`;
+
+const EXPLICIT_TAG_PATTERNS: RegExp[] = [
+  new RegExp(`\\btag(?:ged)?\\s+(?:it|them|these|this)?\\s*as\\s+["“']?${TAG_VALUE}`, 'i'),
+  new RegExp(`\\bwith\\s+(?:the\\s+)?tag\\s+["“']?${TAG_VALUE}`, 'i'),
+  new RegExp(`\\bwith\\s+(?:the\\s+)?["“']?${TAG_VALUE}["”']?\\s+tag\\b`, 'i'),
+  new RegExp(`\\btag\\s*[:=]\\s*["“']?${TAG_VALUE}`, 'i'),
+  new RegExp(`\\bunder\\s+(?:the\\s+)?["“']?${TAG_VALUE}["”']?\\s+(?:group|tag)\\b`, 'i'),
+  new RegExp(`\\buse\\s+(?:the\\s+)?["“']?${TAG_VALUE}["”']?\\s+tag\\b`, 'i'),
+  new RegExp(`\\b(?:use|make\\s+it)\\s+["“']?${TAG_VALUE}["”']?\\s+instead\\b`, 'i'),
+];
+
+/**
+ * Resolve tag intent from one message (Design.md-independent — this is the AI Assistant's
+ * own NL logic). `lastUsedTag` is the most recent tag this conversation actually used in
+ * a completed upload (or null); it's the only thing "same tag as before" is allowed to
+ * resolve against — never a guess.
+ */
+export function resolveCsvTagIntent(text: string, lastUsedTag: string | null): CsvTagResolution {
+  const clean = (text || '').trim();
+
+  if (NO_TAG_RE.test(clean)) {
+    return { mode: 'none', tag: null, needsClarification: false };
+  }
+
+  if (SAME_TAG_RE.test(clean)) {
+    if (lastUsedTag) {
+      return { mode: 'same', tag: lastUsedTag, needsClarification: false };
+    }
+    return {
+      mode: 'same',
+      tag: null,
+      needsClarification: true,
+      clarificationQuestion: "I don't have a previous tag from this conversation to reuse — which tag should I use, or should I leave these contacts untagged?",
+    };
+  }
+
+  for (const re of EXPLICIT_TAG_PATTERNS) {
+    const m = clean.match(re);
+    if (m && m[1] && m[1].trim()) {
+      return { mode: 'explicit', tag: m[1].trim().replace(/\s+/g, '-'), needsClarification: false };
+    }
+  }
+
+  return { mode: 'unspecified', tag: null, needsClarification: false };
+}
+
+// Recognizes an explicit request to delete/remove a CSV or its members — out of scope
+// for the current upload flow, so callers can decline honestly instead of misreading it
+// as an upload.
+export const CSV_DELETE_INTENT_RE = /\b(delete|remove|get rid of)\s+(?:the\s+|this\s+|that\s+)?(csv|file|import|members?|contacts?)\b/i;
+
+// ==================== NATURAL-LANGUAGE LEAD FILTERING ====================
+// Converts an English lead-search sentence into the application's OWN Filters object —
+// never a separate filtering mechanism (Design.md/AI-assistant spec §11) — grounded
+// strictly in values that actually exist in filterOptions. Never invents a filter value
+// or field; a requested concept the data doesn't support is reported, not guessed at.
+
+export interface FilterQueryResult {
+  mode: 'apply' | 'clarify' | 'unavailable' | 'none';
+  /** Full, ready-to-apply Filters object (current filters merged with this query's intent) — only set when mode === 'apply'. */
+  mergedFilters?: Filters;
+  /** Bullet lines describing the FINAL cumulative filter state, for the "I understood: ..." summary. */
+  understood: string[];
+  /** Requested concepts with no matching field/data in this application. */
+  unavailable: string[];
+  clarificationQuestion?: string;
+}
+
+const JOB_TITLE_SYNONYMS: Record<string, string[]> = {
+  ceo: ['ceo', 'chief executive officer'],
+  cto: ['cto', 'chief technology officer', 'chief technical officer'],
+  cfo: ['cfo', 'chief financial officer'],
+  coo: ['coo', 'chief operating officer'],
+  cmo: ['cmo', 'chief marketing officer'],
+  cio: ['cio', 'chief information officer'],
+  ciso: ['ciso', 'chief information security officer'],
+  vp: ['vp', 'vice president'],
+  hr: ['hr', 'human resources', 'human resource'],
+  engineer: ['engineer', 'developer', 'programmer', 'swe', 'software engineer'],
+  developer: ['developer', 'engineer', 'programmer', 'swe'],
+  manager: ['manager', 'mgr'],
+  director: ['director', 'dir'],
+  executive: ['executive', 'exec'],
+  founder: ['founder', 'co-founder', 'cofounder', 'co founder'],
+  president: ['president'],
+  representative: ['representative', 'rep'],
+  admin: ['admin', 'administrator'],
+};
+
+const FILTER_STOPWORDS = new Set(['the', 'a', 'an', 'of', 'people', 'person', 'who', 'are', 'is', 'working', 'as', 'for', 'with', 'from', 'all', 'me', 'some', 'any', 'in']);
+
+// Known concepts this application has no real field for — matched explicitly so the
+// assistant can decline honestly (Design.md/AI-assistant §5) instead of pretending.
+const UNSUPPORTED_FIELD_PATTERNS: { re: RegExp; label: string }[] = [
+  { re: /\b(university|college|graduated|alma mater|\bdegree\b)\b/i, label: 'education/university' },
+  { re: /\byears?\s*(?:of\s*)?experience\b|\d+\+?\s*years?\s*(?:of\s*)?experience/i, label: 'years of experience' },
+  { re: /\bfounded\s+(?:in|after|before)\b|\bfounding\s+(?:year|date)\b/i, label: 'company founding date' },
+  { re: /\brevenue\b/i, label: 'company revenue' },
+  { re: /\bfunding\b|\bseries\s+[a-e]\b/i, label: 'funding stage' },
+  { re: /\bstartups?\b/i, label: 'company stage (startup vs. enterprise)' },
+];
+
+function normalizeToken(t: string): string {
+  const lower = t.toLowerCase().trim();
+  return lower.endsWith('s') && lower.length > 3 && !lower.endsWith('ss') ? lower.slice(0, -1) : lower;
+}
+
+function expandTokenSynonyms(tok: string): string[] {
+  const norm = normalizeToken(tok);
+  const hits = new Set<string>([norm]);
+  Object.entries(JOB_TITLE_SYNONYMS).forEach(([key, syns]) => {
+    if (key === norm || syns.some(s => normalizeToken(s) === norm)) {
+      hits.add(key);
+      syns.forEach(s => hits.add(normalizeToken(s)));
+    }
+  });
+  return Array.from(hits);
+}
+
+// Extracts the "role phrase" — text right after a request trigger ("show me", "find",
+// "I want", ...), stopping at the first qualifier-introducing word so "software
+// engineers in Hyderabad" yields just "software engineers".
+function extractRolePhrase(query: string): string | null {
+  let text = query.trim();
+  const triggerMatch = text.match(/^(?:show me|find|give me|get all|get me|i want|i need|list|display|only show|show)\s+(?:all\s+)?/i);
+  if (triggerMatch) text = text.slice(triggerMatch[0].length);
+  const stopMatch = text.match(/\b(in|at|from|based in|located in|working|with|who|having|founded|and)\b/i);
+  const phrase = stopMatch ? text.slice(0, stopMatch.index) : text;
+  const cleaned = phrase.replace(/[.,!?]+$/, '').trim();
+  return cleaned || null;
+}
+
+function matchJobTitles(query: string, options: string[]): string[] {
+  const rolePhrase = extractRolePhrase(query);
+  if (!rolePhrase) return [];
+  const tokens = rolePhrase.split(/\s+/).map(t => t.replace(/[^a-zA-Z-]/g, '')).filter(t => t && !FILTER_STOPWORDS.has(t.toLowerCase()));
+  if (tokens.length === 0) return [];
+
+  // Each token expands to its synonym family; a real jobTitle option must contain at
+  // least one member of EVERY group to count as a match — so "software engineer" never
+  // matches a bare "Manager", and "CEO" matches "Chief Executive Officer" even though
+  // it isn't a literal substring.
+  const groups = tokens.map(expandTokenSynonyms);
+  return options.filter(opt => {
+    const optLower = opt.toLowerCase();
+    return groups.every(group => group.some(term => optLower.includes(term)));
+  });
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Grounded, safe matcher for categorical fields whose real option values are typically
+// already phrased the way people naturally say them (city/state/country/company/
+// industry names) — scans for the REAL option text appearing in the query, never the
+// reverse, so nothing not actually in the data can ever get selected.
+function scanForOptionMatches(query: string, options: string[]): string[] {
+  return options.filter(opt => {
+    const optLower = (opt || '').trim();
+    if (!optLower || optLower === '-') return false;
+    try {
+      return new RegExp(`\\b${escapeRegExp(optLower)}\\b`, 'i').test(query);
+    } catch {
+      return false;
+    }
+  });
+}
+
+// A small, finite hint table for industry phrasing that doesn't literally appear inside
+// the real option labels (e.g. "technology companies" vs. the option "Software & SaaS")
+// — still only ever selects real existing option values, never invents one.
+const INDUSTRY_HINTS: Record<string, string[]> = {
+  technology: ['software', 'tech', 'saas', 'it'],
+  tech: ['software', 'tech', 'saas', 'it'],
+  healthcare: ['health', 'biotech', 'medical'],
+  finance: ['financial', 'bank', 'fintech'],
+  retail: ['e-commerce', 'ecommerce', 'retail'],
+  education: ['education'],
+};
+
+function matchIndustries(query: string, options: string[]): string[] {
+  const direct = scanForOptionMatches(query, options);
+  if (direct.length > 0) return direct;
+  const hinted = new Set<string>();
+  Object.entries(INDUSTRY_HINTS).forEach(([trigger, keywords]) => {
+    if (new RegExp(`\\b${escapeRegExp(trigger)}\\b`, 'i').test(query)) {
+      options.forEach(opt => {
+        const optLower = opt.toLowerCase();
+        if (keywords.some(k => optLower.includes(k))) hinted.add(opt);
+      });
+    }
+  });
+  return Array.from(hinted);
+}
+
+function parseCompanySizeQuery(query: string, options: string[]): string[] {
+  const lower = query.toLowerCase();
+  let threshold: number | null = null;
+  let comparison: 'more' | 'less' | null = null;
+
+  let m = lower.match(/(?:more than|over|above|greater than)\s+(\d+)\+?\s*employees?/);
+  if (!m) m = lower.match(/(\d+)\s*\+\s*employees?/);
+  if (m) { threshold = parseInt(m[1], 10); comparison = 'more'; }
+
+  if (threshold === null) {
+    m = lower.match(/(?:less than|under|fewer than|below)\s+(\d+)\s*employees?/);
+    if (m) { threshold = parseInt(m[1], 10); comparison = 'less'; }
+  }
+  if (threshold === null || !comparison) return [];
+
+  const matched: string[] = [];
+  options.forEach(opt => {
+    const rangeMatch = opt.match(/(\d+)\s*-\s*(\d+)/);
+    const plusMatch = opt.match(/(\d+)\s*\+/);
+    if (rangeMatch) {
+      const lo = parseInt(rangeMatch[1], 10), hi = parseInt(rangeMatch[2], 10);
+      if (comparison === 'more' && hi > (threshold as number)) matched.push(opt);
+      if (comparison === 'less' && lo < (threshold as number)) matched.push(opt);
+    } else if (plusMatch && comparison === 'more') {
+      const lo = parseInt(plusMatch[1], 10);
+      if (lo >= (threshold as number)) matched.push(opt);
+    }
+  });
+  return matched;
+}
+
+function detectRemovalIntent(query: string): (keyof Filters)[] {
+  const lower = query.toLowerCase();
+  const removals: (keyof Filters)[] = [];
+  const wantsClear = /\b(remove|clear|drop)\b/.test(lower);
+  if (!wantsClear) return removals;
+  if (/\blocation\b|\bcity\b|\bstate\b|\bcountry\b/.test(lower)) removals.push('cities', 'states', 'countries');
+  if (/\bjob title\b|\brole\b/.test(lower)) removals.push('jobTitles');
+  if (/\bcompany\b/.test(lower)) removals.push('companies');
+  if (/\bindustry\b/.test(lower)) removals.push('industries');
+  if (/\btag\b|\bsource\b/.test(lower)) { removals.push('sources'); removals.push('tags'); }
+  if (/\b(company size|employee)\b/.test(lower)) removals.push('companySizes');
+  if (/\bseniority\b/.test(lower)) removals.push('seniorities');
+  return removals;
+}
+
+function describeFilters(f: Filters): string[] {
+  const lines: string[] = [];
+  if (f.jobTitles?.length) lines.push(`Job Title: ${f.jobTitles.join(', ')}`);
+  if (f.cities?.length) lines.push(`City: ${f.cities.join(', ')}`);
+  if (f.states?.length) lines.push(`State: ${f.states.join(', ')}`);
+  if (f.countries?.length) lines.push(`Country: ${f.countries.join(', ')}`);
+  if (f.companies?.length) lines.push(`Company: ${f.companies.join(', ')}`);
+  if (f.industries?.length) lines.push(`Industry: ${f.industries.join(', ')}`);
+  if (f.seniorities?.length) lines.push(`Seniority: ${f.seniorities.join(', ')}`);
+  if (f.companySizes?.length) lines.push(`Company Size: ${f.companySizes.join(', ')}`);
+  if (f.sources?.length) lines.push(`Tag/Source: ${f.sources.join(', ')}`);
+  return lines;
+}
+
+export function interpretFilterQuery(
+  query: string,
+  filterOptions: FilterOptions,
+  currentFilters: Filters
+): FilterQueryResult {
+  const clean = query.trim();
+  const lower = clean.toLowerCase();
+
+  // Sidebar fallback defaults (FiltersSidebar.tsx) — matched here too so the assistant
+  // offers exactly the same option universe the sidebar itself does, even before real
+  // data has populated filterOptions.
+  const seniorityOptions = filterOptions.seniorities?.length ? filterOptions.seniorities : ['C-Suite', 'VP / Vice President', 'Director', 'Manager', 'Owner / Partner', 'Entry Level'];
+  const companySizeOptions = filterOptions.companySizes?.length ? filterOptions.companySizes : ['1-10 employees', '11-50 employees', '51-200 employees', '201-500 employees', '501-1000 employees', '1000+ employees'];
+  const industryOptions = filterOptions.industries?.length ? filterOptions.industries : ['Software & SaaS', 'Financial Services', 'Healthcare & Biotech', 'Marketing & Advertising', 'E-Commerce & Retail', 'Education & Research', 'Consulting & IT'];
+
+  const removals = detectRemovalIntent(clean);
+  const keepOnlyMatch = clean.match(/^keep only\s+(.+)/i);
+  const resetOthers = !!keepOnlyMatch;
+  const effectiveQuery = keepOnlyMatch ? keepOnlyMatch[1] : clean;
+
+  // Ambiguity check (spec example): "senior" alone could mean a job-title prefix or a
+  // seniority-level filter — ask rather than guess, but only when it's genuinely
+  // standalone (not already resolved by an unambiguous role match below).
+  const jobTitleMatches = matchJobTitles(effectiveQuery, filterOptions.jobTitles || []);
+  if (jobTitleMatches.length === 0 && /\bsenior\b/i.test(effectiveQuery) && (filterOptions.jobTitles || []).some(t => /^senior\b/i.test(t.trim()))) {
+    return {
+      mode: 'clarify',
+      understood: [],
+      unavailable: [],
+      clarificationQuestion: 'Do you mean:\n• Senior job titles (e.g. "Senior Sales Manager")?\n• Seniority level = Senior/Director?',
+    };
+  }
+
+  const cityMatches = scanForOptionMatches(effectiveQuery, filterOptions.cities || []);
+  const stateMatches = scanForOptionMatches(effectiveQuery, filterOptions.states || []);
+  const countryMatches = scanForOptionMatches(effectiveQuery, filterOptions.countries || []);
+  const companyMatches = scanForOptionMatches(effectiveQuery, filterOptions.companies || []);
+  const industryMatches = matchIndustries(effectiveQuery, industryOptions);
+  const seniorityMatches = scanForOptionMatches(effectiveQuery, seniorityOptions);
+  const sizeMatches = parseCompanySizeQuery(effectiveQuery, companySizeOptions);
+  const tagMatches = scanForOptionMatches(effectiveQuery, filterOptions.sources || []);
+
+  const unavailable: string[] = [];
+  UNSUPPORTED_FIELD_PATTERNS.forEach(({ re, label }) => {
+    if (re.test(clean) && !unavailable.includes(label)) unavailable.push(label);
+  });
+
+  const hasAnyMatch = jobTitleMatches.length + cityMatches.length + stateMatches.length + countryMatches.length +
+    companyMatches.length + industryMatches.length + seniorityMatches.length + sizeMatches.length + tagMatches.length > 0;
+
+  if (!hasAnyMatch && removals.length === 0) {
+    if (unavailable.length > 0) {
+      // Declining one field never wipes filters already active from earlier turns —
+      // restate them so the conversation stays legible (§8 conversational continuity).
+      return { mode: 'unavailable', understood: describeFilters(currentFilters), unavailable };
+    }
+    return { mode: 'none', understood: [], unavailable: [] }; // not a filter-shaped query — let the caller fall through
+  }
+
+  const base: Filters = resetOthers
+    ? { ...currentFilters, jobTitles: [], companies: [], cities: [], states: [], countries: [], sources: [], statuses: [], industries: [], seniorities: [], companySizes: [], tags: [], search: currentFilters.search }
+    : { ...currentFilters };
+
+  const merged: Filters = { ...base };
+  if (jobTitleMatches.length > 0) merged.jobTitles = Array.from(new Set([...(resetOthers ? [] : merged.jobTitles || []), ...jobTitleMatches]));
+  if (cityMatches.length > 0) merged.cities = Array.from(new Set([...(resetOthers ? [] : merged.cities || []), ...cityMatches]));
+  if (stateMatches.length > 0) merged.states = Array.from(new Set([...(resetOthers ? [] : merged.states || []), ...stateMatches]));
+  if (countryMatches.length > 0) merged.countries = Array.from(new Set([...(resetOthers ? [] : merged.countries || []), ...countryMatches]));
+  if (companyMatches.length > 0) merged.companies = Array.from(new Set([...(resetOthers ? [] : merged.companies || []), ...companyMatches]));
+  if (industryMatches.length > 0) merged.industries = Array.from(new Set([...(resetOthers ? [] : merged.industries || []), ...industryMatches]));
+  if (seniorityMatches.length > 0) merged.seniorities = Array.from(new Set([...(resetOthers ? [] : merged.seniorities || []), ...seniorityMatches]));
+  if (sizeMatches.length > 0) merged.companySizes = Array.from(new Set([...(resetOthers ? [] : merged.companySizes || []), ...sizeMatches]));
+  if (tagMatches.length > 0) { merged.sources = Array.from(new Set([...(resetOthers ? [] : merged.sources || []), ...tagMatches])); merged.tags = merged.sources; }
+
+  removals.forEach(key => {
+    (merged as any)[key] = [];
+  });
+
+  const understood = describeFilters(merged);
+
+  if (understood.length === 0 && removals.length === 0) {
+    return unavailable.length > 0
+      ? { mode: 'unavailable', understood: describeFilters(currentFilters), unavailable }
+      : { mode: 'none', understood: [], unavailable: [] };
+  }
+
+  return { mode: 'apply', mergedFilters: merged, understood, unavailable };
+}
+
 /**
  * Helper to scan chat history backwards and resolve the last referenced/created/updated lead object.
  */

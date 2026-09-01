@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Lead } from '../types.ts';
 import { setActiveHeaders, getActiveHeaders } from '../data/leadStorage.ts';
+import { buildDuplicateSignature, ExistingRecordRef } from './dedupe.ts';
 
 const SUPABASE_CONFIG_KEY = 'operon_supabase_config_v1';
 const LEGACY_SUPABASE_CONFIG_KEY = 'apollo_supabase_config_v1';
@@ -251,6 +252,11 @@ export const pushLeadsToSupabase = async (
       linkedin_url: l.linkedinUrl || '',
       website: l.website || '',
       company_linkedin_url: l.companyLinkedinUrl || '',
+      // Real, queryable column for the CSV tag/context (falls back to the base64-encoded
+      // copy in `questions` on tables that haven't run the csv_tag migration yet — the
+      // existing missing-column retry loop below drops this key and retries automatically).
+      csv_tag: (l as any).csvTag ?? null,
+      tags: Array.isArray((l as any).tags) && (l as any).tags.length > 0 ? JSON.stringify((l as any).tags) : null,
       questions: finalQuestions,
       registration_time: l.registrationTime || new Date().toLocaleString(),
       approval_status: l.approvalStatus || 'approved',
@@ -500,6 +506,18 @@ export const pullLeadsFromSupabase = async (
         state: row.state || restoredCustomMeta.state || '',
         country: row.country || restoredCustomMeta.country || '',
         sourceName: row.source || srcName,
+        // Prefer the real csv_tag column (tables that ran the migration); fall back to
+        // the legacy base64-encoded copy restored from `questions` for older rows.
+        csvTag: row.csv_tag || restoredCustomMeta.csvTag || null,
+        tags: (() => {
+          if (!row.tags) return undefined;
+          try {
+            const parsed = JSON.parse(row.tags);
+            return Array.isArray(parsed) ? parsed : undefined;
+          } catch {
+            return undefined;
+          }
+        })(),
         emailStatus: row.email_status || row.emailStatus || restoredCustomMeta.emailStatus || 'Verified',
         seniority: row.seniority || row.seniority_level || restoredCustomMeta.seniority || '',
         department: row.department || row.dept || restoredCustomMeta.department || '',
@@ -757,6 +775,154 @@ export const deleteLeadsByTagFromSupabase = async (
   }
 };
 
+const cleanSyntheticEmail = (raw: string): string => {
+  let cleanEmail = raw || '';
+  if (cleanEmail.includes('_entry')) {
+    cleanEmail = cleanEmail.replace(/_entry\d+_\d+@/, '@').replace(/_entry\d+@/, '@');
+  } else if (cleanEmail.startsWith('contact_') && cleanEmail.includes('@imported.com')) {
+    cleanEmail = '';
+  }
+  return cleanEmail;
+};
+
+const extractRowTagAndExtraTags = (row: any, restoredMeta: Record<string, any>): { tag: string | null; extraTags: string[] } => {
+  let tag: string | null = null;
+  if (row.csv_tag) tag = String(row.csv_tag).trim();
+  else if (restoredMeta.csvTag) tag = String(restoredMeta.csvTag).trim();
+  else {
+    const src = (row.source_name || row.source || '').trim();
+    tag = src || null;
+  }
+  let extraTags: string[] = [];
+  if (row.tags) {
+    try {
+      const parsed = JSON.parse(row.tags);
+      if (Array.isArray(parsed)) extraTags = parsed.map((t: any) => String(t).trim()).filter(Boolean);
+    } catch { /* not JSON — ignore */ }
+  }
+  return { tag, extraTags };
+};
+
+// Fetches EVERY existing Supabase row and returns their duplicate signatures (see
+// lib/dedupe.ts) — the "compare against existing Supabase records" half of the exact
+// duplicate rule. Deliberately global, not tag-scoped: tag is metadata handled
+// separately from the exact-duplicate decision (a matching lead under a different tag
+// is still the same duplicate lead). Best-effort: on any failure this returns an empty
+// map rather than throwing, so a duplicate-check hiccup never blocks an import — it only
+// means the cross-Supabase half of the check was skipped for this run (still backed by
+// the within-batch check, which never depends on network access).
+export const getExistingLeadIndex = async (
+  config?: SupabaseConfig
+): Promise<Map<string, ExistingRecordRef>> => {
+  const index = new Map<string, ExistingRecordRef>();
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return index;
+
+  const tableName = activeConfig.tableName || 'registration_contacts';
+
+  try {
+    const PAGE_SIZE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await client
+        .from(tableName)
+        .select('*')
+        .range(from, from + PAGE_SIZE - 1);
+      if (error || !data || data.length === 0) break;
+
+      data.forEach((row: any) => {
+        let restoredMeta: Record<string, any> = {};
+        const q = row.questions || '';
+        const metaMatch = q.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
+        if (metaMatch) {
+          try {
+            restoredMeta = JSON.parse(safeAtob(metaMatch[1]));
+          } catch { /* ignore malformed metadata */ }
+        }
+
+        const { tag, extraTags } = extractRowTagAndExtraTags(row, restoredMeta);
+        const cleanEmail = cleanSyntheticEmail(row.email || '');
+
+        const leadShaped: Record<string, any> = {
+          ...restoredMeta,
+          firstName: row.first_name || '',
+          lastName: row.last_name || '',
+          email: cleanEmail,
+          phone: row.phone_number || '',
+          jobTitle: row.job_title || '',
+          organization: row.company_name || row.organization || '',
+          city: row.city || '',
+          state: row.state || '',
+          country: row.country || '',
+          sourceName: row.source_name || row.source || '',
+          emailStatus: row.email_status || '',
+          seniority: row.seniority || '',
+          department: row.department || '',
+          industry: row.industry || '',
+          companySize: row.employee_size || '',
+          linkedinUrl: row.person_linkedin_url || row.linkedin_url || '',
+          website: row.website || '',
+          companyLinkedinUrl: row.company_linkedin_url || '',
+          approvalStatus: row.approval_status || '',
+        };
+
+        const { signature } = buildDuplicateSignature(leadShaped);
+        if (!signature) return; // a completely empty row carries no comparable identity
+        const displayName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || cleanEmail || 'Unknown lead';
+        index.set(signature, { signature, displayName, email: cleanEmail, tag, extraTags });
+      });
+
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+  } catch (err) {
+    console.warn('getExistingLeadIndex failed — proceeding without the cross-Supabase half of duplicate detection:', err);
+  }
+
+  return index;
+};
+
+// Appends `newTag` to an existing lead's `tags` array in Supabase, identified by email
+// (the same reliable identifier the rest of this file already uses for updates/deletes).
+// Used by the "add this tag to the existing lead?" duplicate-resolution decision — never
+// creates a second lead record.
+export const addTagToLeadByEmail = async (
+  email: string,
+  newTag: string,
+  config?: SupabaseConfig
+): Promise<{ success: boolean; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return { success: false, error: 'Supabase client missing' };
+  const cleanEmail = (email || '').trim();
+  if (!cleanEmail || cleanEmail === '-') return { success: false, error: 'No reliable email identifier for this lead' };
+
+  const tableName = activeConfig.tableName || 'registration_contacts';
+  try {
+    const { data, error } = await client.from(tableName).select('csv_tag, tags').eq('email', cleanEmail).limit(1);
+    if (error) return { success: false, error: error.message };
+    if (!data || data.length === 0) return { success: false, error: 'Lead not found in Supabase' };
+
+    let existingTags: string[] = [];
+    try {
+      const parsed = data[0].tags ? JSON.parse(data[0].tags) : [];
+      if (Array.isArray(parsed)) existingTags = parsed.map((t: any) => String(t).trim()).filter(Boolean);
+    } catch { /* start fresh */ }
+
+    const cleanNewTag = newTag.trim();
+    if (existingTags.includes(cleanNewTag) || data[0].csv_tag === cleanNewTag) {
+      return { success: true }; // already has it — nothing to do
+    }
+    existingTags.push(cleanNewTag);
+
+    const { error: updateErr } = await client.from(tableName).update({ tags: JSON.stringify(existingTags) }).eq('email', cleanEmail);
+    if (updateErr) return { success: false, error: updateErr.message };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to add tag' };
+  }
+};
 
 export const generateSupabaseSQL = (tableName: string = 'registration_contacts'): string => {
 
@@ -809,6 +975,15 @@ ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS person_linkedin_url TEX
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS website TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS company_linkedin_url TEXT;
+-- csv_tag: the CSV upload's own tag/context as a real, queryable column (previously
+-- only smuggled inside the questions column as base64 metadata) — required for the app
+-- to enforce "same email under a different tag is NOT a duplicate" correctly at the
+-- database level. Purely additive; existing rows just get csv_tag = NULL until re-synced.
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS csv_tag TEXT;
+-- tags: additional tag memberships beyond the original csv_tag (JSON array as text),
+-- e.g. '["Prospects","Investors"]' — written when the exact-duplicate "add this tag
+-- too?" decision is accepted for a lead that already exists under a different tag.
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS tags TEXT;
 
 -- 2b. Make sure email actually carries the unique constraint the app upserts against
 -- (safe to re-run; no-ops if it's already there under this name)
@@ -820,6 +995,23 @@ BEGIN
     ALTER TABLE public.${tableName} ADD CONSTRAINT ${tableName}_email_key UNIQUE (email);
   END IF;
 END $$;
+
+-- 2c. OPTIONAL — run this block yourself ONLY if you want the database itself to allow
+-- the same email to exist more than once when it's under a genuinely different CSV tag
+-- (Design.md CSV duplicate rule: "different tag context = NOT a duplicate"). Today the
+-- constraint above (email alone, globally unique) means Supabase will still merge two
+-- rows sharing an email even across different tags. Swapping to a composite constraint
+-- on (email, csv_tag) fixes that — but changes what "insert vs. update" means for every
+-- future push, so it's left commented out rather than applied automatically:
+--
+-- ALTER TABLE public.${tableName} DROP CONSTRAINT IF EXISTS ${tableName}_email_key;
+-- ALTER TABLE public.${tableName} ADD CONSTRAINT ${tableName}_email_csv_tag_key UNIQUE (email, csv_tag);
+--
+-- After running this, ask the AI assistant to switch the app's upsert conflict target
+-- from 'email' to 'email,csv_tag' to match — that change is NOT applied automatically
+-- and needs its own follow-up (it also requires every lead to carry a non-null csv_tag,
+-- since Postgres treats two NULLs as never conflicting under a composite unique
+-- constraint, which would silently duplicate-row every untagged single-record edit).
 
 -- 3. Allow explicit ID insertion starting from 1
 ALTER TABLE public.${tableName} ALTER COLUMN id DROP IDENTITY IF EXISTS;

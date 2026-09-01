@@ -80,7 +80,7 @@ export default function SectionInfoModal({ section, leads, onClose, onApplyFilte
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)] shrink-0">
               <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-sm">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white flex items-center justify-center shadow-sm">
                   {meta.icon}
                 </div>
                 <div>
@@ -173,9 +173,9 @@ export default function SectionInfoModal({ section, leads, onClose, onApplyFilte
                         <button
                           key={src}
                           onClick={() => { onApplyFilter('source', src); onClose(); }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-3xs font-bold bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-400/20 rounded-full hover:bg-purple-100 dark:hover:bg-purple-500/20 cursor-pointer text-purple-700 dark:text-purple-300"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-3xs font-bold bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-400/20 rounded-full hover:bg-violet-100 dark:hover:bg-violet-500/20 cursor-pointer text-violet-700 dark:text-violet-300"
                         >
-                          {src} <span className="text-purple-400">({count})</span>
+                          {src} <span className="text-violet-400">({count})</span>
                         </button>
                       ))}
                     </div>
@@ -207,7 +207,7 @@ export default function SectionInfoModal({ section, leads, onClose, onApplyFilte
                   {savedLeads.length > 0 && (
                     <button
                       onClick={() => { onApplyFilter('saved'); onClose(); }}
-                      className="w-full mt-2 px-3 py-2 text-xs font-bold text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-500/10 rounded-lg cursor-pointer"
+                      className="w-full mt-2 px-3 py-2 text-xs font-bold text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 rounded-lg cursor-pointer"
                     >
                       View all {savedLeads.length} saved contacts in Contact Directory →
                     </button>

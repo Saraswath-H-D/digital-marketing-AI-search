@@ -500,7 +500,7 @@ export default function LeadsTable({
                     {/* 10. Source */}
                     <td className="py-3.5 px-4 font-medium text-[var(--text-secondary)]">
                       {lead.sourceName && lead.sourceName !== '-' ? (
-                        <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold">
+                        <span className="px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-200 text-[11px] font-bold">
                           {lead.sourceName}
                         </span>
                       ) : (
@@ -625,7 +625,7 @@ export default function LeadsTable({
                           <button
                             onClick={() => onSelectLeadForDrawer(lead)}
                             title="View Full Profile Drawer"
-                            className="p-1.5 rounded-xl border text-purple-600 bg-purple-50 border-purple-200 hover:bg-purple-600 hover:text-white hover:scale-110 active:scale-90 transition-all duration-200 cursor-pointer shadow-3xs"
+                            className="p-1.5 rounded-xl border text-violet-600 bg-violet-50 border-violet-200 hover:bg-violet-600 hover:text-white hover:scale-110 active:scale-90 transition-all duration-200 cursor-pointer shadow-3xs"
                           >
                             <Eye className="w-4 h-4" />
                           </button>

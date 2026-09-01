@@ -34,7 +34,7 @@ interface OperonNavigationDrawerProps {
 // rgba(99,102,241,.22)/#A5B4FC), tooltip = dark chip to the right on hover).
 // Views that already render real content in App.tsx's routing (no popup needed —
 // clicking just switches the main content area).
-const REAL_VIEWS = new Set(['Contacts', 'Campaigns', 'Messages', 'Phone Calls', 'Action Items', 'Deliverability', 'Settings']);
+const REAL_VIEWS = new Set(['Contacts', 'Sequences', 'Messages', 'Phone Calls', 'Tasks', 'Deliverability', 'Settings']);
 
 export default function OperonNavigationDrawer({
   activeView,
@@ -83,7 +83,7 @@ export default function OperonNavigationDrawer({
         <div className={`sidebar-item relative ${isActive ? 'active' : ''}`}>
           {icon}
           {badge && (
-            <span className="absolute top-1 right-1 px-1 py-0.2 text-[8px] font-extrabold bg-purple-600 text-white rounded-full leading-none">
+            <span className="absolute top-1 right-1 px-1 py-0.2 text-[8px] font-extrabold bg-violet-600 text-white rounded-full leading-none">
               {badge}
             </span>
           )}
@@ -134,10 +134,10 @@ export default function OperonNavigationDrawer({
 
         {divider}
 
-        {renderItem('Campaigns', <Send className="w-5 h-5" />, '3')}
+        {renderItem('Sequences', <Send className="w-5 h-5" />, '3')}
         {renderItem('Messages', <Mail className="w-5 h-5" />)}
         {renderItem('Phone Calls', <Phone className="w-5 h-5" />)}
-        {renderItem('Action Items', <CheckSquare className="w-5 h-5" />, '12')}
+        {renderItem('Tasks', <CheckSquare className="w-5 h-5" />, '12')}
 
         {divider}
 

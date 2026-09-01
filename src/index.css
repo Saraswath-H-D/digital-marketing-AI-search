@@ -71,9 +71,8 @@
   }
 }
 
-/* Atmosphere background — deep navy/slate corporate palette (deliberately deviates
-   from Design.md's pastel indigo/pink/mint/yellow spec, per explicit request for a
-   more subdued, executive look; stays within the brand's indigo/purple family). */
+/* Atmosphere background — Design.md §3 exact spec: pastel indigo/pink/mint/yellow
+   bloom in light mode, deep brand tones in dark mode. */
 .atmosphere {
   position: fixed;
   inset: 0;
@@ -81,20 +80,20 @@
   filter: blur(80px);
   pointer-events: none;
   background:
-    radial-gradient(circle at 20% 20%, #1e1b4b 0%, transparent 40%),
-    radial-gradient(circle at 80% 10%, #334155 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, #e2e8f0 0%, transparent 100%),
-    radial-gradient(circle at 10% 80%, #1e293b 0%, transparent 40%),
-    radial-gradient(circle at 90% 90%, #475569 0%, transparent 40%);
+    radial-gradient(circle at 20% 20%, #e0e7ff 0%, transparent 40%),
+    radial-gradient(circle at 80% 10%, #fae8ff 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, #f1f5f9 0%, transparent 100%),
+    radial-gradient(circle at 10% 80%, #dcfce7 0%, transparent 40%),
+    radial-gradient(circle at 90% 90%, #fef9c3 0%, transparent 40%);
 }
 
 [data-theme="dark"] .atmosphere {
   background:
     radial-gradient(circle at 20% 20%, #1e1b4b 0%, transparent 40%),
-    radial-gradient(circle at 80% 10%, #334155 0%, transparent 40%),
+    radial-gradient(circle at 80% 10%, #3b0764 0%, transparent 40%),
     radial-gradient(circle at 50% 50%, #0f172a 0%, transparent 100%),
-    radial-gradient(circle at 10% 80%, #1e293b 0%, transparent 40%),
-    radial-gradient(circle at 90% 90%, #475569 0%, transparent 40%);
+    radial-gradient(circle at 10% 80%, #064e3b 0%, transparent 40%),
+    radial-gradient(circle at 90% 90%, #1c1917 0%, transparent 40%);
 }
 
 /* App Shell Structure */
@@ -462,6 +461,22 @@
 .badge-priority-medium { background: rgba(254, 243, 199, 0.9); color: #92400E; }
 .badge-priority-low { background: rgba(249, 250, 251, 0.9); color: #4B5563; }
 
+/* Role-badge text (Design.md §2): gradient-clip label, no background pill — Super
+   Admin gets its own violet/purple gradient; every other role reuses the indigo one. */
+.role-badge-text {
+  background: linear-gradient(135deg, #818CF8, #4F46E5);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-weight: 800;
+}
+
+.role-badge-text.super-admin {
+  background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
 /* Motion & Keyframes */
 .page-enter {
   animation: slideUpFade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -495,6 +510,89 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.7);
+}
+
+/* Utility layer completing Tailwind's default scale per Design.md §4/§5/§8/§17 —
+   components throughout the app reference these class names, but Tailwind v4 only
+   generates CSS for utilities it recognises (its own scale, or names declared via
+   @theme); an unrecognised class name is silently dropped, not an error, so these
+   were rendering with no effect at all until defined here explicitly. */
+
+/* Type scale: Design.md §4 "captions 0.62–0.72rem" sit below Tailwind's own
+   smallest step (text-xs = 0.75rem, "meta"), so they need their own classes. */
+.text-2xs { font-size: 0.7rem; line-height: 1rem; }
+.text-3xs { font-size: 0.65rem; line-height: 0.85rem; }
+.text-4xs { font-size: 0.6rem; line-height: 0.75rem; }
+
+/* Display heading treatment — Design.md §4: page titles stay on Inter, just at a
+   tighter tracking than body text; the numeric/KPI serif is the separate
+   .font-serif-kpi class above. */
+.font-display {
+  font-family: var(--font-sans);
+  letter-spacing: -0.02em;
+}
+
+/* Shadow scale: Design.md §5 elevation ladder — .shadow-2xs sits at Tailwind v4's
+   own default 2xs step; .shadow-3xs is one step lighter still, for small controls
+   (pagination buttons, table-row badges) that want the faintest possible lift. */
+.shadow-3xs { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03); }
+
+/* Hover "glow" shadow for the email/phone unlock pills — extends the primary-CTA
+   shadow recipe (Design.md §5) to the indigo/emerald pair those buttons use. */
+.shadow-glow-indigo { box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35); }
+.shadow-glow-emerald { box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35); }
+
+/* "Super 3D" elevated surface — a soft embossed variant of Design.md §5's elevated
+   pill-control recipe, used for the white toolbar buttons and filter accordion
+   headers throughout the app. */
+.super-3d-white-btn,
+.super-3d-card {
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: all 0.15s ease;
+}
+
+.super-3d-white-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12), 0 2px 4px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.super-3d-white-btn:active { transform: translateY(0); }
+
+[data-theme="dark"] .super-3d-white-btn,
+[data-theme="dark"] .super-3d-card {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .super-3d-white-btn:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Loading-overlay backdrop blur one step below Tailwind's own smallest (blur-xs). */
+.backdrop-blur-3xs {
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+/* Entry animation for dropdowns/suggestion panels/toasts — Design.md §17: 150–300ms,
+   ease-out on enter. */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.18s ease-out forwards;
+}
+
+/* Slow attention pulse for the "saved" bookmark ring — deliberately gentler than
+   Tailwind's own animate-pulse (Design.md §17: micro-interactions stay subtle). */
+@keyframes pulseSlow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.animate-pulseSlow {
+  animation: pulseSlow 2.2s ease-in-out infinite;
 }
 
 /* Dark mode safety net (Design.md §1): force readable light text on plain elements

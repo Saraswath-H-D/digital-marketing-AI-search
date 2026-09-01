@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Sparkles, Mail, Target, Copy, Check, RotateCcw, 
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Sparkles, Mail, Target, Copy, Check, RotateCcw,
   Brain, User, Lightbulb, Send, X, ArrowRight, ArrowLeft,
   Briefcase, MapPin, Building, HelpCircle, Loader2, MessageSquare, Flame,
-  Search, Plus, Edit3, Trash2, Zap, Terminal, CheckCircle2
+  Search, Plus, Edit3, Trash2, Zap, Terminal, CheckCircle2,
+  Paperclip, FileSpreadsheet, AlertCircle, Tag
 } from 'lucide-react';
 import { Lead, Filters, FilterOptions } from '../types.ts';
-import { processNaturalLanguageCommand, AICommandResult } from '../lib/aiAssistant.ts';
-import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory } from '../data/leadStorage.ts';
+import { processNaturalLanguageCommand, AICommandResult, resolveCsvTagIntent, NO_TAG_RE, CSV_DELETE_INTENT_RE, interpretFilterQuery } from '../lib/aiAssistant.ts';
+import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory, bulkImportLeads, addTagToExistingLead, getLastImportReport, BulkImportResult } from '../data/leadStorage.ts';
+import { parseCsvFile, buildAutoMapping, mapRowsToLeads, isCsvParseError } from '../lib/csvMapping.ts';
+import { hashFile, findCsvFileRecord, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
+import DuplicateLeadsModal from './DuplicateLeadsModal.tsx';
 
 interface AICopilotDrawerProps {
   isOpen: boolean;
@@ -26,6 +30,10 @@ interface AICopilotDrawerProps {
   onDeleteLead?: (lead: Lead) => Promise<void>;
   onSetSearchInput?: (query: string) => void;
   onRefreshLeads?: () => void;
+  // Natural-language lead filtering (§11: writes the app's OWN Filters state, same one
+  // the sidebar drives — never a separate filtering mechanism).
+  filters?: Filters;
+  onApplyFilters?: (filters: Filters) => void;
 }
 
 interface ChatMessage {
@@ -35,6 +43,17 @@ interface ChatMessage {
   result?: AICommandResult;
   timestamp: string;
 }
+
+interface AttachedCsv {
+  file: File;
+  name: string;
+  size: number;
+  headers: string[];
+  rows: Record<string, string>[];
+  hash: string | null;
+}
+
+const nowStamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
   isOpen,
@@ -51,7 +70,9 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
   onUpdateLead,
   onDeleteLead,
   onSetSearchInput,
-  onRefreshLeads
+  onRefreshLeads,
+  filters,
+  onApplyFilters
 }) => {
   const [activeTab, setActiveTab] = useState<'assistant' | 'pitch' | 'matcher'>('assistant');
   const [selectedLeadForPitch, setSelectedLeadForPitch] = useState<Lead | null>(null);
@@ -65,10 +86,25 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     {
       id: 'welcome-1',
       sender: 'assistant',
-      text: 'Hello! I am your AI Command Assistant. Type any search term, or instruct me in plain English to insert new leads or update existing records.',
+      text: 'Hello! I am your AI Command Assistant. Type any search term, instruct me in plain English to insert new leads or update existing records, or attach a CSV to import contacts.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
+
+  // CSV-via-chat upload state
+  const [attachedCsv, setAttachedCsv] = useState<AttachedCsv | null>(null);
+  const [isProcessingCsv, setIsProcessingCsv] = useState(false);
+  const [awaitingTagAnswer, setAwaitingTagAnswer] = useState(false);
+  const [awaitingFileConflictAnswer, setAwaitingFileConflictAnswer] = useState(false);
+  const [pendingImportTag, setPendingImportTag] = useState<string | null>(null);
+  // Most recent tag actually used in a completed chat-driven upload this session — the
+  // only thing "same tag as before" is allowed to resolve against (never a guess).
+  const [lastUsedCsvTag, setLastUsedCsvTag] = useState<string | null>(null);
+  const [csvAttachError, setCsvAttachError] = useState('');
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [duplicateModalResult, setDuplicateModalResult] = useState<BulkImportResult | null>(null);
+  const [duplicateModalCsvName, setDuplicateModalCsvName] = useState<string | undefined>(undefined);
 
   // Outreach Pitch Form States
   const [outreachAngle, setOutreachAngle] = useState<string>('Value-First Pitch');
@@ -109,6 +145,35 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     }
   }, [selectedLeads]);
 
+  // Answers a duplicate-related question strictly from the real last-import report —
+  // never invented. See leadStorage.ts's getLastImportReport / bulkImportLeads.
+  const formatLastImportAnswer = (question: string): string => {
+    const report = getLastImportReport();
+    if (!report) {
+      return "I don't have a CSV import result from this session yet — upload a CSV first and I can answer questions about its duplicate results.";
+    }
+    const { result, tag } = report;
+    const q = question.toLowerCase();
+    const tagLabel = tag ? `tag "${tag}"` : 'no tag';
+
+    if (/unique/.test(q)) {
+      return `The last import (${tagLabel}) kept ${result.uniqueRows} unique lead${result.uniqueRows === 1 ? '' : 's'} out of ${result.totalRows} row${result.totalRows === 1 ? '' : 's'} processed.`;
+    }
+    if (/different tag/.test(q)) {
+      return `Tags are handled separately from the exact-duplicate decision — a lead with identical information but a different tag is still the same duplicate lead, not a second record. If you'd like, I can add the new tag to the existing lead instead of creating a duplicate.`;
+    }
+    if (/why/.test(q)) {
+      return `A lead only counts as an exact duplicate when every relevant mapped field matches another lead exactly, after safe normalization (trimming, case, harmless formatting) — tag is not part of that comparison. Even one differing field — job title, city, country, anything meaningful — means it's kept as a separate record, never merged.`;
+    }
+    if (result.duplicatesSkipped === 0) {
+      return `No duplicates were found in the last import (${tagLabel}) — all ${result.uniqueRows} row${result.uniqueRows === 1 ? '' : 's'} were unique and imported.`;
+    }
+    const conflictNote = result.tagConflicts.length > 0
+      ? ` ${result.tagConflicts.length} of those already existed under a different tag — you can decide from the popup whether to add the new tag.`
+      : '';
+    return `I found exact duplicates of ${result.duplicateLeadNames.length} lead${result.duplicateLeadNames.length === 1 ? '' : 's'} (${result.duplicatesSkipped} duplicate cop${result.duplicatesSkipped === 1 ? 'y' : 'ies'} total) in the last import (${tagLabel}) and corrected each to one lead — they were skipped during import, not deleted from Supabase.${conflictNote}`;
+  };
+
   // ==================== NATURAL LANGUAGE COMMAND EXECUTION ====================
   const handleExecuteNLCommand = async (inputPrompt?: string) => {
     const queryToProcess = (inputPrompt || naturalPrompt).trim();
@@ -120,6 +185,66 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       text: queryToProcess,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
+
+    // Duplicate-result Q&A — answered from the real last-import report (leadStorage's
+    // getLastImportReport, updated by every bulkImportLeads call regardless of which UI
+    // triggered it), never guessed and never routed through the generic search/CRUD parser.
+    if (/\b(duplicate|duplicates|dupe|dupes)\b/i.test(queryToProcess)) {
+      setChatLogs(prev => [...prev, userMsg]);
+      if (!inputPrompt) setNaturalPrompt('');
+      setChatLogs(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        sender: 'assistant',
+        text: formatLastImportAnswer(queryToProcess),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }]);
+      return;
+    }
+
+    // Natural-language lead filtering — writes the app's OWN Filters state (never a
+    // separate filtering mechanism), so the result is identical to using the sidebar by
+    // hand. Grounded strictly in real filterOptions values; declines honestly when the
+    // requested concept isn't a field this app actually has.
+    if (filters && onApplyFilters) {
+      const filterResult = interpretFilterQuery(queryToProcess, filterOptions, filters);
+      if (filterResult.mode !== 'none') {
+        setChatLogs(prev => [...prev, userMsg]);
+        if (!inputPrompt) setNaturalPrompt('');
+        const stamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        if (filterResult.mode === 'clarify') {
+          setChatLogs(prev => [...prev, { id: (Date.now() + 1).toString(), sender: 'assistant', text: filterResult.clarificationQuestion!, timestamp: stamp() }]);
+          return;
+        }
+        if (filterResult.mode === 'unavailable') {
+          const list = filterResult.unavailable.map(u => `• ${u}`).join('\n');
+          const stillActive = filterResult.understood.length > 0
+            ? `\n\nYour current filters are still active:\n${filterResult.understood.map(u => `• ${u}`).join('\n')}`
+            : '';
+          setChatLogs(prev => [...prev, {
+            id: (Date.now() + 1).toString(), sender: 'assistant',
+            text: `I can't filter by this because it isn't available as a field in your current lead data:\n${list}${stillActive}`,
+            timestamp: stamp(),
+          }]);
+          return;
+        }
+
+        // mode === 'apply'
+        onApplyFilters(filterResult.mergedFilters!);
+        onApplyLeadFilter(null); // clear any stale AI id-override so the real Filters state is what's shown
+        const understoodList = filterResult.understood.map(u => `• ${u}`).join('\n');
+        const unavailNote = filterResult.unavailable.length > 0
+          ? `\n\nNote: I couldn't filter by ${filterResult.unavailable.join(', ')} — not available in your current lead data.`
+          : '';
+        setChatLogs(prev => [...prev, {
+          id: (Date.now() + 1).toString(), sender: 'assistant',
+          text: `I understood:\n${understoodList}\n\nShowing matching leads...${unavailNote}`,
+          timestamp: stamp(),
+        }]);
+        onShowMessage('Filters updated from your request.', 'success');
+        return;
+      }
+    }
 
     setChatLogs(prev => [...prev, userMsg]);
     if (!inputPrompt) setNaturalPrompt('');
@@ -249,6 +374,203 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       ]);
     } finally {
       setIsProcessingCommand(false);
+    }
+  };
+
+  // ==================== CSV UPLOAD VIA CHAT ====================
+
+  const handleAttachCsvFile = async (file: File) => {
+    setCsvAttachError('');
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setCsvAttachError('Only CSV files are supported.');
+      return;
+    }
+    const result = await parseCsvFile(file);
+    if (isCsvParseError(result)) {
+      setCsvAttachError(result.error);
+      return;
+    }
+    const hash = await hashFile(file).catch(() => null);
+    setAttachedCsv({ file, name: file.name, size: file.size, headers: result.headers, rows: result.rows, hash });
+    setAwaitingTagAnswer(false);
+    setAwaitingFileConflictAnswer(false);
+  };
+
+  const handleCsvFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleAttachCsvFile(e.target.files[0]);
+    }
+    e.target.value = '';
+  };
+
+  const removeAttachedCsv = () => {
+    setAttachedCsv(null);
+    setAwaitingTagAnswer(false);
+    setAwaitingFileConflictAnswer(false);
+    setPendingImportTag(null);
+    setCsvAttachError('');
+  };
+
+  // Executes the CSV-via-chat upload flow: tag resolution (Case A–D) → file-level
+  // duplicate check (separate from lead-level duplicates) → import. Runs instead of
+  // handleExecuteNLCommand whenever a CSV is currently attached.
+  const handleCsvUploadCommand = async () => {
+    const csv = attachedCsv;
+    if (!csv) return;
+    const messageText = naturalPrompt.trim();
+    const wasAwaitingTag = awaitingTagAnswer;
+    const wasAwaitingFileConflict = awaitingFileConflictAnswer;
+
+    setChatLogs(prev => [...prev, {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: messageText ? `📎 ${csv.name}\n${messageText}` : `📎 ${csv.name}`,
+      timestamp: nowStamp(),
+    }]);
+    setNaturalPrompt('');
+    setIsProcessingCsv(true);
+
+    const say = (text: string) => setChatLogs(prev => [...prev, { id: (Date.now() + 1).toString(), sender: 'assistant', text, timestamp: nowStamp() }]);
+
+    // Runs the actual import for a resolved tag — only ever called after the file-level
+    // conflict check below has been settled.
+    const finishImport = async (finalTag: string | null) => {
+      const mapping = buildAutoMapping(csv.headers);
+      const mappedLeads = mapRowsToLeads(csv.rows, mapping, csv.headers);
+
+      if (mappedLeads.length === 0) {
+        say(`I parsed "${csv.name}" but found no usable contact rows in it — nothing was imported.`);
+        return;
+      }
+
+      const leadsWithTag = mappedLeads.map((l: any) => ({ ...l, csvTag: finalTag }));
+      // bulkImportLeads runs the exact-duplicate rule itself (every relevant field
+      // identical after safe normalization — tag is handled separately) against this
+      // batch AND existing Supabase rows — no separate ad-hoc duplicate check needed.
+      const importResult = await bulkImportLeads(leadsWithTag);
+      const { count, supabaseResult } = importResult;
+
+      if (finalTag) setLastUsedCsvTag(finalTag);
+      if (csv.hash) recordCsvFileUpload(csv.hash, csv.name, finalTag, mappedLeads.length);
+
+      const importedOk = count > 0;
+      const lines = [
+        importedOk ? `✓ Imported ${count} member${count === 1 ? '' : 's'}` : `✗ No members were imported`,
+        `✓ CSV: ${csv.name}`,
+        finalTag ? `✓ Tag: ${finalTag}` : `✓ No tag assigned`,
+      ];
+      if (importResult.duplicatesSkipped > 0) {
+        lines.push(`✓ Found exact duplicates of ${importResult.duplicateLeadNames.length} lead${importResult.duplicateLeadNames.length === 1 ? '' : 's'} and corrected them to one lead each — ${importResult.duplicatesSkipped} cop${importResult.duplicatesSkipped === 1 ? 'y' : 'ies'} skipped, not added to Supabase`);
+        if (importResult.tagConflicts.length > 0) {
+          lines.push(`• Some of these already exist under a different tag — see the popup to decide whether to add the new tag`);
+        }
+      }
+      if (!supabaseResult.success && supabaseResult.error) {
+        lines.push(`⚠ Supabase sync issue: ${supabaseResult.error} — contacts were added locally but may not be fully synced yet.`);
+      }
+      say(lines.join('\n'));
+
+      onShowMessage(
+        importedOk ? `Imported ${count} contact(s) from ${csv.name}${finalTag ? ` tagged "${finalTag}"` : ''}.` : `Import from ${csv.name} added no contacts.`,
+        importedOk ? 'success' : 'error'
+      );
+      if (onRefreshLeads) onRefreshLeads();
+
+      // Mandatory popup (never just the chat) whenever exact duplicates were found.
+      if (importResult.duplicatesSkipped > 0) {
+        setDuplicateModalResult(importResult);
+        setDuplicateModalCsvName(csv.name);
+        setIsDuplicateModalOpen(true);
+      }
+    };
+
+    // File-level duplicate check — separate from lead-level exact duplicates. Runs
+    // right before import, once the tag to use is known.
+    const checkFileThenImport = async (finalTag: string | null) => {
+      if (!csv.hash) {
+        await finishImport(finalTag);
+        return;
+      }
+      const existingRecord = findCsvFileRecord(csv.hash);
+      if (!existingRecord) {
+        await finishImport(finalTag);
+        return;
+      }
+      const tagLabel = finalTag || '(no tag)';
+      if (existingRecord.tags.includes(tagLabel)) {
+        say(`This exact CSV file was already imported as "${tagLabel}". Nothing new was imported.`);
+        return;
+      }
+      // Same file, different tag — never decide silently.
+      setPendingImportTag(finalTag);
+      setAwaitingFileConflictAnswer(true);
+      say(`This CSV file has already been uploaded with a different tag (${existingRecord.tags.join(', ')}). Would you like to **upload both** (keep the same lead data, add "${tagLabel}" alongside the existing tag) or **consider only one file** (skip this — keep it as ${existingRecord.tags.join(', ')})?`);
+    };
+
+    try {
+      // Out-of-scope: deleting a CSV/its members through chat isn't implemented yet —
+      // decline honestly instead of silently mis-reading it as an upload.
+      if (!wasAwaitingTag && !wasAwaitingFileConflict && CSV_DELETE_INTENT_RE.test(messageText)) {
+        say("I can't delete CSVs or their members through chat yet. Use the CSV tag search + \"Delete Tagged CSV Data\" control in the left filters sidebar for that.");
+        removeAttachedCsv();
+        return;
+      }
+
+      if (wasAwaitingFileConflict) {
+        const lower = messageText.toLowerCase();
+        if (/\bboth\b/.test(lower)) {
+          await finishImport(pendingImportTag);
+        } else if (/\b(one|only|single|skip|existing)\b/.test(lower)) {
+          say(`Kept this CSV under its existing tag. Nothing new was imported.`);
+        } else {
+          say('Please reply "upload both" or "consider only one file."');
+          setIsProcessingCsv(false);
+          return; // keep waiting
+        }
+        return;
+      }
+
+      let finalTag: string | null;
+
+      if (wasAwaitingTag) {
+        // This message IS the answer to "which tag should I use?" — a bare word/phrase
+        // reply counts as the tag itself here, no "... tag" phrasing required.
+        if (!messageText) {
+          say("I still need a tag name, or let me know to leave these untagged.");
+          setIsProcessingCsv(false);
+          return; // keep attachedCsv + awaitingTagAnswer, ask again
+        }
+        if (NO_TAG_RE.test(messageText) || /^(none|no|nothing|skip|untagged)$/i.test(messageText)) {
+          finalTag = null;
+        } else {
+          finalTag = messageText.replace(/\s+/g, '-');
+        }
+      } else {
+        const tagRes = resolveCsvTagIntent(messageText, lastUsedCsvTag);
+        if (tagRes.needsClarification) {
+          setAwaitingTagAnswer(true);
+          say(tagRes.clarificationQuestion!);
+          setIsProcessingCsv(false);
+          return; // keep attachedCsv, wait for the next message to answer it
+        }
+        finalTag = tagRes.tag; // explicit tag, explicit null, or unspecified→null (never invented)
+      }
+
+      await checkFileThenImport(finalTag);
+    } catch (err: any) {
+      console.error('AI CSV upload failed:', err);
+      say(`I couldn't complete this import — ${err?.message || 'an unexpected error occurred'}. Nothing further was changed.`);
+    } finally {
+      setIsProcessingCsv(false);
+      removeAttachedCsv();
+    }
+  };
+
+  const handleSendComposer = () => {
+    if (attachedCsv) {
+      handleCsvUploadCommand();
+    } else {
+      handleExecuteNLCommand();
     }
   };
 
@@ -541,26 +863,78 @@ Operon AI Growth Team`;
               )}
             </div>
 
+            {/* CSV attachment error */}
+            {csvAttachError && (
+              <div className="flex items-start space-x-2 px-3 py-2 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-400/20 rounded-xl text-2xs font-semibold text-rose-700 dark:text-rose-400">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{csvAttachError}</span>
+              </div>
+            )}
+
+            {/* Attached CSV chip — Design.md §19 "attachment context" */}
+            {attachedCsv && (
+              <div className="flex items-center justify-between px-3 py-2 bg-[var(--accent-primary-soft)] border border-violet-300 dark:border-violet-400/30 rounded-xl animate-fadeIn">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-violet-600 text-white flex items-center justify-center shrink-0">
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-2xs font-extrabold text-[var(--text-primary)] truncate">{attachedCsv.name}</p>
+                    <p className="text-3xs text-[var(--text-muted)] font-medium">{attachedCsv.rows.length} rows • {(attachedCsv.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                </div>
+                <button
+                  onClick={removeAttachedCsv}
+                  className="p-1 rounded-lg text-[var(--text-muted)] hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
+                  title="Remove attachment"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {awaitingTagAnswer && (
+              <div className="flex items-center space-x-1.5 px-1 text-3xs font-bold text-violet-600">
+                <Tag className="w-3 h-3" />
+                <span>Waiting for a tag answer for "{attachedCsv?.name}"</span>
+              </div>
+            )}
+
             {/* Input Bar */}
             <div className="relative">
+              <input
+                type="file"
+                ref={csvFileInputRef}
+                accept=".csv"
+                onChange={handleCsvFileInputChange}
+                className="hidden"
+              />
               <textarea
                 value={naturalPrompt}
                 onChange={(e) => setNaturalPrompt(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    handleExecuteNLCommand();
+                    handleSendComposer();
                   }
                 }}
-                placeholder="Type natural language command... e.g. 'Search Procurement Managers' or 'Add lead VP Sales at Acme Corp' or 'Update lead #1 email to contact@acme.com'"
+                placeholder={attachedCsv ? "e.g. 'Upload this with the SaaS Founders tag' or 'Upload this without a tag'" : "Type natural language command... e.g. 'Search Procurement Managers' or 'Add lead VP Sales at Acme Corp' or attach a CSV to import contacts"}
                 rows={2}
-                className="w-full text-xs p-3 pr-10 border border-[var(--border-subtle)] rounded-xl focus:outline-hidden focus:border-indigo-500 resize-none bg-[var(--surface-card)] font-medium shadow-3xs"
+                className="w-full text-xs p-3 pr-16 pl-10 border border-[var(--border-subtle)] rounded-xl focus:outline-hidden focus:border-indigo-500 resize-none bg-[var(--surface-card)] font-medium shadow-3xs"
               />
               <button
-                onClick={() => handleExecuteNLCommand()}
-                disabled={isProcessingCommand || !naturalPrompt.trim()}
+                onClick={() => csvFileInputRef.current?.click()}
+                disabled={isProcessingCommand || isProcessingCsv}
+                className="absolute left-2.5 bottom-3.5 p-1.5 text-[var(--text-muted)] hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-500/10 rounded-lg disabled:opacity-40 transition-colors cursor-pointer"
+                title="Attach a CSV to import contacts"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleSendComposer}
+                disabled={isProcessingCommand || isProcessingCsv || (!naturalPrompt.trim() && !attachedCsv)}
                 className="absolute right-2.5 bottom-3.5 p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-40 transition-colors shadow-sm cursor-pointer"
-                title="Send AI Command"
+                title={attachedCsv ? "Send / Import CSV" : "Send AI Command"}
               >
                 <Send className="w-3.5 h-3.5 text-white" />
               </button>
@@ -624,7 +998,7 @@ Operon AI Growth Team`;
                         {selectedLeadForPitch.organization && (
                           <div className="flex items-center text-xs text-[var(--text-secondary)] font-medium">
                             <Building className="w-3.5 h-3.5 text-[var(--text-muted)] mr-2 shrink-0" />
-                            <span className="font-bold text-indigo-650">{selectedLeadForPitch.organization}</span>
+                            <span className="font-bold text-indigo-600">{selectedLeadForPitch.organization}</span>
                           </div>
                         )}
                         {selectedLeadForPitch.city && (
@@ -803,7 +1177,7 @@ Operon AI Growth Team`;
                     <div 
                       key={match.leadId}
                       onClick={() => onSelectLeadInTable(match.leadId)}
-                      className="group bg-[var(--surface-card)] hover:bg-indigo-50/20 border border-[var(--border-subtle)] hover:border-indigo-150 rounded-xl p-3 cursor-pointer transition-all flex items-start justify-between"
+                      className="group bg-[var(--surface-card)] hover:bg-indigo-50/20 border border-[var(--border-subtle)] hover:border-indigo-200 rounded-xl p-3 cursor-pointer transition-all flex items-start justify-between"
                     >
                       <div className="space-y-1 flex-1 pr-3">
                         <span className="font-extrabold text-xs text-[var(--text-primary)] group-hover:text-indigo-900 block">
@@ -831,6 +1205,18 @@ Operon AI Growth Team`;
         <span>Credits Remaining</span>
         <span className="text-indigo-700 text-xs font-black font-mono">{creditBalance} Cr</span>
       </div>
+
+      <DuplicateLeadsModal
+        isOpen={isDuplicateModalOpen}
+        onClose={() => { setIsDuplicateModalOpen(false); if (onRefreshLeads) onRefreshLeads(); }}
+        result={duplicateModalResult}
+        csvName={duplicateModalCsvName}
+        onAddTag={async (email, tag) => {
+          const res = await addTagToExistingLead(email, tag);
+          if (!res.success) onShowMessage(`Couldn't add tag "${tag}": ${res.error || 'unknown error'}`, 'error');
+          return res.success;
+        }}
+      />
 
     </div>
   );

@@ -134,7 +134,7 @@ export default function DataEnhancementModal({ isOpen, onClose, leads, creditBal
                 <div>
                   <h3 className="text-sm font-extrabold text-[var(--text-primary)] flex items-center gap-1.5">
                     Data Enhancement
-                    <span className="px-1.5 py-0.1 text-[9px] font-black bg-purple-600 text-white rounded-full">PRO</span>
+                    <span className="px-1.5 py-0.1 text-[9px] font-black bg-violet-600 text-white rounded-full">PRO</span>
                   </h3>
                   <p className="text-3xs text-[var(--text-muted)] font-medium">Fill gaps using data you already have — never fabricated</p>
                 </div>
