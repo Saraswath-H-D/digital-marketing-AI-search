@@ -283,20 +283,32 @@ export default function App() {
         const localLeads = getStoredLeads();
         const trashLeads = getTrashLeads();
         const deletedEmailSet = new Set(trashLeads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
+        // A blank-contact lead (no email at all) has no reliable email to delete by in
+        // Supabase — deleteLeadFromSupabase skips it, so its remote row lives on and
+        // this sync would otherwise pull it straight back every time (the old
+        // `!cleanEmail || cleanEmail === '-'` check below always kept it, trashed or
+        // not). Match it against trash the same way addLeadsToTrash/restoreLeadsFromTrash
+        // already do for these — by firstName+lastName+organization — so a deleted
+        // no-email contact stops reappearing on the next sync.
+        const deletedNameKeySet = new Set(
+          trashLeads
+            .filter(l => !l.email || l.email.trim() === '' || l.email.trim() === '-')
+            .map(l => `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`)
+        );
+        const isTrashed = (l: Lead) => {
+          const cleanEmail = (l.email || '').toLowerCase().trim();
+          if (cleanEmail && cleanEmail !== '-') return deletedEmailSet.has(cleanEmail);
+          const nameKey = `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`;
+          return deletedNameKeySet.has(nameKey);
+        };
 
         if (res.success && res.leads.length > 0) {
           // Filter out deleted trash leads
-          const activeRemoteLeads = res.leads.filter(l => {
-            const cleanEmail = (l.email || '').toLowerCase().trim();
-            return !cleanEmail || cleanEmail === '-' || !deletedEmailSet.has(cleanEmail);
-          });
-          
+          const activeRemoteLeads = res.leads.filter(l => !isTrashed(l));
+
           saveStoredLeads(activeRemoteLeads);
         } else if (localLeads.length > 0) {
-          const activeLocalLeads = localLeads.filter(l => {
-            const clean = (l.email || '').toLowerCase().trim();
-            return !clean || clean === '-' || !deletedEmailSet.has(clean);
-          });
+          const activeLocalLeads = localLeads.filter(l => !isTrashed(l));
           saveStoredLeads(activeLocalLeads);
           await pushLeadsToSupabase(activeLocalLeads);
         }
