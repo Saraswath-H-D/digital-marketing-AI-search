@@ -803,6 +803,70 @@ const extractRowTagAndExtraTags = (row: any, restoredMeta: Record<string, any>):
   return { tag, extraTags };
 };
 
+const normalizeTagKey = (t: string): string => t.trim().toLowerCase().replace(/[-_\s]+/g, '-');
+
+// Returns the set of normalized tags that currently have at least one LIVE lead in
+// Supabase — i.e. tags that are genuinely active right now, not just tags that were
+// ever used. A CSV's tag no longer having any live leads means that CSV was deleted
+// (Supabase is the source of truth for "active", per the CSV-lifecycle rule — there's
+// no separate stored status to go stale, since this is checked fresh on every upload).
+// Returns null (not an empty set) when Supabase can't be reached, so callers can tell
+// "confirmed inactive" apart from "couldn't verify" and never mistake the latter for
+// the former — that would flip the deleted-CSV bug into a lost-duplicate-protection bug.
+export const getActiveTagSet = async (config?: SupabaseConfig): Promise<Set<string> | null> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return null;
+
+  const tableName = activeConfig.tableName || 'registration_contacts';
+  const active = new Set<string>();
+  // PostgREST fails the WHOLE query (not just the missing field) when a named column
+  // doesn't exist — e.g. a table that hasn't run the csv_tag/tags migration yet. Once
+  // that's detected on the first page, every later page goes straight to `*` (which
+  // only ever returns columns that actually exist) instead of re-discovering it —
+  // still lets tag liveness be verified from source_name/questions alone, rather than
+  // silently returning null (couldn't verify) forever.
+  let useWideSelect = false;
+  const fetchPage = (from: number, to: number) =>
+    useWideSelect
+      ? client.from(tableName).select('*').range(from, to)
+      : client.from(tableName).select('csv_tag, source_name, source, tags, questions').range(from, to);
+
+  try {
+    const PAGE_SIZE = 1000;
+    let from = 0;
+    while (true) {
+      let { data, error } = await fetchPage(from, from + PAGE_SIZE - 1);
+
+      if (error?.code === '42703' && !useWideSelect) {
+        useWideSelect = true;
+        ({ data, error } = await fetchPage(from, from + PAGE_SIZE - 1));
+      }
+      if (error) return null; // a real query error — don't report false "inactive"
+      if (!data || data.length === 0) break;
+
+      data.forEach((row: any) => {
+        let restoredMeta: Record<string, any> = {};
+        const q = row.questions || '';
+        const metaMatch = q.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
+        if (metaMatch) {
+          try { restoredMeta = JSON.parse(safeAtob(metaMatch[1])); } catch { /* ignore malformed metadata */ }
+        }
+        const { tag, extraTags } = extractRowTagAndExtraTags(row, restoredMeta);
+        if (tag) active.add(normalizeTagKey(tag));
+        extraTags.forEach(t => active.add(normalizeTagKey(t)));
+      });
+
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+  } catch (err) {
+    console.warn('getActiveTagSet failed — tag liveness could not be verified:', err);
+    return null;
+  }
+  return active;
+};
+
 // Fetches EVERY existing Supabase row and returns their duplicate signatures (see
 // lib/dedupe.ts) — the "compare against existing Supabase records" half of the exact
 // duplicate rule. Deliberately global, not tag-scoped: tag is metadata handled
@@ -869,8 +933,9 @@ export const getExistingLeadIndex = async (
 
         const { signature } = buildDuplicateSignature(leadShaped);
         if (!signature) return; // a completely empty row carries no comparable identity
-        const displayName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || cleanEmail || 'Unknown lead';
-        index.set(signature, { signature, displayName, email: cleanEmail, tag, extraTags });
+        // leadName is built from the row's own name columns — NEVER from `tag`.
+        const leadName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || cleanEmail || 'Unknown lead';
+        index.set(signature, { signature, leadName, email: cleanEmail, tagName: tag, extraTags });
       });
 
       if (data.length < PAGE_SIZE) break;
@@ -900,7 +965,12 @@ export const addTagToLeadByEmail = async (
 
   const tableName = activeConfig.tableName || 'registration_contacts';
   try {
-    const { data, error } = await client.from(tableName).select('csv_tag, tags').eq('email', cleanEmail).limit(1);
+    // Same missing-column self-heal as getActiveTagSet — a table that hasn't run the
+    // csv_tag/tags migration yet fails the named select outright.
+    let { data, error } = await client.from(tableName).select('csv_tag, tags').eq('email', cleanEmail).limit(1);
+    if (error?.code === '42703') {
+      ({ data, error } = await client.from(tableName).select('*').eq('email', cleanEmail).limit(1));
+    }
     if (error) return { success: false, error: error.message };
     if (!data || data.length === 0) return { success: false, error: 'Lead not found in Supabase' };
 
@@ -917,7 +987,14 @@ export const addTagToLeadByEmail = async (
     existingTags.push(cleanNewTag);
 
     const { error: updateErr } = await client.from(tableName).update({ tags: JSON.stringify(existingTags) }).eq('email', cleanEmail);
-    if (updateErr) return { success: false, error: updateErr.message };
+    if (updateErr) {
+      // The `tags` column genuinely doesn't exist yet — say so plainly rather than
+      // surfacing a raw Postgres error or silently pretending it worked.
+      if (updateErr.code === '42703') {
+        return { success: false, error: `This Supabase table hasn't run the "tags" column migration yet — run the updated SQL from the Supabase Sync modal, then try adding the tag again.` };
+      }
+      return { success: false, error: updateErr.message };
+    }
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to add tag' };

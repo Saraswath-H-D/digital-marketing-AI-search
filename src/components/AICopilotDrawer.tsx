@@ -10,7 +10,7 @@ import { Lead, Filters, FilterOptions } from '../types.ts';
 import { processNaturalLanguageCommand, AICommandResult, resolveCsvTagIntent, NO_TAG_RE, CSV_DELETE_INTENT_RE, interpretFilterQuery } from '../lib/aiAssistant.ts';
 import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory, bulkImportLeads, addTagToExistingLead, getLastImportReport, BulkImportResult } from '../data/leadStorage.ts';
 import { parseCsvFile, buildAutoMapping, mapRowsToLeads, isCsvParseError } from '../lib/csvMapping.ts';
-import { hashFile, findCsvFileRecord, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
+import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
 import DuplicateLeadsModal from './DuplicateLeadsModal.tsx';
 
 interface AICopilotDrawerProps {
@@ -485,26 +485,33 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     };
 
     // File-level duplicate check — separate from lead-level exact duplicates. Runs
-    // right before import, once the tag to use is known.
+    // right before import, once the tag to use is known. Only a still-ACTIVE prior
+    // upload (verified live against Supabase, not just "ever recorded") can trigger
+    // this — a deleted CSV is always treated as brand new, its old tag never restored.
     const checkFileThenImport = async (finalTag: string | null) => {
       if (!csv.hash) {
         await finishImport(finalTag);
         return;
       }
-      const existingRecord = findCsvFileRecord(csv.hash);
-      if (!existingRecord) {
-        await finishImport(finalTag);
-        return;
-      }
+      const conflict = await resolveFileConflict(csv.hash, finalTag);
       const tagLabel = finalTag || '(no tag)';
-      if (existingRecord.tags.includes(tagLabel)) {
+      if (conflict.status === 'same-active-tag') {
         say(`This exact CSV file was already imported as "${tagLabel}". Nothing new was imported.`);
         return;
       }
-      // Same file, different tag — never decide silently.
-      setPendingImportTag(finalTag);
-      setAwaitingFileConflictAnswer(true);
-      say(`This CSV file has already been uploaded with a different tag (${existingRecord.tags.join(', ')}). Would you like to **upload both** (keep the same lead data, add "${tagLabel}" alongside the existing tag) or **consider only one file** (skip this — keep it as ${existingRecord.tags.join(', ')})?`);
+      if (conflict.status === 'different-active-tag') {
+        setPendingImportTag(finalTag);
+        setAwaitingFileConflictAnswer(true);
+        say(`This CSV file has already been uploaded with a different tag (${conflict.activeTags.join(', ')}). Would you like to **upload both** (keep the same lead data, add "${tagLabel}" alongside the existing tag) or **consider only one file** (skip this — keep it as ${conflict.activeTags.join(', ')})?`);
+        return;
+      }
+      // status === 'new' — either never uploaded, or every prior recorded tag for this
+      // exact file has since been deleted. Never restore the old tag; §19 — current
+      // Supabase state outranks chat history/local registry as proof of what's active.
+      if (conflict.wasPreviouslyDeleted) {
+        say(`This CSV was previously deleted, so I'm treating this as a new upload.`);
+      }
+      await finishImport(finalTag);
     };
 
     try {

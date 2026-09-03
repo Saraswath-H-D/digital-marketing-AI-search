@@ -101,9 +101,9 @@ export default function DuplicateLeadsModal({ isOpen, onClose, result, csvName, 
                   <div className="space-y-1.5 max-h-32 overflow-y-auto">
                     {result.tagConflicts.map((c, idx) => (
                       <div key={idx} className="flex items-center justify-between text-2xs px-2.5 py-1.5 bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-lg">
-                        <span className="font-bold text-[var(--text-primary)] truncate">{c.displayName}</span>
+                        <span className="font-bold text-[var(--text-primary)] truncate">{c.leadName}</span>
                         <span className="text-[var(--text-muted)] font-medium shrink-0 ml-2">
-                          {c.existing.tag || '(no tag)'} <span className="text-violet-500">→</span> {c.newTag}
+                          {c.existing.tagName || '(no tag)'} <span className="text-violet-500">→</span> {c.newTag}
                         </span>
                       </div>
                     ))}

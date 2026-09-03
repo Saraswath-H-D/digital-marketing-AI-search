@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Upload, X, Check, AlertCircle, FileSpreadsheet, Eye, ArrowRight, Table, Tag, SlidersHorizontal, CheckCircle2 } from 'lucide-react';
 import { setActiveHeaders } from '../data/leadStorage.ts';
 import { SYSTEM_FIELDS, parseCsvFile, buildAutoMapping, mapRowsToLeads, isCsvParseError } from '../lib/csvMapping.ts';
-import { hashFile, findCsvFileRecord, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
+import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
 import FileAlreadyUploadedModal from './FileAlreadyUploadedModal.tsx';
 
 interface CsvImporterProps {
@@ -138,6 +138,9 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     const finalData = parsedData.map(item => ({
       ...item,
       csvTag: finalTag,
+      // Carried the same way _csvHeaders already is, so callers (App.tsx) can label the
+      // duplicate popup with the real filename instead of falling back to the tag.
+      _csvFileName: file?.name || 'CSV Import',
     }));
 
     const success = await onImport(finalData);
@@ -160,19 +163,24 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
 
     // File-level duplicate check — a completely separate check from lead-level exact
     // duplicates (see lib/csvFileRegistry.ts). Runs BEFORE any header mapping/lead
-    // comparison, per the required processing order.
+    // comparison, per the required processing order. Only a still-ACTIVE prior upload
+    // (verified live against Supabase, not just "ever recorded") can trigger this — a
+    // deleted CSV is always treated as brand new, and its old tag is never restored.
     if (fileHash) {
-      const existingRecord = findCsvFileRecord(fileHash);
-      if (existingRecord) {
-        if (existingRecord.tags.includes(finalTag)) {
-          // Same file, same tag — prevent duplicate import entirely, silently.
-          setInfoMessage(`This exact CSV file was already imported as "${finalTag}". Nothing new was imported.`);
-          return;
-        }
-        // Same file, different tag — never decide silently.
-        setPendingFileConflict({ existingTags: existingRecord.tags, newTag: finalTag });
+      const conflict = await resolveFileConflict(fileHash, finalTag);
+      if (conflict.status === 'same-active-tag') {
+        setInfoMessage(`This exact CSV file was already imported as "${finalTag}". Nothing new was imported.`);
         return;
       }
+      if (conflict.status === 'different-active-tag') {
+        setPendingFileConflict({ existingTags: conflict.activeTags, newTag: finalTag });
+        return;
+      }
+      // status === 'new' — either never uploaded, or every prior recorded tag for this
+      // exact file has since been deleted. Proceed as a fresh upload; never restore the
+      // old tag. (No banner here — the modal closes immediately on success, so it would
+      // never be seen; the chat-driven upload path surfaces this instead, since its log
+      // persists.)
     }
 
     await doActualImport(finalTag);
@@ -470,28 +478,32 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
               )}
 
               {/* Modal Footer Controls */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-[var(--border-subtle)]">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-end justify-between gap-3 pt-4 border-t border-[var(--border-subtle)]">
                 {/* Tag Input Box */}
-                <div className="flex-1 relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-violet-600">
-                    <Tag className="w-4 h-4" />
+                <div className="flex-1">
+                  <label htmlFor="csv-import-tag-input" className="micro-label block mb-1.5">Tag Name</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-violet-600">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="csv-import-tag-input"
+                      type="text"
+                      value={importTag}
+                      onChange={(e) => setImportTag(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault(); // no surrounding <form>, but keep this inert regardless
+                        // Enter auto-uploads only once a real tag name is present; an empty
+                        // tag here does nothing (the toolbar button below still falls back
+                        // to a filename-based tag on click, unchanged).
+                        if (!importTag.trim() || isUploading || parsedData.length === 0) return;
+                        handleImportSubmit();
+                      }}
+                      placeholder="Tag this CSV import (e.g. Q3-Marketing, Event-Leads)..."
+                      className="glass-input pl-9 pr-3 !text-xs font-bold focus:!border-violet-500 focus:!ring-2 focus:!ring-violet-500/20 !bg-violet-50/30 dark:!bg-violet-500/10 !border-violet-200 placeholder-violet-400"
+                    />
                   </div>
-                  <input
-                    type="text"
-                    value={importTag}
-                    onChange={(e) => setImportTag(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter') return;
-                      e.preventDefault(); // no surrounding <form>, but keep this inert regardless
-                      // Enter auto-uploads only once a real tag name is present; an empty
-                      // tag here does nothing (the toolbar button below still falls back
-                      // to a filename-based tag on click, unchanged).
-                      if (!importTag.trim() || isUploading || parsedData.length === 0) return;
-                      handleImportSubmit();
-                    }}
-                    placeholder="Tag this CSV import (e.g. Q3-Marketing, Event-Leads)..."
-                    className="glass-input pl-9 pr-3 !text-xs font-bold focus:!border-violet-500 focus:!ring-2 focus:!ring-violet-500/20 !bg-violet-50/30 dark:!bg-violet-500/10 !border-violet-200 placeholder-violet-400"
-                  />
                 </div>
 
                 <div className="flex items-center justify-end space-x-2.5">

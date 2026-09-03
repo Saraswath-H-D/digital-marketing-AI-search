@@ -3,6 +3,13 @@
 // bytes of this file before, and under what tag(s)?", using a real content hash rather
 // than filename/size, so a renamed-but-identical file is still recognized and a
 // same-named-but-different file never falsely matches.
+//
+// A recorded upload is only a live conflict while at least one lead under its tag still
+// exists in Supabase (see resolveFileConflict) — this registry alone is just a local
+// index of "what hash/tag pairs were ever recorded"; it is NEVER treated as proof a CSV
+// is still active on its own, exactly because deleting the leads later can't reach back
+// and update it. Supabase stays the single source of truth for "active."
+import { getActiveTagSet } from './supabase.ts';
 
 const REGISTRY_KEY = 'operon_csv_file_registry_v1';
 
@@ -68,4 +75,63 @@ export function recordCsvFileUpload(hash: string, fileName: string, tag: string 
     };
   }
   saveRegistry(registry);
+}
+
+/** Removes tags no longer confirmed live from a file's recorded history (hygiene only — resolveFileConflict never trusts stale tags regardless). */
+function pruneCsvFileRecordTags(hash: string, keepTags: string[]): void {
+  const registry = getRegistry();
+  if (!registry[hash]) return;
+  if (keepTags.length === 0) {
+    delete registry[hash];
+  } else {
+    registry[hash].tags = keepTags;
+  }
+  saveRegistry(registry);
+}
+
+export type FileConflictStatus =
+  | { status: 'new'; wasPreviouslyDeleted: boolean }
+  | { status: 'same-active-tag' }
+  | { status: 'different-active-tag'; activeTags: string[] };
+
+/**
+ * Resolves whether `hash` represents an ACTIVE prior upload — i.e. at least one of its
+ * recorded tags currently has live leads in Supabase — before ever showing the
+ * "already uploaded" conflict UI. A tag whose leads were all deleted is no longer
+ * active: its stale registry entry is pruned, and re-uploading that file is treated as
+ * a brand-new upload with no tag restored from history.
+ *
+ * Untagged historical entries ("(no tag)") have no single reliable identity to verify
+ * liveness against — rather than risk permanently blocking on a stale untagged record,
+ * they're treated as inactive as soon as they're the only recorded tag.
+ */
+export async function resolveFileConflict(hash: string, requestedTag: string | null): Promise<FileConflictStatus> {
+  const record = findCsvFileRecord(hash);
+  if (!record) return { status: 'new', wasPreviouslyDeleted: false };
+
+  const requestedLabel = requestedTag || '(no tag)';
+  const namedTags = record.tags.filter(t => t !== '(no tag)');
+  if (namedTags.length === 0) {
+    const hadNamedTagsBefore = record.tags.length > 0;
+    pruneCsvFileRecordTags(hash, []);
+    return { status: 'new', wasPreviouslyDeleted: hadNamedTagsBefore };
+  }
+
+  const activeTagSet = await getActiveTagSet();
+  let liveTags: string[];
+  if (activeTagSet === null) {
+    // Couldn't verify against Supabase — fall back to trusting the local registry
+    // rather than silently losing file-conflict protection.
+    liveTags = namedTags;
+  } else {
+    const normalize = (t: string) => t.trim().toLowerCase().replace(/[-_\s]+/g, '-');
+    liveTags = namedTags.filter(t => activeTagSet.has(normalize(t)));
+    if (liveTags.length !== record.tags.length) {
+      pruneCsvFileRecordTags(hash, liveTags);
+    }
+  }
+
+  if (liveTags.length === 0) return { status: 'new', wasPreviouslyDeleted: true };
+  if (liveTags.includes(requestedLabel)) return { status: 'same-active-tag' };
+  return { status: 'different-active-tag', activeTags: liveTags };
 }

@@ -82,12 +82,17 @@ export function buildDuplicateSignature(lead: Record<string, any>): { signature:
   return { signature: parts.join('|'), comparedFields };
 }
 
+// Deliberately explicit, non-ambiguous field names (leadName vs. tagName) — a lead's
+// display identity and its tag must never be interchangeable in this data structure,
+// so a future edit can't silently swap them the way a generic `name`/`label` could.
 /** A previously-known record (existing Supabase row, or an earlier row in this batch) sharing a signature. */
 export interface ExistingRecordRef {
   signature: string;
-  displayName: string;
+  /** The lead's own name (or email, as a fallback) — NEVER a tag. */
+  leadName: string;
   email: string;
-  tag: string | null;
+  /** The tag this existing record was uploaded/tagged under — NEVER a lead name. */
+  tagName: string | null;
   extraTags: string[];
 }
 
@@ -95,7 +100,8 @@ export interface DuplicateMatch<T> {
   row: T;
   signature: string;
   comparedFields: Record<string, string>;
-  displayName: string;
+  /** The lead's own name (or email, as a fallback) — NEVER a tag. */
+  leadName: string;
   newTag: string | null;
   existing: ExistingRecordRef;
   /** true when the existing record's tag differs from this row's tag — needs an "add tag?" decision. */
@@ -114,7 +120,7 @@ export interface DedupeBatchResult<T> {
   tagConflicts: DuplicateMatch<T>[];
 }
 
-function displayNameOf(lead: Record<string, any>): string {
+function leadNameOf(lead: Record<string, any>): string {
   const first = (lead.firstName || '').trim();
   const last = (lead.lastName || '').trim();
   const name = [first, last !== '-' ? last : ''].filter(Boolean).join(' ').trim();
@@ -145,15 +151,15 @@ export function dedupeLeadRows<T extends Record<string, any>>(
     const existing = existingIndex.get(signature) || seenThisBatch.get(signature);
 
     if (existing) {
-      const displayName = displayNameOf(row);
-      duplicateLeadNames.add(displayName);
-      const tagConflict = !!newTag && newTag !== existing.tag && !existing.extraTags.includes(newTag);
-      duplicates.push({ row, signature, comparedFields, displayName, newTag, existing, tagConflict });
+      const leadName = leadNameOf(row);
+      duplicateLeadNames.add(leadName);
+      const tagConflict = !!newTag && newTag !== existing.tagName && !existing.extraTags.includes(newTag);
+      duplicates.push({ row, signature, comparedFields, leadName, newTag, existing, tagConflict });
       continue;
     }
 
     const email = (row.email && String(row.email).trim() !== '-') ? String(row.email).trim() : '';
-    seenThisBatch.set(signature, { signature, displayName: displayNameOf(row), email, tag: newTag, extraTags: [] });
+    seenThisBatch.set(signature, { signature, leadName: leadNameOf(row), email, tagName: newTag, extraTags: [] });
     kept.push(row);
   }
 

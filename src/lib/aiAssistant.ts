@@ -707,20 +707,35 @@ function parseCommandLocally(
   }
 
   // 6. INTENT: GENERAL QUESTIONS / CONVERSATIONAL
-  const isGeneralQuestion = 
+  // Catches existence/count questions phrased with "any" ("is there any leads?"),
+  // greetings, and capability/help questions — none of which should ever fall through
+  // to the search catch-all below.
+  const EXISTENCE_QUESTION_RE = /\b(is|are)\s+there\b|\bdo\s+(we|you|i)\s+have\b|\bany\s+leads\b|\bany\s+contacts\b/i;
+  const GREETING_RE = /^\s*(hi|hello|hey|yo|hiya|sup)\b/i;
+  const CAPABILITY_RE = /\bwhat\s+can\s+you\s+do\b|^\s*help\s*$|\bwhat\s+is\s+this\b|\bwho\s+are\s+you\b|\bwhat\s+do\s+you\s+do\b/i;
+
+  const isGeneralQuestion =
     /\b(what|how|why|tell|explain|summarize|summary|who|list|which|count|many|detail)\b/i.test(clean) ||
+    EXISTENCE_QUESTION_RE.test(clean) || GREETING_RE.test(clean) || CAPABILITY_RE.test(clean) ||
     lower.includes('previous') || lower.includes('before') || lower.includes('above') || lower.includes('page');
 
   if (isGeneralQuestion) {
     const prevTurn = chatHistory.length > 0 ? chatHistory[chatHistory.length - 1] : null;
     const count = leadsContext.length;
+    const totalCount = allLeads.length;
     const companies = Array.from(new Set(leadsContext.map(l => l.organization).filter(b => b && b !== '-')));
     const cities = Array.from(new Set(leadsContext.map(l => l.city).filter(b => b && b !== '-')));
     const roles = Array.from(new Set(leadsContext.map(l => l.jobTitle).filter(b => b && b !== '-')));
 
     let chatResponse = '';
 
-    if (lower.includes('summarize') || lower.includes('summary')) {
+    if (GREETING_RE.test(clean) || CAPABILITY_RE.test(clean)) {
+      chatResponse = `Hi! I'm your Operon AI Assistant. I can:\n• Search or filter leads in plain English ("Find CEOs in Hyderabad")\n• Add, update, or delete a lead ("Add lead VP Sales at Acme Corp")\n• Import a CSV — just attach one and tell me the tag (or none)\n• Summarize what's currently on your page\n• Answer questions about your last CSV import (duplicates, counts)\n\nWhat would you like to do?`;
+    } else if (EXISTENCE_QUESTION_RE.test(clean) && !/\bcompan(y|ies)\b|\bcit(y|ies)\b|\blocation\b/i.test(clean)) {
+      chatResponse = totalCount > 0
+        ? `Yes — there ${totalCount === 1 ? 'is' : 'are'} currently ${totalCount} lead${totalCount === 1 ? '' : 's'} in the system${count !== totalCount ? ` (${count} shown in the current view)` : ''}.`
+        : `No — there are currently no leads in the system yet. You can add one, or attach a CSV to import contacts.`;
+    } else if (lower.includes('summarize') || lower.includes('summary')) {
       chatResponse = `Here is a summary of the ${count} leads currently displayed on the page:\n- Companies: ${companies.slice(0, 6).join(', ') || '-'}\n- Primary Locations: ${cities.slice(0, 6).join(', ') || '-'}\n- Core Roles: ${roles.slice(0, 6).join(', ') || '-'}`;
     } else if (lower.includes('company') || lower.includes('companies')) {
       chatResponse = `The leads currently on your page belong to the following companies:\n${companies.map(c => `• ${c}`).join('\n') || 'No explicit companies listed.'}`;

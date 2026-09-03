@@ -168,6 +168,7 @@ export default function App() {
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [lastImportResult, setLastImportResult] = useState<BulkImportResult | null>(null);
   const [lastImportedTag, setLastImportedTag] = useState<string | null>(null);
+  const [lastImportedFileName, setLastImportedFileName] = useState<string | null>(null);
 
   // General States
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
@@ -575,6 +576,7 @@ export default function App() {
 
       setLastImportResult(result);
       setLastImportedTag(items[0]?.csvTag || null);
+      setLastImportedFileName(items[0]?._csvFileName || null);
 
       if (result.duplicatesSkipped > 0) {
         setIsDuplicateModalOpen(true);
@@ -1915,7 +1917,7 @@ export default function App() {
         isOpen={isDuplicateModalOpen}
         onClose={() => { setIsDuplicateModalOpen(false); fetchLeads(); }}
         result={lastImportResult}
-        csvName={lastImportedTag ? `Tag: ${lastImportedTag}` : undefined}
+        csvName={lastImportedFileName || undefined}
         onAddTag={async (email, tag) => {
           const res = await addTagToExistingLead(email, tag);
           if (!res.success) showStatus(`Couldn't add tag "${tag}": ${res.error || 'unknown error'}`, 'error');
