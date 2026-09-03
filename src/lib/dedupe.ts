@@ -1,15 +1,18 @@
 // Exact-duplicate-lead detection engine.
 //
-// Definitive rule (supersedes the earlier tag-scoped version): after CSV headers are
-// mapped to the app's fields, two leads are an EXACT DUPLICATE only when EVERY
-// applicable mapped field matches exactly (after safe normalization). Tags are metadata
-// handled separately — a matching lead under a different tag is still the same
-// duplicate lead; the difference is resolved via an "add this tag too?" decision, not by
-// treating them as two different leads. No similarity scoring, ever.
+// Definitive rule: two leads are an EXACT DUPLICATE only when they share the SAME
+// tag/context AND EVERY applicable mapped field matches exactly (after safe
+// normalization). Tag is part of the duplicate identity, not separate metadata — the
+// same person imported under a genuinely different tag is a DIFFERENT lead record, kept
+// separately, never merged or silently collapsed into the existing one. Filename is
+// NEVER part of this comparison (see lib/csvFileRegistry.ts for the unrelated,
+// file-content-hash-based "have I seen this exact file before" check). No similarity
+// scoring, ever.
 
 // Fields that carry genuine lead "content" for duplicate comparison — excludes
-// auto-generated/system bookkeeping fields AND tag fields, which are handled entirely
-// separately from the exact-duplicate decision.
+// auto-generated/system bookkeeping fields AND the tag field, which is folded into the
+// signature separately (see buildDuplicateSignature) rather than compared like a
+// regular content field.
 const CORE_CONTENT_FIELDS = [
   'firstName', 'lastName', 'email', 'phone', 'jobTitle', 'organization',
   'city', 'state', 'country', 'sourceName', 'emailStatus', 'seniority',
@@ -53,14 +56,29 @@ function normalizeFieldValue(field: string, raw: any): string {
   return normalizeGeneric(v);
 }
 
-// Builds the exact-duplicate identity: normalized header set + normalized value per
-// header — deliberately NO tag/context in this signature. Two leads produce the
-// identical signature ONLY when every relevant field matches (after safe
+// Same harmless normalization as any other field (trim/case/whitespace-insensitive), plus
+// hyphen/underscore collapsing so "Q3 Marketing", "q3-marketing" and "q3_marketing" are
+// recognized as the same context — consistent with how tags are matched everywhere else
+// in the app (see leadMatchesTag in data/leadStorage.ts). An empty/missing tag still
+// gets its own stable bucket rather than being dropped from the signature, so two
+// genuinely untagged imports are still compared against each other, and a tagged lead
+// never accidentally collides with an untagged one.
+function normalizeTagForSignature(tag: string | null | undefined): string {
+  const t = (tag || '').trim().toLowerCase().replace(/[-_\s]+/g, '-');
+  return t || '(no-tag)';
+}
+
+// Builds the exact-duplicate identity: normalized tag/context + normalized header set +
+// normalized value per header. Two leads produce the identical signature ONLY when they
+// share the same tag/context AND every relevant field matches (after safe
 // normalization). A header with no value on a given record is simply omitted from its
 // signature, so a record missing a field a sibling has produces a different signature
 // rather than being silently treated as a match (a present value vs. a missing one is
 // itself a difference).
-export function buildDuplicateSignature(lead: Record<string, any>): { signature: string; comparedFields: Record<string, string> } {
+export function buildDuplicateSignature(
+  lead: Record<string, any>,
+  tag: string | null | undefined
+): { signature: string; comparedFields: Record<string, string> } {
   const comparedFields: Record<string, string> = {};
 
   const keys = new Set<string>(CORE_CONTENT_FIELDS);
@@ -70,7 +88,7 @@ export function buildDuplicateSignature(lead: Record<string, any>): { signature:
     }
   });
 
-  const parts: string[] = [];
+  const parts: string[] = [`tag=${normalizeTagForSignature(tag)}`];
   Array.from(keys).sort().forEach(field => {
     const norm = normalizeFieldValue(field, (lead as any)[field]);
     if (norm) {
@@ -82,18 +100,15 @@ export function buildDuplicateSignature(lead: Record<string, any>): { signature:
   return { signature: parts.join('|'), comparedFields };
 }
 
-// Deliberately explicit, non-ambiguous field names (leadName vs. tagName) — a lead's
-// display identity and its tag must never be interchangeable in this data structure,
-// so a future edit can't silently swap them the way a generic `name`/`label` could.
+// Deliberately explicit, non-ambiguous field name (leadName, never a tag) — a lead's
+// display identity must never be confused with its tag in this data structure, so a
+// future edit can't silently swap them the way a generic `name`/`label` could.
 /** A previously-known record (existing Supabase row, or an earlier row in this batch) sharing a signature. */
 export interface ExistingRecordRef {
   signature: string;
   /** The lead's own name (or email, as a fallback) — NEVER a tag. */
   leadName: string;
   email: string;
-  /** The tag this existing record was uploaded/tagged under — NEVER a lead name. */
-  tagName: string | null;
-  extraTags: string[];
 }
 
 export interface DuplicateMatch<T> {
@@ -102,10 +117,7 @@ export interface DuplicateMatch<T> {
   comparedFields: Record<string, string>;
   /** The lead's own name (or email, as a fallback) — NEVER a tag. */
   leadName: string;
-  newTag: string | null;
   existing: ExistingRecordRef;
-  /** true when the existing record's tag differs from this row's tag — needs an "add tag?" decision. */
-  tagConflict: boolean;
 }
 
 export interface DedupeBatchResult<T> {
@@ -116,8 +128,6 @@ export interface DedupeBatchResult<T> {
   duplicatesSkipped: number;
   /** Distinct duplicate leads found (by signature) — for the consolidated popup's name list. */
   duplicateLeadNames: string[];
-  /** Subset of `duplicates` whose tag actually differs from the existing record's tag. */
-  tagConflicts: DuplicateMatch<T>[];
 }
 
 function leadNameOf(lead: Record<string, any>): string {
@@ -129,11 +139,11 @@ function leadNameOf(lead: Record<string, any>): string {
 
 /**
  * Filters `rows` against exact duplicates already known via `existingIndex` (a
- * signature → record map, typically built from ALL existing Supabase rows regardless of
- * tag — tag is not part of the duplicate identity) AND against each other within this
- * same batch. First occurrence of a signature wins; later ones are reported as
- * duplicates (never silently merged, never silently dropped) along with whether their
- * tag actually conflicts with the kept/existing record's tag.
+ * signature → record map, built ONLY from the existing Supabase rows this batch's own
+ * signatures could actually match — see getExistingLeadIndexForSignatures — since tag is
+ * folded into the signature there is no separate tag-scoping step here) AND against each
+ * other within this same batch. First occurrence of a signature wins; later ones are
+ * reported as duplicates (never silently merged, never silently dropped).
  */
 export function dedupeLeadRows<T extends Record<string, any>>(
   rows: T[],
@@ -146,20 +156,19 @@ export function dedupeLeadRows<T extends Record<string, any>>(
   const duplicateLeadNames = new Set<string>();
 
   for (const row of rows) {
-    const { signature, comparedFields } = buildDuplicateSignature(row);
-    const newTag = (row[tagField] as unknown as string) || null;
+    const tag = (row[tagField] as unknown as string) || null;
+    const { signature, comparedFields } = buildDuplicateSignature(row, tag);
     const existing = existingIndex.get(signature) || seenThisBatch.get(signature);
 
     if (existing) {
       const leadName = leadNameOf(row);
       duplicateLeadNames.add(leadName);
-      const tagConflict = !!newTag && newTag !== existing.tagName && !existing.extraTags.includes(newTag);
-      duplicates.push({ row, signature, comparedFields, leadName, newTag, existing, tagConflict });
+      duplicates.push({ row, signature, comparedFields, leadName, existing });
       continue;
     }
 
     const email = (row.email && String(row.email).trim() !== '-') ? String(row.email).trim() : '';
-    seenThisBatch.set(signature, { signature, leadName: leadNameOf(row), email, tagName: newTag, extraTags: [] });
+    seenThisBatch.set(signature, { signature, leadName: leadNameOf(row), email });
     kept.push(row);
   }
 
@@ -170,6 +179,5 @@ export function dedupeLeadRows<T extends Record<string, any>>(
     uniqueRows: kept.length,
     duplicatesSkipped: duplicates.length,
     duplicateLeadNames: Array.from(duplicateLeadNames),
-    tagConflicts: duplicates.filter(d => d.tagConflict),
   };
 }

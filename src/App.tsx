@@ -21,7 +21,6 @@ import {
   addCsvTag,
   removeCsvTag,
   bulkImportLeads,
-  addTagToExistingLead,
   getActiveHeaders,
   getFixedHeaderValue,
   getTrashLeads,
@@ -1918,11 +1917,6 @@ export default function App() {
         onClose={() => { setIsDuplicateModalOpen(false); fetchLeads(); }}
         result={lastImportResult}
         csvName={lastImportedFileName || undefined}
-        onAddTag={async (email, tag) => {
-          const res = await addTagToExistingLead(email, tag);
-          if (!res.success) showStatus(`Couldn't add tag "${tag}": ${res.error || 'unknown error'}`, 'error');
-          return res.success;
-        }}
       />
 
     </div>

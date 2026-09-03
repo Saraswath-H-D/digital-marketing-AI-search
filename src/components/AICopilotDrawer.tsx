@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { processNaturalLanguageCommand, AICommandResult, resolveCsvTagIntent, NO_TAG_RE, CSV_DELETE_INTENT_RE, interpretFilterQuery } from '../lib/aiAssistant.ts';
-import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory, bulkImportLeads, addTagToExistingLead, getLastImportReport, BulkImportResult } from '../data/leadStorage.ts';
+import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory, bulkImportLeads, getLastImportReport, BulkImportResult } from '../data/leadStorage.ts';
 import { parseCsvFile, buildAutoMapping, mapRowsToLeads, isCsvParseError } from '../lib/csvMapping.ts';
 import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
 import DuplicateLeadsModal from './DuplicateLeadsModal.tsx';
@@ -160,18 +160,15 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       return `The last import (${tagLabel}) kept ${result.uniqueRows} unique lead${result.uniqueRows === 1 ? '' : 's'} out of ${result.totalRows} row${result.totalRows === 1 ? '' : 's'} processed.`;
     }
     if (/different tag/.test(q)) {
-      return `Tags are handled separately from the exact-duplicate decision — a lead with identical information but a different tag is still the same duplicate lead, not a second record. If you'd like, I can add the new tag to the existing lead instead of creating a duplicate.`;
+      return `Tag is part of the exact-duplicate identity — a lead with identical information under a genuinely different tag is a different lead, imported as its own record, never merged into the existing one. Only the same person under the SAME tag counts as a duplicate.`;
     }
     if (/why/.test(q)) {
-      return `A lead only counts as an exact duplicate when every relevant mapped field matches another lead exactly, after safe normalization (trimming, case, harmless formatting) — tag is not part of that comparison. Even one differing field — job title, city, country, anything meaningful — means it's kept as a separate record, never merged.`;
+      return `A lead only counts as an exact duplicate when it shares the same tag AND every relevant mapped field matches another lead exactly, after safe normalization (trimming, case, harmless formatting). Even one differing field — job title, city, country, tag, anything meaningful — means it's kept as a separate record, never merged.`;
     }
     if (result.duplicatesSkipped === 0) {
       return `No duplicates were found in the last import (${tagLabel}) — all ${result.uniqueRows} row${result.uniqueRows === 1 ? '' : 's'} were unique and imported.`;
     }
-    const conflictNote = result.tagConflicts.length > 0
-      ? ` ${result.tagConflicts.length} of those already existed under a different tag — you can decide from the popup whether to add the new tag.`
-      : '';
-    return `I found exact duplicates of ${result.duplicateLeadNames.length} lead${result.duplicateLeadNames.length === 1 ? '' : 's'} (${result.duplicatesSkipped} duplicate cop${result.duplicatesSkipped === 1 ? 'y' : 'ies'} total) in the last import (${tagLabel}) and corrected each to one lead — they were skipped during import, not deleted from Supabase.${conflictNote}`;
+    return `I found exact duplicates of ${result.duplicateLeadNames.length} lead${result.duplicateLeadNames.length === 1 ? '' : 's'} (${result.duplicatesSkipped} duplicate cop${result.duplicatesSkipped === 1 ? 'y' : 'ies'} total) in the last import (${tagLabel}) and corrected each to one lead — they were skipped during import, not deleted from Supabase.`;
   };
 
   // ==================== NATURAL LANGUAGE COMMAND EXECUTION ====================
@@ -461,9 +458,6 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       ];
       if (importResult.duplicatesSkipped > 0) {
         lines.push(`✓ Found exact duplicates of ${importResult.duplicateLeadNames.length} lead${importResult.duplicateLeadNames.length === 1 ? '' : 's'} and corrected them to one lead each — ${importResult.duplicatesSkipped} cop${importResult.duplicatesSkipped === 1 ? 'y' : 'ies'} skipped, not added to Supabase`);
-        if (importResult.tagConflicts.length > 0) {
-          lines.push(`• Some of these already exist under a different tag — see the popup to decide whether to add the new tag`);
-        }
       }
       if (!supabaseResult.success && supabaseResult.error) {
         lines.push(`⚠ Supabase sync issue: ${supabaseResult.error} — contacts were added locally but may not be fully synced yet.`);
@@ -1218,11 +1212,6 @@ Operon AI Growth Team`;
         onClose={() => { setIsDuplicateModalOpen(false); if (onRefreshLeads) onRefreshLeads(); }}
         result={duplicateModalResult}
         csvName={duplicateModalCsvName}
-        onAddTag={async (email, tag) => {
-          const res = await addTagToExistingLead(email, tag);
-          if (!res.success) onShowMessage(`Couldn't add tag "${tag}": ${res.error || 'unknown error'}`, 'error');
-          return res.success;
-        }}
       />
 
     </div>

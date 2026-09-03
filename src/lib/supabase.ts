@@ -257,6 +257,13 @@ export const pushLeadsToSupabase = async (
       // existing missing-column retry loop below drops this key and retries automatically).
       csv_tag: (l as any).csvTag ?? null,
       tags: Array.isArray((l as any).tags) && (l as any).tags.length > 0 ? JSON.stringify((l as any).tags) : null,
+      // The exact-duplicate identity this row was imported under (tag/context + every
+      // normalized content field — see lib/dedupe.ts). Stored so a future import's
+      // duplicate check can query Supabase directly for just the signatures it needs
+      // (`.in('duplicate_signature', [...])`) instead of downloading the whole table —
+      // see getExistingLeadIndexForSignatures below. Missing-column retry (below) drops
+      // this automatically on tables that haven't run the migration yet.
+      duplicate_signature: buildDuplicateSignature(l as any, (l as any).csvTag ?? null).signature || null,
       questions: finalQuestions,
       registration_time: l.registrationTime || new Date().toLocaleString(),
       approval_status: l.approvalStatus || 'approved',
@@ -867,19 +874,58 @@ export const getActiveTagSet = async (config?: SupabaseConfig): Promise<Set<stri
   return active;
 };
 
-// Fetches EVERY existing Supabase row and returns their duplicate signatures (see
-// lib/dedupe.ts) — the "compare against existing Supabase records" half of the exact
-// duplicate rule. Deliberately global, not tag-scoped: tag is metadata handled
-// separately from the exact-duplicate decision (a matching lead under a different tag
-// is still the same duplicate lead). Best-effort: on any failure this returns an empty
-// map rather than throwing, so a duplicate-check hiccup never blocks an import — it only
-// means the cross-Supabase half of the check was skipped for this run (still backed by
-// the within-batch check, which never depends on network access).
-export const getExistingLeadIndex = async (
-  config?: SupabaseConfig
+// Builds a lead-shaped object from a raw Supabase row, the same shape dedupe.ts expects
+// (firstName/lastName/email/... — see buildDuplicateSignature), restoring any custom
+// CSV columns that were smuggled into `questions` as base64 metadata. Shared by both the
+// efficient signature-targeted lookup and its full-table-scan fallback below.
+const rowToLeadShaped = (row: any): { leadShaped: Record<string, any>; tag: string | null; cleanEmail: string; leadName: string } => {
+  let restoredMeta: Record<string, any> = {};
+  const q = row.questions || '';
+  const metaMatch = q.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
+  if (metaMatch) {
+    try { restoredMeta = JSON.parse(safeAtob(metaMatch[1])); } catch { /* ignore malformed metadata */ }
+  }
+
+  const { tag } = extractRowTagAndExtraTags(row, restoredMeta);
+  const cleanEmail = cleanSyntheticEmail(row.email || '');
+
+  const leadShaped: Record<string, any> = {
+    ...restoredMeta,
+    firstName: row.first_name || '',
+    lastName: row.last_name || '',
+    email: cleanEmail,
+    phone: row.phone_number || '',
+    jobTitle: row.job_title || '',
+    organization: row.company_name || row.organization || '',
+    city: row.city || '',
+    state: row.state || '',
+    country: row.country || '',
+    sourceName: row.source_name || row.source || '',
+    emailStatus: row.email_status || '',
+    seniority: row.seniority || '',
+    department: row.department || '',
+    industry: row.industry || '',
+    companySize: row.employee_size || '',
+    linkedinUrl: row.person_linkedin_url || row.linkedin_url || '',
+    website: row.website || '',
+    companyLinkedinUrl: row.company_linkedin_url || '',
+    approvalStatus: row.approval_status || '',
+  };
+
+  const leadName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || cleanEmail || 'Unknown lead';
+  return { leadShaped, tag, cleanEmail, leadName };
+};
+
+// FALLBACK ONLY — used when the live table hasn't run the `duplicate_signature` column
+// migration yet. Downloads every row and recomputes each one's signature client-side so
+// duplicate detection still works pre-migration, just without the efficient path below.
+// `neededSignatures` still bounds memory use (only matches this batch could actually hit
+// are kept), even though the download itself can't be narrowed without the column.
+const getExistingLeadIndexFullScan = async (
+  neededSignatures: Set<string>,
+  activeConfig: SupabaseConfig
 ): Promise<Map<string, ExistingRecordRef>> => {
   const index = new Map<string, ExistingRecordRef>();
-  const activeConfig = config || getSupabaseConfig();
   const client = getSupabaseClient(activeConfig);
   if (!client) return index;
 
@@ -896,109 +942,94 @@ export const getExistingLeadIndex = async (
       if (error || !data || data.length === 0) break;
 
       data.forEach((row: any) => {
-        let restoredMeta: Record<string, any> = {};
-        const q = row.questions || '';
-        const metaMatch = q.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
-        if (metaMatch) {
-          try {
-            restoredMeta = JSON.parse(safeAtob(metaMatch[1]));
-          } catch { /* ignore malformed metadata */ }
-        }
-
-        const { tag, extraTags } = extractRowTagAndExtraTags(row, restoredMeta);
-        const cleanEmail = cleanSyntheticEmail(row.email || '');
-
-        const leadShaped: Record<string, any> = {
-          ...restoredMeta,
-          firstName: row.first_name || '',
-          lastName: row.last_name || '',
-          email: cleanEmail,
-          phone: row.phone_number || '',
-          jobTitle: row.job_title || '',
-          organization: row.company_name || row.organization || '',
-          city: row.city || '',
-          state: row.state || '',
-          country: row.country || '',
-          sourceName: row.source_name || row.source || '',
-          emailStatus: row.email_status || '',
-          seniority: row.seniority || '',
-          department: row.department || '',
-          industry: row.industry || '',
-          companySize: row.employee_size || '',
-          linkedinUrl: row.person_linkedin_url || row.linkedin_url || '',
-          website: row.website || '',
-          companyLinkedinUrl: row.company_linkedin_url || '',
-          approvalStatus: row.approval_status || '',
-        };
-
-        const { signature } = buildDuplicateSignature(leadShaped);
-        if (!signature) return; // a completely empty row carries no comparable identity
-        // leadName is built from the row's own name columns — NEVER from `tag`.
-        const leadName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || cleanEmail || 'Unknown lead';
-        index.set(signature, { signature, leadName, email: cleanEmail, tagName: tag, extraTags });
+        const { leadShaped, tag, cleanEmail, leadName } = rowToLeadShaped(row);
+        const { signature } = buildDuplicateSignature(leadShaped, tag);
+        if (!signature || !neededSignatures.has(signature)) return;
+        index.set(signature, { signature, leadName, email: cleanEmail });
       });
 
       if (data.length < PAGE_SIZE) break;
       from += PAGE_SIZE;
     }
   } catch (err) {
-    console.warn('getExistingLeadIndex failed — proceeding without the cross-Supabase half of duplicate detection:', err);
+    console.warn('getExistingLeadIndexFullScan failed — proceeding without the cross-Supabase half of duplicate detection:', err);
   }
 
   return index;
 };
 
-// Appends `newTag` to an existing lead's `tags` array in Supabase, identified by email
-// (the same reliable identifier the rest of this file already uses for updates/deletes).
-// Used by the "add this tag to the existing lead?" duplicate-resolution decision — never
-// creates a second lead record.
-export const addTagToLeadByEmail = async (
-  email: string,
-  newTag: string,
+// The "compare against existing Supabase records" half of the exact-duplicate rule (see
+// lib/dedupe.ts) — given the signatures THIS batch actually needs to check, queries
+// Supabase directly for just those rows (`duplicate_signature IN (...)`, chunked and
+// indexed) instead of downloading the whole table. This is what keeps a 1,000-row table
+// costing roughly "1 new row's worth" of lookup work when importing 1 new lead, per the
+// efficiency requirement — never proportional to total existing leads.
+// Best-effort: on any failure this returns an empty map rather than throwing, so a
+// duplicate-check hiccup never blocks an import — it only means the cross-Supabase half
+// of the check was skipped for this run (still backed by the within-batch check, which
+// never depends on network access).
+export const getExistingLeadIndexForSignatures = async (
+  signatures: string[],
   config?: SupabaseConfig
-): Promise<{ success: boolean; error?: string }> => {
+): Promise<Map<string, ExistingRecordRef>> => {
+  const index = new Map<string, ExistingRecordRef>();
+  const uniqueSigs = Array.from(new Set(signatures.filter(Boolean)));
+  if (uniqueSigs.length === 0) return index;
+
   const activeConfig = config || getSupabaseConfig();
   const client = getSupabaseClient(activeConfig);
-  if (!client) return { success: false, error: 'Supabase client missing' };
-  const cleanEmail = (email || '').trim();
-  if (!cleanEmail || cleanEmail === '-') return { success: false, error: 'No reliable email identifier for this lead' };
+  if (!client) return index;
 
   const tableName = activeConfig.tableName || 'registration_contacts';
+  const CHUNK = 200;
+
   try {
-    // Same missing-column self-heal as getActiveTagSet — a table that hasn't run the
-    // csv_tag/tags migration yet fails the named select outright.
-    let { data, error } = await client.from(tableName).select('csv_tag, tags').eq('email', cleanEmail).limit(1);
-    if (error?.code === '42703') {
-      ({ data, error } = await client.from(tableName).select('*').eq('email', cleanEmail).limit(1));
+    // Rollout-safety precheck: rows pushed before duplicate_signature existed (or not
+    // re-synced since) carry duplicate_signature = NULL, which the indexed lookup below
+    // can never match against a real candidate signature — silently missing genuine
+    // duplicates against that old data. A cheap indexed count (not a data download) is
+    // enough to know whether that's a risk right now; if so, fall back to the full scan
+    // until every row has been backfilled, so correctness never regresses mid-rollout.
+    const { count: unmigratedCount, error: countError } = await client
+      .from(tableName)
+      .select('id', { count: 'exact', head: true })
+      .is('duplicate_signature', null);
+
+    if (countError?.code === '42703') {
+      return getExistingLeadIndexFullScan(new Set(uniqueSigs), activeConfig);
     }
-    if (error) return { success: false, error: error.message };
-    if (!data || data.length === 0) return { success: false, error: 'Lead not found in Supabase' };
-
-    let existingTags: string[] = [];
-    try {
-      const parsed = data[0].tags ? JSON.parse(data[0].tags) : [];
-      if (Array.isArray(parsed)) existingTags = parsed.map((t: any) => String(t).trim()).filter(Boolean);
-    } catch { /* start fresh */ }
-
-    const cleanNewTag = newTag.trim();
-    if (existingTags.includes(cleanNewTag) || data[0].csv_tag === cleanNewTag) {
-      return { success: true }; // already has it — nothing to do
+    if (!countError && (unmigratedCount ?? 0) > 0) {
+      return getExistingLeadIndexFullScan(new Set(uniqueSigs), activeConfig);
     }
-    existingTags.push(cleanNewTag);
 
-    const { error: updateErr } = await client.from(tableName).update({ tags: JSON.stringify(existingTags) }).eq('email', cleanEmail);
-    if (updateErr) {
-      // The `tags` column genuinely doesn't exist yet — say so plainly rather than
-      // surfacing a raw Postgres error or silently pretending it worked.
-      if (updateErr.code === '42703') {
-        return { success: false, error: `This Supabase table hasn't run the "tags" column migration yet — run the updated SQL from the Supabase Sync modal, then try adding the tag again.` };
+    for (let i = 0; i < uniqueSigs.length; i += CHUNK) {
+      const chunk = uniqueSigs.slice(i, i + CHUNK);
+      const { data, error } = await client
+        .from(tableName)
+        .select('first_name, last_name, email, duplicate_signature')
+        .in('duplicate_signature', chunk);
+
+      if (error?.code === '42703') {
+        // duplicate_signature column doesn't exist yet (migration not run on this table)
+        // — fall back to the full-table scan so duplicate detection still works, just
+        // less efficiently, until the SQL migration is applied.
+        return getExistingLeadIndexFullScan(new Set(uniqueSigs), activeConfig);
       }
-      return { success: false, error: updateErr.message };
+      if (error) return index; // a real query error — don't silently report zero matches as "no duplicates"
+
+      (data || []).forEach((row: any) => {
+        const signature = row.duplicate_signature;
+        if (!signature) return;
+        const cleanEmail = cleanSyntheticEmail(row.email || '');
+        const leadName = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || cleanEmail || 'Unknown lead';
+        index.set(signature, { signature, leadName, email: cleanEmail });
+      });
     }
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Failed to add tag' };
+  } catch (err) {
+    console.warn('getExistingLeadIndexForSignatures failed — proceeding without the cross-Supabase half of duplicate detection:', err);
   }
+
+  return index;
 };
 
 export const generateSupabaseSQL = (tableName: string = 'registration_contacts'): string => {
@@ -1058,9 +1089,16 @@ ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS company_linkedin_url TE
 -- database level. Purely additive; existing rows just get csv_tag = NULL until re-synced.
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS csv_tag TEXT;
 -- tags: additional tag memberships beyond the original csv_tag (JSON array as text),
--- e.g. '["Prospects","Investors"]' — written when the exact-duplicate "add this tag
--- too?" decision is accepted for a lead that already exists under a different tag.
+-- e.g. '["Prospects","Investors"]'.
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS tags TEXT;
+-- duplicate_signature: this row's exact-duplicate identity — tag/context + every
+-- normalized content field (see lib/dedupe.ts) — computed and stored on every import so
+-- a future import's duplicate check can query Supabase directly for just the signatures
+-- it needs instead of downloading the whole table. Purely additive; existing rows get
+-- duplicate_signature = NULL until they're re-synced (re-push, or any edit that
+-- round-trips the row), at which point it's filled in automatically.
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS duplicate_signature TEXT;
+CREATE INDEX IF NOT EXISTS ${tableName}_duplicate_signature_idx ON public.${tableName} (duplicate_signature);
 
 -- 2b. Make sure email actually carries the unique constraint the app upserts against
 -- (safe to re-run; no-ops if it's already there under this name)
@@ -1073,13 +1111,15 @@ BEGIN
   END IF;
 END $$;
 
--- 2c. OPTIONAL — run this block yourself ONLY if you want the database itself to allow
--- the same email to exist more than once when it's under a genuinely different CSV tag
--- (Design.md CSV duplicate rule: "different tag context = NOT a duplicate"). Today the
--- constraint above (email alone, globally unique) means Supabase will still merge two
--- rows sharing an email even across different tags. Swapping to a composite constraint
--- on (email, csv_tag) fixes that — but changes what "insert vs. update" means for every
--- future push, so it's left commented out rather than applied automatically:
+-- 2c. OPTIONAL, and NOT about exact-duplicate detection — that's already fully
+-- tag-scoped at the application layer (duplicate_signature above), so a genuinely new
+-- lead under a different tag is never skipped, and Supabase only ever receives rows the
+-- app already decided are new. This block is about a separate, narrower edge case: the
+-- SAME real email address deliberately imported under two different tags ends up as one
+-- Supabase row today, because the constraint below (email alone, globally unique) is
+-- what the app's upsert still targets — the second import's row updates the first
+-- instead of sitting beside it. Run this yourself ONLY if you also want the database
+-- row itself to allow that (email, csv_tag) pair to coexist as two separate rows:
 --
 -- ALTER TABLE public.${tableName} DROP CONSTRAINT IF EXISTS ${tableName}_email_key;
 -- ALTER TABLE public.${tableName} ADD CONSTRAINT ${tableName}_email_csv_tag_key UNIQUE (email, csv_tag);

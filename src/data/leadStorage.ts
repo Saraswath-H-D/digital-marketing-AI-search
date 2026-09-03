@@ -1,7 +1,7 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
-import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, deleteAllLeadsFromSupabase, getSupabaseConfig, getLastConfirmedDeletedEmails, getExistingLeadIndex, addTagToLeadByEmail } from '../lib/supabase.ts';
-import { dedupeLeadRows, DedupeBatchResult, DuplicateMatch } from '../lib/dedupe.ts';
+import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, deleteAllLeadsFromSupabase, getSupabaseConfig, getLastConfirmedDeletedEmails, getExistingLeadIndexForSignatures } from '../lib/supabase.ts';
+import { dedupeLeadRows, buildDuplicateSignature } from '../lib/dedupe.ts';
 
 const STORAGE_KEY = 'operon_leads_v9';
 const LEGACY_STORAGE_KEY = 'apollo_leads_v9';
@@ -844,30 +844,6 @@ export const getLeadStats = (filters: Filters): { total: number; netNew: number;
   return { total, netNew, saved };
 };
 
-// Applies an "add this tag to the existing lead?" decision (exact-duplicate-with-a-
-// different-tag resolution): appends the tag to that ONE existing lead's `tags` array,
-// locally and in Supabase — never creates a second lead record.
-export const addTagToExistingLead = async (email: string, tag: string): Promise<{ success: boolean; error?: string }> => {
-  const cleanEmail = (email || '').trim().toLowerCase();
-  const cleanTag = tag.trim();
-  if (!cleanEmail || !cleanTag) return { success: false, error: 'Missing email or tag' };
-
-  const allLeads = getStoredLeads();
-  const updated = allLeads.map(l => {
-    if ((l.email || '').trim().toLowerCase() !== cleanEmail) return l;
-    const existingTags = Array.isArray(l.tags) ? l.tags : [];
-    if (existingTags.includes(cleanTag) || l.csvTag === cleanTag) return l;
-    return { ...l, tags: [...existingTags, cleanTag] };
-  });
-  saveStoredLeads(updated);
-
-  try {
-    return await addTagToLeadByEmail(cleanEmail, cleanTag);
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Failed to sync new tag to Supabase' };
-  }
-};
-
 // Toggle Lead Saved status
 export const toggleSaveLead = (leadId: number): Lead[] => {
   const allLeads = getStoredLeads();
@@ -1211,7 +1187,6 @@ export interface BulkImportResult {
   uniqueRows: number;
   duplicatesSkipped: number;
   duplicateLeadNames: string[];
-  tagConflicts: DuplicateMatch<Partial<Lead>>[];
 }
 
 // Session-scoped record of the most recent CSV import's real result — shared by every
@@ -1223,31 +1198,29 @@ let lastImportReport: { result: BulkImportResult; tag: string | null; at: string
 export const getLastImportReport = () => lastImportReport;
 
 // Bulk Import Leads — enforces the exact-duplicate rule (see lib/dedupe.ts): a row is a
-// duplicate ONLY when EVERY relevant mapped field matches (after safe normalization)
-// another row already kept in this batch or already present in Supabase — tag is
-// deliberately NOT part of that comparison. A different tag on an otherwise-identical
-// lead still counts as the same duplicate lead; the tag difference is surfaced via
-// `tagConflicts` for the caller to resolve (add the tag, or don't) rather than ever
-// creating a second lead record.
+// duplicate ONLY when it shares the SAME tag/context AND EVERY relevant mapped field
+// matches (after safe normalization) another row already kept in this batch or already
+// present in Supabase. A different tag on an otherwise-identical lead is a DIFFERENT
+// lead — it's imported as its own record, never merged into the existing one. Filename
+// is never part of this comparison (see lib/csvFileRegistry.ts for the unrelated,
+// file-content-hash-based "already uploaded this exact file" check).
 export const bulkImportLeads = async (
   newLeadsList: Partial<Lead>[]
 ): Promise<BulkImportResult> => {
   let existingIndex = new Map<string, import('../lib/dedupe.ts').ExistingRecordRef>();
   try {
-    // Best-effort cross-Supabase check; a network hiccup here degrades to
-    // within-batch-only dedup rather than blocking the import.
-    existingIndex = await getExistingLeadIndex();
+    // Only ask Supabase about the signatures THIS batch could actually match — never
+    // downloads the whole table (see getExistingLeadIndexForSignatures). Best-effort: a
+    // network hiccup here degrades to within-batch-only dedup rather than blocking the
+    // import.
+    const candidateSignatures = newLeadsList.map(row => buildDuplicateSignature(row, (row as any).csvTag ?? null).signature);
+    existingIndex = await getExistingLeadIndexForSignatures(candidateSignatures);
   } catch (err) {
     console.warn('Existing-Supabase duplicate check failed', err);
   }
 
   const dedupeResult = dedupeLeadRows(newLeadsList, 'csvTag', existingIndex);
   const uniqueItems = dedupeResult.kept;
-
-  // Exact duplicate + matching tag (or the new tag was already on the lead) needs no
-  // decision at all — silently keep the one existing lead, no popup, no duplicate tag.
-  // Exact duplicate + genuinely different tag is left in `tagConflicts` for the caller
-  // to resolve via addTagToExistingLead(), never auto-applied.
 
   const allLeads = getStoredLeads();
   let maxId = allLeads.length > 0 ? Math.max(...allLeads.map(l => l.id)) : 0;
@@ -1314,7 +1287,6 @@ export const bulkImportLeads = async (
     uniqueRows: uniqueItems.length,
     duplicatesSkipped: dedupeResult.duplicatesSkipped,
     duplicateLeadNames: dedupeResult.duplicateLeadNames,
-    tagConflicts: dedupeResult.tagConflicts,
   };
 
   lastImportReport = {
