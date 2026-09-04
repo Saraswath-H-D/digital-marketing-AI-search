@@ -1189,6 +1189,13 @@ export interface BulkImportResult {
   duplicateLeadNames: string[];
 }
 
+export interface DuplicatePreviewResult {
+  totalRows: number;
+  uniqueRows: number;
+  duplicatesSkipped: number;
+  duplicateLeadNames: string[];
+}
+
 // Session-scoped record of the most recent CSV import's real result — shared by every
 // import entry point (manual CsvImporter, AI-assistant chat upload) so the AI Assistant
 // can answer follow-up questions ("were there duplicates?", "why wasn't X a duplicate?")
@@ -1197,22 +1204,17 @@ export interface BulkImportResult {
 let lastImportReport: { result: BulkImportResult; tag: string | null; at: string } | null = null;
 export const getLastImportReport = () => lastImportReport;
 
-// Bulk Import Leads — enforces the exact-duplicate rule (see lib/dedupe.ts): a row is a
-// duplicate ONLY when it shares the SAME tag/context AND EVERY relevant mapped field
-// matches (after safe normalization) another row already kept in this batch or already
-// present in Supabase. A different tag on an otherwise-identical lead is a DIFFERENT
-// lead — it's imported as its own record, never merged into the existing one. Filename
-// is never part of this comparison (see lib/csvFileRegistry.ts for the unrelated,
-// file-content-hash-based "already uploaded this exact file" check).
-export const bulkImportLeads = async (
+// Read-only dry run of the same exact-duplicate check bulkImportLeads runs — used by
+// every CSV import entry point to ask the user, BEFORE anything is written, whether to
+// import only the new leads or the full file (duplicates included). Runs the same
+// tag-scoped check regardless of whether a tag was given for this upload or not — an
+// untagged upload still gets compared against other untagged leads (see
+// buildDuplicateSignature's "(no-tag)" bucket). Nothing is created or pushed here.
+export const previewBulkImportDuplicates = async (
   newLeadsList: Partial<Lead>[]
-): Promise<BulkImportResult> => {
+): Promise<DuplicatePreviewResult> => {
   let existingIndex = new Map<string, import('../lib/dedupe.ts').ExistingRecordRef>();
   try {
-    // Only ask Supabase about the signatures THIS batch could actually match — never
-    // downloads the whole table (see getExistingLeadIndexForSignatures). Best-effort: a
-    // network hiccup here degrades to within-batch-only dedup rather than blocking the
-    // import.
     const candidateSignatures = newLeadsList.map(row => buildDuplicateSignature(row, (row as any).csvTag ?? null).signature);
     existingIndex = await getExistingLeadIndexForSignatures(candidateSignatures);
   } catch (err) {
@@ -1220,7 +1222,52 @@ export const bulkImportLeads = async (
   }
 
   const dedupeResult = dedupeLeadRows(newLeadsList, 'csvTag', existingIndex);
-  const uniqueItems = dedupeResult.kept;
+  return {
+    totalRows: newLeadsList.length,
+    uniqueRows: dedupeResult.kept.length,
+    duplicatesSkipped: dedupeResult.duplicatesSkipped,
+    duplicateLeadNames: dedupeResult.duplicateLeadNames,
+  };
+};
+
+// Bulk Import Leads — enforces the exact-duplicate rule (see lib/dedupe.ts): a row is a
+// duplicate ONLY when it shares the SAME tag/context AND EVERY relevant mapped field
+// matches (after safe normalization) another row already kept in this batch or already
+// present in Supabase. A different tag on an otherwise-identical lead is a DIFFERENT
+// lead — it's imported as its own record, never merged into the existing one. Filename
+// is never part of this comparison (see lib/csvFileRegistry.ts for the unrelated,
+// file-content-hash-based "already uploaded this exact file" check).
+//
+// `options.includeDuplicates` — set only after the caller showed the user the
+// duplicate-preview choice (see previewBulkImportDuplicates) and they explicitly picked
+// "import the full file": every row is imported as its own record, exact duplicates
+// included, instead of the default skip-duplicates behavior. Note this still goes
+// through pushLeadsToSupabase's normal upsert-by-email — a duplicate row sharing a real
+// email with an existing lead updates that lead rather than creating a second Supabase
+// row; only rows with a genuinely different (or no) email actually land as new rows.
+export const bulkImportLeads = async (
+  newLeadsList: Partial<Lead>[],
+  options?: { includeDuplicates?: boolean }
+): Promise<BulkImportResult> => {
+  const includeDuplicates = options?.includeDuplicates === true;
+
+  let dedupeResult: ReturnType<typeof dedupeLeadRows> | null = null;
+  if (!includeDuplicates) {
+    let existingIndex = new Map<string, import('../lib/dedupe.ts').ExistingRecordRef>();
+    try {
+      // Only ask Supabase about the signatures THIS batch could actually match — never
+      // downloads the whole table (see getExistingLeadIndexForSignatures). Best-effort: a
+      // network hiccup here degrades to within-batch-only dedup rather than blocking the
+      // import.
+      const candidateSignatures = newLeadsList.map(row => buildDuplicateSignature(row, (row as any).csvTag ?? null).signature);
+      existingIndex = await getExistingLeadIndexForSignatures(candidateSignatures);
+    } catch (err) {
+      console.warn('Existing-Supabase duplicate check failed', err);
+    }
+    dedupeResult = dedupeLeadRows(newLeadsList, 'csvTag', existingIndex);
+  }
+
+  const uniqueItems = includeDuplicates ? newLeadsList : dedupeResult!.kept;
 
   const allLeads = getStoredLeads();
   let maxId = allLeads.length > 0 ? Math.max(...allLeads.map(l => l.id)) : 0;
@@ -1285,8 +1332,10 @@ export const bulkImportLeads = async (
     supabaseResult,
     totalRows: newLeadsList.length,
     uniqueRows: uniqueItems.length,
-    duplicatesSkipped: dedupeResult.duplicatesSkipped,
-    duplicateLeadNames: dedupeResult.duplicateLeadNames,
+    // Nothing was actually skipped when the caller chose to include duplicates — the
+    // report should reflect what really happened, not what the check would have skipped.
+    duplicatesSkipped: includeDuplicates ? 0 : dedupeResult!.duplicatesSkipped,
+    duplicateLeadNames: includeDuplicates ? [] : dedupeResult!.duplicateLeadNames,
   };
 
   lastImportReport = {

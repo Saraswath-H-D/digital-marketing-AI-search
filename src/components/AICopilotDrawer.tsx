@@ -8,10 +8,11 @@ import {
 } from 'lucide-react';
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { processNaturalLanguageCommand, AICommandResult, resolveCsvTagIntent, NO_TAG_RE, CSV_DELETE_INTENT_RE, interpretFilterQuery } from '../lib/aiAssistant.ts';
-import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory, bulkImportLeads, getLastImportReport, BulkImportResult } from '../data/leadStorage.ts';
+import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory, bulkImportLeads, previewBulkImportDuplicates, DuplicatePreviewResult, getLastImportReport, BulkImportResult } from '../data/leadStorage.ts';
 import { parseCsvFile, buildAutoMapping, mapRowsToLeads, isCsvParseError } from '../lib/csvMapping.ts';
 import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
 import DuplicateLeadsModal from './DuplicateLeadsModal.tsx';
+import ImportDuplicateChoiceModal from './ImportDuplicateChoiceModal.tsx';
 
 interface AICopilotDrawerProps {
   isOpen: boolean;
@@ -105,6 +106,17 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [duplicateModalResult, setDuplicateModalResult] = useState<BulkImportResult | null>(null);
   const [duplicateModalCsvName, setDuplicateModalCsvName] = useState<string | undefined>(undefined);
+  // Pre-import choice: set only when a dry-run duplicate check finds this upload
+  // contains leads that already exist, mixed with genuinely new ones — asked every time
+  // that happens, whether a tag was given for the upload or not (see
+  // ImportDuplicateChoiceModal / previewBulkImportDuplicates).
+  const [pendingDuplicateChoice, setPendingDuplicateChoice] = useState<{
+    leadsWithTag: any[];
+    finalTag: string | null;
+    preview: DuplicatePreviewResult;
+    csvName: string;
+    csvHash: string | null;
+  } | null>(null);
 
   // Outreach Pitch Form States
   const [outreachAngle, setOutreachAngle] = useState<string>('Value-First Pitch');
@@ -408,6 +420,69 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     setCsvAttachError('');
   };
 
+  const sayInChat = (text: string) => setChatLogs(prev => [...prev, { id: (Date.now() + 1).toString(), sender: 'assistant', text, timestamp: nowStamp() }]);
+
+  // Runs the actual import for a resolved tag + lead-duplicate choice — only ever called
+  // after both the file-level conflict check AND the lead-level duplicate preview (see
+  // previewThenImport inside handleCsvUploadCommand, and the ImportDuplicateChoiceModal
+  // handler below) have been settled. Component-scoped (not a closure over a specific
+  // `attachedCsv`) so the duplicate-choice modal's callback — which fires after the CSV
+  // attachment has already been cleared — can still call it with the csvName/csvHash it
+  // captured at preview time.
+  const runImportForCsv = async (
+    leadsWithTag: any[],
+    finalTag: string | null,
+    csvName: string,
+    csvHash: string | null,
+    includeDuplicates: boolean
+  ) => {
+    // bulkImportLeads runs the exact-duplicate rule itself (every relevant field
+    // identical after safe normalization, tag included — see lib/dedupe.ts) against
+    // this batch AND existing Supabase rows, unless the caller already asked and the
+    // user chose to include duplicates.
+    const importResult = await bulkImportLeads(leadsWithTag, { includeDuplicates });
+    const { count, supabaseResult } = importResult;
+
+    if (finalTag) setLastUsedCsvTag(finalTag);
+    if (csvHash) recordCsvFileUpload(csvHash, csvName, finalTag, leadsWithTag.length);
+
+    const importedOk = count > 0;
+    const lines = [
+      importedOk ? `✓ Imported ${count} member${count === 1 ? '' : 's'}` : `✗ No members were imported`,
+      `✓ CSV: ${csvName}`,
+      finalTag ? `✓ Tag: ${finalTag}` : `✓ No tag assigned`,
+    ];
+    if (importResult.duplicatesSkipped > 0) {
+      lines.push(`✓ Found exact duplicates of ${importResult.duplicateLeadNames.length} lead${importResult.duplicateLeadNames.length === 1 ? '' : 's'} and corrected them to one lead each — ${importResult.duplicatesSkipped} cop${importResult.duplicatesSkipped === 1 ? 'y' : 'ies'} skipped, not added to Supabase`);
+    } else if (includeDuplicates) {
+      lines.push(`✓ Imported every row from the file, including duplicates, as you chose.`);
+    }
+    if (!supabaseResult.success && supabaseResult.error) {
+      lines.push(`⚠ Supabase sync issue: ${supabaseResult.error} — contacts were added locally but may not be fully synced yet.`);
+    }
+    sayInChat(lines.join('\n'));
+
+    onShowMessage(
+      importedOk ? `Imported ${count} contact(s) from ${csvName}${finalTag ? ` tagged "${finalTag}"` : ''}.` : `Import from ${csvName} added no contacts.`,
+      importedOk ? 'success' : 'error'
+    );
+    if (onRefreshLeads) onRefreshLeads();
+
+    // Mandatory popup (never just the chat) whenever exact duplicates were found.
+    if (importResult.duplicatesSkipped > 0) {
+      setDuplicateModalResult(importResult);
+      setDuplicateModalCsvName(csvName);
+      setIsDuplicateModalOpen(true);
+    }
+  };
+
+  const handleDuplicateChoiceForCsv = async (choice: 'only-new' | 'full-file') => {
+    const pending = pendingDuplicateChoice;
+    setPendingDuplicateChoice(null);
+    if (!pending) return;
+    await runImportForCsv(pending.leadsWithTag, pending.finalTag, pending.csvName, pending.csvHash, choice === 'full-file');
+  };
+
   // Executes the CSV-via-chat upload flow: tag resolution (Case A–D) → file-level
   // duplicate check (separate from lead-level duplicates) → import. Runs instead of
   // handleExecuteNLCommand whenever a CSV is currently attached.
@@ -427,11 +502,14 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     setNaturalPrompt('');
     setIsProcessingCsv(true);
 
-    const say = (text: string) => setChatLogs(prev => [...prev, { id: (Date.now() + 1).toString(), sender: 'assistant', text, timestamp: nowStamp() }]);
+    const say = sayInChat;
 
-    // Runs the actual import for a resolved tag — only ever called after the file-level
-    // conflict check below has been settled.
-    const finishImport = async (finalTag: string | null) => {
+    // Lead-level duplicate check — separate from the file-level one below (see
+    // lib/dedupe.ts). Runs whether an explicit tag was resolved for this upload or not
+    // (finalTag may be null) — the comparison is about the lead data + tag, never the
+    // filename. Only asks when it actually finds duplicates mixed with new leads; a
+    // clean file imports immediately with no extra step.
+    const previewThenImport = async (finalTag: string | null) => {
       const mapping = buildAutoMapping(csv.headers);
       const mappedLeads = mapRowsToLeads(csv.rows, mapping, csv.headers);
 
@@ -441,41 +519,14 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       }
 
       const leadsWithTag = mappedLeads.map((l: any) => ({ ...l, csvTag: finalTag }));
-      // bulkImportLeads runs the exact-duplicate rule itself (every relevant field
-      // identical after safe normalization — tag is handled separately) against this
-      // batch AND existing Supabase rows — no separate ad-hoc duplicate check needed.
-      const importResult = await bulkImportLeads(leadsWithTag);
-      const { count, supabaseResult } = importResult;
+      const preview = await previewBulkImportDuplicates(leadsWithTag);
 
-      if (finalTag) setLastUsedCsvTag(finalTag);
-      if (csv.hash) recordCsvFileUpload(csv.hash, csv.name, finalTag, mappedLeads.length);
-
-      const importedOk = count > 0;
-      const lines = [
-        importedOk ? `✓ Imported ${count} member${count === 1 ? '' : 's'}` : `✗ No members were imported`,
-        `✓ CSV: ${csv.name}`,
-        finalTag ? `✓ Tag: ${finalTag}` : `✓ No tag assigned`,
-      ];
-      if (importResult.duplicatesSkipped > 0) {
-        lines.push(`✓ Found exact duplicates of ${importResult.duplicateLeadNames.length} lead${importResult.duplicateLeadNames.length === 1 ? '' : 's'} and corrected them to one lead each — ${importResult.duplicatesSkipped} cop${importResult.duplicatesSkipped === 1 ? 'y' : 'ies'} skipped, not added to Supabase`);
+      if (preview.duplicatesSkipped > 0) {
+        setPendingDuplicateChoice({ leadsWithTag, finalTag, preview, csvName: csv.name, csvHash: csv.hash });
+        say(`I found ${preview.duplicatesSkipped} duplicate lead${preview.duplicatesSkipped === 1 ? '' : 's'} and ${preview.uniqueRows} new lead${preview.uniqueRows === 1 ? '' : 's'} in "${csv.name}"${finalTag ? ` (tag "${finalTag}")` : ''}. Choose how to import it from the popup.`);
+        return;
       }
-      if (!supabaseResult.success && supabaseResult.error) {
-        lines.push(`⚠ Supabase sync issue: ${supabaseResult.error} — contacts were added locally but may not be fully synced yet.`);
-      }
-      say(lines.join('\n'));
-
-      onShowMessage(
-        importedOk ? `Imported ${count} contact(s) from ${csv.name}${finalTag ? ` tagged "${finalTag}"` : ''}.` : `Import from ${csv.name} added no contacts.`,
-        importedOk ? 'success' : 'error'
-      );
-      if (onRefreshLeads) onRefreshLeads();
-
-      // Mandatory popup (never just the chat) whenever exact duplicates were found.
-      if (importResult.duplicatesSkipped > 0) {
-        setDuplicateModalResult(importResult);
-        setDuplicateModalCsvName(csv.name);
-        setIsDuplicateModalOpen(true);
-      }
+      await runImportForCsv(leadsWithTag, finalTag, csv.name, csv.hash, false);
     };
 
     // File-level duplicate check — separate from lead-level exact duplicates. Runs
@@ -484,7 +535,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     // this — a deleted CSV is always treated as brand new, its old tag never restored.
     const checkFileThenImport = async (finalTag: string | null) => {
       if (!csv.hash) {
-        await finishImport(finalTag);
+        await previewThenImport(finalTag);
         return;
       }
       const conflict = await resolveFileConflict(csv.hash, finalTag);
@@ -505,7 +556,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       if (conflict.wasPreviouslyDeleted) {
         say(`This CSV was previously deleted, so I'm treating this as a new upload.`);
       }
-      await finishImport(finalTag);
+      await previewThenImport(finalTag);
     };
 
     try {
@@ -520,7 +571,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       if (wasAwaitingFileConflict) {
         const lower = messageText.toLowerCase();
         if (/\bboth\b/.test(lower)) {
-          await finishImport(pendingImportTag);
+          await previewThenImport(pendingImportTag);
         } else if (/\b(one|only|single|skip|existing)\b/.test(lower)) {
           say(`Kept this CSV under its existing tag. Nothing new was imported.`);
         } else {
@@ -1212,6 +1263,18 @@ Operon AI Growth Team`;
         onClose={() => { setIsDuplicateModalOpen(false); if (onRefreshLeads) onRefreshLeads(); }}
         result={duplicateModalResult}
         csvName={duplicateModalCsvName}
+      />
+
+      <ImportDuplicateChoiceModal
+        isOpen={!!pendingDuplicateChoice}
+        preview={pendingDuplicateChoice?.preview || null}
+        fileName={pendingDuplicateChoice?.csvName}
+        tagLabel={pendingDuplicateChoice?.finalTag || null}
+        onChoose={handleDuplicateChoiceForCsv}
+        onCancel={() => {
+          setPendingDuplicateChoice(null);
+          sayInChat('Import cancelled — nothing was added.');
+        }}
       />
 
     </div>

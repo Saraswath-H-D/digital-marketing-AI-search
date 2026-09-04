@@ -1,15 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Upload, X, Check, AlertCircle, FileSpreadsheet, Eye, ArrowRight, Table, Tag, SlidersHorizontal, CheckCircle2 } from 'lucide-react';
-import { setActiveHeaders } from '../data/leadStorage.ts';
+import { setActiveHeaders, previewBulkImportDuplicates, DuplicatePreviewResult } from '../data/leadStorage.ts';
 import { SYSTEM_FIELDS, parseCsvFile, buildAutoMapping, mapRowsToLeads, isCsvParseError } from '../lib/csvMapping.ts';
 import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
 import FileAlreadyUploadedModal from './FileAlreadyUploadedModal.tsx';
+import ImportDuplicateChoiceModal from './ImportDuplicateChoiceModal.tsx';
 
 interface CsvImporterProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (items: any[]) => Promise<boolean>;
+  onImport: (items: any[], options?: { includeDuplicates?: boolean }) => Promise<boolean>;
 }
 
 export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterProps) {
@@ -22,10 +23,12 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const [activeTab, setActiveTab] = useState<'mapping' | 'preview'>('mapping');
   const [fileHash, setFileHash] = useState<string | null>(null);
   const [pendingFileConflict, setPendingFileConflict] = useState<{ existingTags: string[]; newTag: string } | null>(null);
+  const [pendingDuplicateChoice, setPendingDuplicateChoice] = useState<{ preview: DuplicatePreviewResult; finalTag: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -121,21 +124,18 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     setFileHash(null);
   };
 
-  // Runs the actual import — only ever called after the file-level duplicate check (see
-  // handleImportSubmit) has been resolved, so this never re-checks the file itself.
-  const doActualImport = async (finalTag: string) => {
-    setIsUploading(true);
-
-    // csvTag is stamped on EVERY row in this batch unconditionally — it's the upload's
-    // own identity, independent of sourceName. sourceName is left exactly as the CSV
-    // mapped it (or '-' if the row had none) and is NEVER defaulted to the tag name —
-    // a lead with no real source should display "-", not the batch tag, in the Source
-    // column. Previously the tag only ever lived inside sourceName (defaulted onto
-    // source-less rows), which both mislabeled the Source column and, for rows that DID
-    // have their own source value, lost the tag association entirely — the underlying
-    // bug that made searching/deleting by tag miss rows or leave part of an upload
-    // behind. csvTag now carries the tag reliably on its own regardless.
-    const finalData = parsedData.map(item => ({
+  // csvTag is stamped on EVERY row in this batch unconditionally — it's the upload's
+  // own identity, independent of sourceName. sourceName is left exactly as the CSV
+  // mapped it (or '-' if the row had none) and is NEVER defaulted to the tag name —
+  // a lead with no real source should display "-", not the batch tag, in the Source
+  // column. Previously the tag only ever lived inside sourceName (defaulted onto
+  // source-less rows), which both mislabeled the Source column and, for rows that DID
+  // have their own source value, lost the tag association entirely — the underlying
+  // bug that made searching/deleting by tag miss rows or leave part of an upload
+  // behind. csvTag now carries the tag reliably on its own regardless. Shared by the
+  // duplicate-preview check and the real import so both see the exact same rows.
+  const buildFinalData = (finalTag: string) =>
+    parsedData.map(item => ({
       ...item,
       csvTag: finalTag,
       // Carried the same way _csvHeaders already is, so callers (App.tsx) can label the
@@ -143,7 +143,14 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
       _csvFileName: file?.name || 'CSV Import',
     }));
 
-    const success = await onImport(finalData);
+  // Runs the actual import — only ever called after the file-level duplicate check AND
+  // the lead-level duplicate choice (see handleImportSubmit) have both been resolved, so
+  // this never re-checks either.
+  const doActualImport = async (finalTag: string, includeDuplicates: boolean) => {
+    setIsUploading(true);
+    const finalData = buildFinalData(finalTag);
+
+    const success = await onImport(finalData, { includeDuplicates });
 
     setIsUploading(false);
     if (success) {
@@ -183,7 +190,35 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
       // persists.)
     }
 
-    await doActualImport(finalTag);
+    await checkLeadDuplicatesThenImport(finalTag);
+  };
+
+  // Lead-level duplicate check — a completely separate check from the file-level one
+  // above (see lib/dedupe.ts). Runs whether an explicit tag was typed in or the filename
+  // fallback was used — the comparison is about the lead data + tag, never the filename.
+  // Only asks when it actually finds duplicates; a clean file imports immediately with no
+  // extra step.
+  const checkLeadDuplicatesThenImport = async (finalTag: string) => {
+    setIsCheckingDuplicates(true);
+    let preview: DuplicatePreviewResult;
+    try {
+      preview = await previewBulkImportDuplicates(buildFinalData(finalTag));
+    } finally {
+      setIsCheckingDuplicates(false);
+    }
+
+    if (preview.duplicatesSkipped > 0) {
+      setPendingDuplicateChoice({ preview, finalTag });
+      return;
+    }
+    await doActualImport(finalTag, false);
+  };
+
+  const handleDuplicateChoice = async (choice: 'only-new' | 'full-file') => {
+    const pending = pendingDuplicateChoice;
+    setPendingDuplicateChoice(null);
+    if (!pending) return;
+    await doActualImport(pending.finalTag, choice === 'full-file');
   };
 
   const handleFileConflictChoice = async (choice: 'both' | 'one') => {
@@ -196,10 +231,11 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
       return;
     }
 
-    // "Upload Both" — proceed with the new tag; lead-level exact-duplicate detection
-    // inside bulkImportLeads still applies normally and will never create duplicate
-    // lead records even though the file itself is now associated with two tags.
-    await doActualImport(conflict.newTag);
+    // "Upload Both" — proceed with the new tag; the lead-level duplicate check (see
+    // checkLeadDuplicatesThenImport) still runs normally and will still ask before
+    // creating any duplicate lead records, even though the file itself is now
+    // associated with two tags.
+    await checkLeadDuplicatesThenImport(conflict.newTag);
   };
 
   // Extract sample value for Row 1 preview
@@ -516,7 +552,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                   </button>
                   <button
                     type="button"
-                    disabled={isUploading || parsedData.length === 0}
+                    disabled={isUploading || isCheckingDuplicates || parsedData.length === 0}
                     onClick={handleImportSubmit}
                     className="btn-primary shrink-0"
                   >
@@ -524,6 +560,11 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         <span>Importing to Operon & Supabase...</span>
+                      </>
+                    ) : isCheckingDuplicates ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Checking for duplicate leads...</span>
                       </>
                     ) : (
                       <>
@@ -547,6 +588,17 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
         existingTags={pendingFileConflict?.existingTags || []}
         newTag={pendingFileConflict?.newTag || null}
         onChoose={handleFileConflictChoice}
+      />
+    )}
+
+    {isOpen && (
+      <ImportDuplicateChoiceModal
+        isOpen={!!pendingDuplicateChoice}
+        preview={pendingDuplicateChoice?.preview || null}
+        fileName={file?.name}
+        tagLabel={pendingDuplicateChoice?.finalTag || null}
+        onChoose={handleDuplicateChoice}
+        onCancel={() => setPendingDuplicateChoice(null)}
       />
     )}
     </>

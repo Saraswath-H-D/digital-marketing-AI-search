@@ -578,9 +578,9 @@ export default function App() {
   };
 
   // CSV Import Action Handler
-  const handleImportLeads = async (items: any[]) => {
+  const handleImportLeads = async (items: any[], options?: { includeDuplicates?: boolean }) => {
     try {
-      const result = await bulkImportLeads(items);
+      const result = await bulkImportLeads(items, options);
       setPage(1); // Jump to Page 1 so newly uploaded leads display immediately at top of app table
       fetchLeads();
       fetchFilterOptions();
@@ -590,8 +590,15 @@ export default function App() {
       setLastImportedFileName(items[0]?._csvFileName || null);
 
       if (result.duplicatesSkipped > 0) {
+        // Only reachable when the user was never actually asked (e.g. an older/other
+        // entry point that doesn't run the pre-import duplicate-choice check) — the
+        // CsvImporter and AI-chat upload flows both already ask before this point
+        // whenever there are duplicates, so a duplicatesSkipped>0 result there means
+        // the user explicitly chose "only new leads".
         setIsDuplicateModalOpen(true);
         showStatus(`Imported ${result.count} new contact(s). ${result.duplicatesSkipped} exact duplicate cop${result.duplicatesSkipped === 1 ? 'y' : 'ies'} skipped.`, 'success');
+      } else if (options?.includeDuplicates) {
+        showStatus(`Imported all ${result.count} rows from the file, including duplicates.`, 'success');
       } else {
         showStatus(`Imported ${result.count} new contacts & synced live to Supabase!`, 'success');
       }
