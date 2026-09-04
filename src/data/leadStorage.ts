@@ -1204,6 +1204,49 @@ export interface DuplicatePreviewResult {
 let lastImportReport: { result: BulkImportResult; tag: string | null; at: string } | null = null;
 export const getLastImportReport = () => lastImportReport;
 
+// Builds duplicate signatures for every lead already sitting in local storage — this
+// app's own in-memory/localStorage cache, already loaded, so this costs nothing extra
+// over the network. Layered under the Supabase-backed check below so a previously
+// imported lead is still caught as a duplicate even when Supabase is unreachable,
+// unconfigured, mid-migration, or simply hasn't caught up (a partially-failed sync,
+// autoSync having been off at the time it was created, etc.) — duplicate detection must
+// never silently depend on Supabase alone.
+const buildLocalExistingIndex = (): Map<string, import('../lib/dedupe.ts').ExistingRecordRef> => {
+  const index = new Map<string, import('../lib/dedupe.ts').ExistingRecordRef>();
+  getStoredLeads().forEach(lead => {
+    const { signature } = buildDuplicateSignature(lead as any, (lead as any).csvTag ?? null);
+    if (!signature) return;
+    const first = (lead.firstName || '').trim();
+    const last = (lead.lastName || '').trim();
+    const leadName = [first, last !== '-' ? last : ''].filter(Boolean).join(' ').trim() || (lead.email && lead.email !== '-' ? lead.email : '') || 'Unknown lead';
+    const email = (lead.email && lead.email !== '-') ? lead.email : '';
+    index.set(signature, { signature, leadName, email });
+  });
+  return index;
+};
+
+// Combines the local-storage index above with a targeted Supabase lookup for the
+// signatures this batch could actually match (see getExistingLeadIndexForSignatures) —
+// local first (cheap, always available), Supabase entries layered on top (authoritative
+// when reachable, and the only source that sees leads imported on a different
+// device/session). Shared by the read-only preview and the real import so both see the
+// exact same "what already exists" picture.
+const buildExistingIndexFor = async (
+  newLeadsList: Partial<Lead>[]
+): Promise<Map<string, import('../lib/dedupe.ts').ExistingRecordRef>> => {
+  const existingIndex = buildLocalExistingIndex();
+  try {
+    // Only ask Supabase about the signatures THIS batch could actually match — never
+    // downloads the whole table (see getExistingLeadIndexForSignatures).
+    const candidateSignatures = newLeadsList.map(row => buildDuplicateSignature(row, (row as any).csvTag ?? null).signature);
+    const remoteIndex = await getExistingLeadIndexForSignatures(candidateSignatures);
+    remoteIndex.forEach((ref, sig) => existingIndex.set(sig, ref));
+  } catch (err) {
+    console.warn('Existing-Supabase duplicate check failed — still backed by the local-storage check above', err);
+  }
+  return existingIndex;
+};
+
 // Read-only dry run of the same exact-duplicate check bulkImportLeads runs — used by
 // every CSV import entry point to ask the user, BEFORE anything is written, whether to
 // import only the new leads or the full file (duplicates included). Runs the same
@@ -1213,13 +1256,7 @@ export const getLastImportReport = () => lastImportReport;
 export const previewBulkImportDuplicates = async (
   newLeadsList: Partial<Lead>[]
 ): Promise<DuplicatePreviewResult> => {
-  let existingIndex = new Map<string, import('../lib/dedupe.ts').ExistingRecordRef>();
-  try {
-    const candidateSignatures = newLeadsList.map(row => buildDuplicateSignature(row, (row as any).csvTag ?? null).signature);
-    existingIndex = await getExistingLeadIndexForSignatures(candidateSignatures);
-  } catch (err) {
-    console.warn('Existing-Supabase duplicate check failed', err);
-  }
+  const existingIndex = await buildExistingIndexFor(newLeadsList);
 
   const dedupeResult = dedupeLeadRows(newLeadsList, 'csvTag', existingIndex);
   return {
@@ -1253,17 +1290,7 @@ export const bulkImportLeads = async (
 
   let dedupeResult: ReturnType<typeof dedupeLeadRows> | null = null;
   if (!includeDuplicates) {
-    let existingIndex = new Map<string, import('../lib/dedupe.ts').ExistingRecordRef>();
-    try {
-      // Only ask Supabase about the signatures THIS batch could actually match — never
-      // downloads the whole table (see getExistingLeadIndexForSignatures). Best-effort: a
-      // network hiccup here degrades to within-batch-only dedup rather than blocking the
-      // import.
-      const candidateSignatures = newLeadsList.map(row => buildDuplicateSignature(row, (row as any).csvTag ?? null).signature);
-      existingIndex = await getExistingLeadIndexForSignatures(candidateSignatures);
-    } catch (err) {
-      console.warn('Existing-Supabase duplicate check failed', err);
-    }
+    const existingIndex = await buildExistingIndexFor(newLeadsList);
     dedupeResult = dedupeLeadRows(newLeadsList, 'csvTag', existingIndex);
   }
 

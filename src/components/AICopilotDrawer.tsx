@@ -460,15 +460,18 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
 
     const importedOk = count > 0;
     const lines = [
-      importedOk ? `✓ Imported ${count} member${count === 1 ? '' : 's'}` : `✗ No members were imported`,
+      `Import Complete`,
       `✓ CSV: ${csvName}`,
-      finalTag ? `✓ Tag: ${finalTag}` : `✓ No tag assigned`,
+      `✓ Total leads in file: ${importResult.totalRows}`,
+      `✓ Duplicate leads: ${importResult.duplicatesSkipped}`,
+      importedOk ? `✓ New leads imported: ${count}` : `✗ No new leads were imported`,
     ];
     if (importResult.duplicatesSkipped > 0) {
-      lines.push(`✓ Found exact duplicates of ${importResult.duplicateLeadNames.length} lead${importResult.duplicateLeadNames.length === 1 ? '' : 's'} and corrected them to one lead each — ${importResult.duplicatesSkipped} cop${importResult.duplicatesSkipped === 1 ? 'y' : 'ies'} skipped, not added to Supabase`);
+      lines.push(`✓ Leads skipped: ${importResult.duplicatesSkipped}`);
     } else if (includeDuplicates) {
       lines.push(`✓ Imported every row from the file, including duplicates, as you chose.`);
     }
+    lines.push(finalTag ? `✓ Tag: ${finalTag}` : `✓ No tag assigned`);
     if (!supabaseResult.success && supabaseResult.error) {
       lines.push(`⚠ Supabase sync issue: ${supabaseResult.error} — contacts were added locally but may not be fully synced yet.`);
     }
@@ -524,29 +527,40 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
 
   // Tag-reuse check — a separate concern from the file-level and lead-level checks. Only
   // fires for an explicit, non-blank tag that already has live leads under it (never for
-  // an untagged upload — there's no specific tag identity to warn about). Reusing a tag
-  // on purpose is normal, so this only ever asks.
+  // an untagged upload — there's no specific tag identity to warn about). Tag names must
+  // be unique per upload — this never offers a "keep using it anyway" bypass; the import
+  // cannot continue until a free tag name is provided (see TagAlreadyInUseModal) or the
+  // user cancels.
   const checkTagReuseThenImportForCsv = async (csv: AttachedCsv, finalTag: string | null) => {
     if (finalTag) {
       const activeTags = await getActiveTagSet();
       if (activeTags && activeTags.has(normalizeTagKey(finalTag))) {
         setPendingTagReuse({ csv, finalTag });
-        sayInChat(`The tag "${finalTag}" already has leads in your list. Choose from the popup whether to keep using it or pick a different tag.`);
+        sayInChat(`The tag "${finalTag}" is already being used. Please enter a different tag name in the popup before I import this file.`);
         return;
       }
     }
     await previewThenImportForCsv(csv, finalTag);
   };
 
-  const handleTagReuseChoiceForCsv = (choice: 'keep' | 'change') => {
+  // Re-validates whatever tag name the user just typed into the conflict modal. Only
+  // resolves `ok: true` once it's confirmed free — TagAlreadyInUseModal keeps asking
+  // otherwise (even if they typed back the exact same conflicting name), so the import
+  // can never proceed under a still-taken tag name.
+  const handleTagConflictSubmitForCsv = async (newTag: string): Promise<{ ok: boolean }> => {
+    const activeTags = await getActiveTagSet();
+    if (activeTags && activeTags.has(normalizeTagKey(newTag))) {
+      return { ok: false };
+    }
     const pending = pendingTagReuse;
     setPendingTagReuse(null);
-    if (!pending) return;
-    if (choice === 'change') {
-      sayInChat('Okay — please attach the CSV again with a different tag name.');
-      return;
-    }
-    previewThenImportForCsv(pending.csv, pending.finalTag);
+    if (pending) await previewThenImportForCsv(pending.csv, newTag);
+    return { ok: true };
+  };
+
+  const handleTagConflictCancelForCsv = () => {
+    setPendingTagReuse(null);
+    sayInChat('Import cancelled — nothing was added.');
   };
 
   // Executes the CSV-via-chat upload flow: tag resolution (Case A–D) → file-level
@@ -1309,8 +1323,8 @@ Operon AI Growth Team`;
       <TagAlreadyInUseModal
         isOpen={!!pendingTagReuse}
         tag={pendingTagReuse?.finalTag || ''}
-        onKeep={() => handleTagReuseChoiceForCsv('keep')}
-        onChangeTag={() => handleTagReuseChoiceForCsv('change')}
+        onSubmit={handleTagConflictSubmitForCsv}
+        onCancel={handleTagConflictCancelForCsv}
       />
 
       <ImportDuplicateChoiceModal

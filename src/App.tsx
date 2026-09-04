@@ -589,18 +589,18 @@ export default function App() {
       setLastImportedTag(items[0]?.csvTag || null);
       setLastImportedFileName(items[0]?._csvFileName || null);
 
+      const tagLabel = items[0]?.csvTag || '(no tag)';
       if (result.duplicatesSkipped > 0) {
-        // Only reachable when the user was never actually asked (e.g. an older/other
-        // entry point that doesn't run the pre-import duplicate-choice check) — the
-        // CsvImporter and AI-chat upload flows both already ask before this point
-        // whenever there are duplicates, so a duplicatesSkipped>0 result there means
-        // the user explicitly chose "only new leads".
+        // Reachable when the user explicitly chose "only new leads" from the pre-import
+        // duplicate-choice popup (both the CsvImporter and AI-chat upload flows always
+        // ask before this point whenever there are duplicates) — this is the final
+        // summary confirming what that choice actually did.
         setIsDuplicateModalOpen(true);
-        showStatus(`Imported ${result.count} new contact(s). ${result.duplicatesSkipped} exact duplicate cop${result.duplicatesSkipped === 1 ? 'y' : 'ies'} skipped.`, 'success');
+        showStatus(`Import Complete — Total: ${result.totalRows}, Duplicate leads: ${result.duplicatesSkipped}, New leads imported: ${result.count}, Leads skipped: ${result.duplicatesSkipped}, Tag: ${tagLabel}.`, 'success');
       } else if (options?.includeDuplicates) {
-        showStatus(`Imported all ${result.count} rows from the file, including duplicates.`, 'success');
+        showStatus(`Import Complete — Total: ${result.totalRows}, all ${result.count} rows imported including duplicates, Tag: ${tagLabel}.`, 'success');
       } else {
-        showStatus(`Imported ${result.count} new contacts & synced live to Supabase!`, 'success');
+        showStatus(`Import Complete — Total: ${result.totalRows}, New leads imported: ${result.count}, Tag: ${tagLabel}. Synced live to Supabase!`, 'success');
       }
       return true;
     } catch (err) {

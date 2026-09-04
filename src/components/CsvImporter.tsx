@@ -211,7 +211,9 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
   // Tag-reuse check — a separate concern from both the file-level check above and the
   // lead-level check below. Only fires for an explicit, non-blank tag that already has
   // live leads under it; an untagged upload never triggers this (there's no specific tag
-  // identity to warn about). Reusing a tag on purpose is normal, so this only ever asks.
+  // identity to warn about). Tag names must be unique per upload — this never offers a
+  // "keep using it anyway" bypass; the import cannot continue until a free tag name is
+  // provided (see TagAlreadyInUseModal) or the user cancels.
   const checkTagReuseThenImport = async (finalTag: string | null) => {
     if (finalTag) {
       const activeTags = await getActiveTagSet();
@@ -223,15 +225,24 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     await checkLeadDuplicatesThenImport(finalTag);
   };
 
-  const handleTagReuseChoice = (choice: 'keep' | 'change') => {
-    const pending = pendingTagReuse;
-    setPendingTagReuse(null);
-    if (!pending) return;
-    if (choice === 'change') {
-      tagInputRef.current?.focus();
-      return; // nothing imported — user edits the tag field and resubmits
+  // Re-validates whatever tag name the user just typed into the conflict modal. Only
+  // resolves `ok: true` once it's confirmed free — TagAlreadyInUseModal keeps asking
+  // otherwise (even if they typed back the exact same conflicting name), so the import
+  // can never proceed under a still-taken tag name.
+  const handleTagConflictSubmit = async (newTag: string): Promise<{ ok: boolean }> => {
+    const activeTags = await getActiveTagSet();
+    if (activeTags && activeTags.has(normalizeTagKey(newTag))) {
+      return { ok: false };
     }
-    checkLeadDuplicatesThenImport(pending.tag);
+    setPendingTagReuse(null);
+    setImportTag(newTag);
+    await checkLeadDuplicatesThenImport(newTag);
+    return { ok: true };
+  };
+
+  const handleTagConflictCancel = () => {
+    setPendingTagReuse(null);
+    setInfoMessage('Import cancelled — nothing was added.');
   };
 
   // Lead-level duplicate check — a completely separate check from the file-level one
@@ -638,8 +649,8 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
       <TagAlreadyInUseModal
         isOpen={!!pendingTagReuse}
         tag={pendingTagReuse?.tag || ''}
-        onKeep={() => handleTagReuseChoice('keep')}
-        onChangeTag={() => handleTagReuseChoice('change')}
+        onSubmit={handleTagConflictSubmit}
+        onCancel={handleTagConflictCancel}
       />
     )}
 
