@@ -283,13 +283,13 @@ export const pushLeadsToSupabase = async (
       // existing missing-column retry loop below drops this key and retries automatically).
       csv_tag: (l as any).csvTag ?? null,
       tags: Array.isArray((l as any).tags) && (l as any).tags.length > 0 ? JSON.stringify((l as any).tags) : null,
-      // The exact-duplicate identity this row was imported under (tag/context + every
-      // normalized content field — see lib/dedupe.ts). Stored so a future import's
-      // duplicate check can query Supabase directly for just the signatures it needs
-      // (`.in('duplicate_signature', [...])`) instead of downloading the whole table —
-      // see getExistingLeadIndexForSignatures below. Missing-column retry (below) drops
-      // this automatically on tables that haven't run the migration yet.
-      duplicate_signature: buildDuplicateSignature(l as any, (l as any).csvTag ?? null).signature || null,
+      // The exact-duplicate identity this row was imported under (every normalized
+      // content field — tag plays NO part in it, see lib/dedupe.ts). Stored so a future
+      // import's duplicate check can query Supabase directly for just the signatures it
+      // needs (`.in('duplicate_signature', [...])`) instead of downloading the whole
+      // table — see getExistingLeadIndexForSignatures below. Missing-column retry
+      // (below) drops this automatically on tables that haven't run the migration yet.
+      duplicate_signature: buildDuplicateSignature(l as any).signature || null,
       questions: finalQuestions,
       registration_time: l.registrationTime || new Date().toLocaleString(),
       approval_status: l.approvalStatus || 'approved',
@@ -1001,8 +1001,8 @@ const getExistingLeadIndexFullScan = async (
       if (error || !data || data.length === 0) break;
 
       data.forEach((row: any) => {
-        const { leadShaped, tag, cleanEmail, leadName } = rowToLeadShaped(row);
-        const { signature } = buildDuplicateSignature(leadShaped, tag);
+        const { leadShaped, cleanEmail, leadName } = rowToLeadShaped(row);
+        const { signature } = buildDuplicateSignature(leadShaped);
         if (!signature || !neededSignatures.has(signature)) return;
         index.set(signature, { signature, leadName, email: cleanEmail });
       });
@@ -1134,24 +1134,29 @@ ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS linkedin_url TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS website TEXT;
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS company_linkedin_url TEXT;
 -- csv_tag: the CSV upload's own tag/context as a real, queryable column (previously
--- only smuggled inside the questions column as base64 metadata) — required for the app
--- to enforce "same email under a different tag is NOT a duplicate" correctly at the
--- database level. Purely additive; existing rows just get csv_tag = NULL until re-synced.
+-- only smuggled inside the questions column as base64 metadata). Purely additive;
+-- existing rows just get csv_tag = NULL until re-synced. NOTE: tag plays NO part in
+-- whether a lead counts as a duplicate (see lib/dedupe.ts) — this column is for tag-name
+-- uniqueness checks and tag-based search/filter/delete, entirely separate concerns.
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS csv_tag TEXT;
 -- tags: additional tag memberships beyond the original csv_tag (JSON array as text),
 -- e.g. '["Prospects","Investors"]'.
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS tags TEXT;
--- duplicate_signature: this row's exact-duplicate identity — tag/context + every
--- normalized content field (see lib/dedupe.ts) — computed and stored on every import so
--- a future import's duplicate check can query Supabase directly for just the signatures
--- it needs instead of downloading the whole table. Purely additive; existing rows get
--- duplicate_signature = NULL until they're re-synced (re-push, or any edit that
--- round-trips the row), at which point it's filled in automatically.
+-- duplicate_signature: this row's exact-duplicate identity — every normalized content
+-- field, deliberately NOT including tag (see lib/dedupe.ts) — computed and stored on
+-- every import so a future import's duplicate check can query Supabase directly for
+-- just the signatures it needs instead of downloading the whole table. Purely additive;
+-- existing rows get duplicate_signature = NULL until they're re-synced (re-push, or any
+-- edit that round-trips the row), at which point it's filled in automatically.
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS duplicate_signature TEXT;
 CREATE INDEX IF NOT EXISTS ${tableName}_duplicate_signature_idx ON public.${tableName} (duplicate_signature);
 
 -- 2b. Make sure email actually carries the unique constraint the app upserts against
--- (safe to re-run; no-ops if it's already there under this name)
+-- (safe to re-run; no-ops if it's already there under this name). This is intentionally
+-- email-only, not (email, csv_tag) — since tag plays no part in the app's own
+-- duplicate rule, a lead sharing an email with an existing one is always the same
+-- duplicate lead regardless of tag, so there is no case where the database needs to
+-- allow two rows with the same email to coexist.
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -1160,25 +1165,6 @@ BEGIN
     ALTER TABLE public.${tableName} ADD CONSTRAINT ${tableName}_email_key UNIQUE (email);
   END IF;
 END $$;
-
--- 2c. OPTIONAL, and NOT about exact-duplicate detection — that's already fully
--- tag-scoped at the application layer (duplicate_signature above), so a genuinely new
--- lead under a different tag is never skipped, and Supabase only ever receives rows the
--- app already decided are new. This block is about a separate, narrower edge case: the
--- SAME real email address deliberately imported under two different tags ends up as one
--- Supabase row today, because the constraint below (email alone, globally unique) is
--- what the app's upsert still targets — the second import's row updates the first
--- instead of sitting beside it. Run this yourself ONLY if you also want the database
--- row itself to allow that (email, csv_tag) pair to coexist as two separate rows:
---
--- ALTER TABLE public.${tableName} DROP CONSTRAINT IF EXISTS ${tableName}_email_key;
--- ALTER TABLE public.${tableName} ADD CONSTRAINT ${tableName}_email_csv_tag_key UNIQUE (email, csv_tag);
---
--- After running this, ask the AI assistant to switch the app's upsert conflict target
--- from 'email' to 'email,csv_tag' to match — that change is NOT applied automatically
--- and needs its own follow-up (it also requires every lead to carry a non-null csv_tag,
--- since Postgres treats two NULLs as never conflicting under a composite unique
--- constraint, which would silently duplicate-row every untagged single-record edit).
 
 -- 3. Allow explicit ID insertion starting from 1
 ALTER TABLE public.${tableName} ALTER COLUMN id DROP IDENTITY IF EXISTS;

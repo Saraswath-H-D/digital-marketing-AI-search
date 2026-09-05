@@ -659,7 +659,6 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
         isOpen={!!pendingDuplicateChoice}
         preview={pendingDuplicateChoice?.preview || null}
         fileName={file?.name}
-        tagLabel={pendingDuplicateChoice?.finalTag || null}
         onChoose={handleDuplicateChoice}
         onCancel={() => setPendingDuplicateChoice(null)}
       />

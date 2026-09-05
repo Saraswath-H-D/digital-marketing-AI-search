@@ -10,9 +10,10 @@ interface DuplicateLeadsModalProps {
   csvName?: string;
 }
 
-// Only leads under the SAME tag/context whose every relevant field matched exactly.
-// Beyond this many names the list switches to a preview + "View All Duplicates" toggle
-// rather than rendering hundreds/thousands of rows at once (see the 1,000+1 case).
+// Every relevant field on these leads matched exactly (tag plays no part in the
+// comparison — see lib/dedupe.ts). Beyond this many names the list switches to a
+// preview + "View All Duplicates" toggle rather than rendering hundreds/thousands of
+// rows at once (see the 1,000+1 case).
 const PREVIEW_LIMIT = 25;
 
 // Mandatory popup — shown only when duplicatesSkipped > 0. Lists every exact-duplicate

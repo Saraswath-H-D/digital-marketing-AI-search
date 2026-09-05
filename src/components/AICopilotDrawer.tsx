@@ -1331,7 +1331,6 @@ Operon AI Growth Team`;
         isOpen={!!pendingDuplicateChoice}
         preview={pendingDuplicateChoice?.preview || null}
         fileName={pendingDuplicateChoice?.csvName}
-        tagLabel={pendingDuplicateChoice?.finalTag || null}
         onChoose={handleDuplicateChoiceForCsv}
         onCancel={() => {
           setPendingDuplicateChoice(null);

@@ -7,8 +7,6 @@ interface ImportDuplicateChoiceModalProps {
   isOpen: boolean;
   preview: DuplicatePreviewResult | null;
   fileName?: string;
-  /** Display only — a lead's tag/context is compared regardless of whether one was given. */
-  tagLabel?: string | null;
   onChoose: (choice: 'only-new' | 'full-file') => void;
   onCancel: () => void;
 }
@@ -16,9 +14,12 @@ interface ImportDuplicateChoiceModalProps {
 // Pre-import choice — shown whenever a dry-run duplicate check (see
 // previewBulkImportDuplicates) finds this file contains leads that already exist.
 // Asked EVERY time this happens, whether an explicit tag was given for the upload or
-// not — the comparison is about the lead data itself, not the tag or the filename (see
-// lib/dedupe.ts). Nothing is imported until the user picks one.
-export default function ImportDuplicateChoiceModal({ isOpen, preview, fileName, tagLabel, onChoose, onCancel }: ImportDuplicateChoiceModalProps) {
+// not — the comparison is about the lead data itself; tag plays NO part in it (a lead
+// under a different tag than an existing match is still the same duplicate — see
+// lib/dedupe.ts), and neither does the filename. Tag-name uniqueness is a completely
+// separate, independent check (see TagAlreadyInUseModal) that has nothing to do with
+// this popup. Nothing is imported until the user picks one.
+export default function ImportDuplicateChoiceModal({ isOpen, preview, fileName, onChoose, onCancel }: ImportDuplicateChoiceModalProps) {
   if (!preview) return null;
 
   // Every single row already exists — there is no "only new leads" to import, so that
@@ -54,7 +55,7 @@ export default function ImportDuplicateChoiceModal({ isOpen, preview, fileName, 
                   <span className="text-[var(--text-primary)] font-bold">{preview.totalRows}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Already exist{tagLabel ? ` (tag "${tagLabel}")` : ''}</span>
+                  <span className="text-[var(--text-muted)]">Already exist</span>
                   <span className="text-[var(--text-primary)] font-bold">{preview.duplicatesSkipped}</span>
                 </div>
                 <div className="flex justify-between">

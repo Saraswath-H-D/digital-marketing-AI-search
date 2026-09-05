@@ -1214,7 +1214,7 @@ export const getLastImportReport = () => lastImportReport;
 const buildLocalExistingIndex = (): Map<string, import('../lib/dedupe.ts').ExistingRecordRef> => {
   const index = new Map<string, import('../lib/dedupe.ts').ExistingRecordRef>();
   getStoredLeads().forEach(lead => {
-    const { signature } = buildDuplicateSignature(lead as any, (lead as any).csvTag ?? null);
+    const { signature } = buildDuplicateSignature(lead as any);
     if (!signature) return;
     const first = (lead.firstName || '').trim();
     const last = (lead.lastName || '').trim();
@@ -1238,7 +1238,7 @@ const buildExistingIndexFor = async (
   try {
     // Only ask Supabase about the signatures THIS batch could actually match — never
     // downloads the whole table (see getExistingLeadIndexForSignatures).
-    const candidateSignatures = newLeadsList.map(row => buildDuplicateSignature(row, (row as any).csvTag ?? null).signature);
+    const candidateSignatures = newLeadsList.map(row => buildDuplicateSignature(row).signature);
     const remoteIndex = await getExistingLeadIndexForSignatures(candidateSignatures);
     remoteIndex.forEach((ref, sig) => existingIndex.set(sig, ref));
   } catch (err) {
@@ -1249,16 +1249,15 @@ const buildExistingIndexFor = async (
 
 // Read-only dry run of the same exact-duplicate check bulkImportLeads runs — used by
 // every CSV import entry point to ask the user, BEFORE anything is written, whether to
-// import only the new leads or the full file (duplicates included). Runs the same
-// tag-scoped check regardless of whether a tag was given for this upload or not — an
-// untagged upload still gets compared against other untagged leads (see
-// buildDuplicateSignature's "(no-tag)" bucket). Nothing is created or pushed here.
+// import only the new leads or the full file (duplicates included). Runs the same check
+// regardless of whether a tag was given for this upload or not — tag plays no part in
+// the comparison at all (see buildDuplicateSignature). Nothing is created or pushed here.
 export const previewBulkImportDuplicates = async (
   newLeadsList: Partial<Lead>[]
 ): Promise<DuplicatePreviewResult> => {
   const existingIndex = await buildExistingIndexFor(newLeadsList);
 
-  const dedupeResult = dedupeLeadRows(newLeadsList, 'csvTag', existingIndex);
+  const dedupeResult = dedupeLeadRows(newLeadsList, existingIndex);
   return {
     totalRows: newLeadsList.length,
     uniqueRows: dedupeResult.kept.length,
@@ -1268,11 +1267,14 @@ export const previewBulkImportDuplicates = async (
 };
 
 // Bulk Import Leads — enforces the exact-duplicate rule (see lib/dedupe.ts): a row is a
-// duplicate ONLY when it shares the SAME tag/context AND EVERY relevant mapped field
-// matches (after safe normalization) another row already kept in this batch or already
-// present in Supabase. A different tag on an otherwise-identical lead is a DIFFERENT
-// lead — it's imported as its own record, never merged into the existing one. Filename
-// is never part of this comparison (see lib/csvFileRegistry.ts for the unrelated,
+// duplicate ONLY when EVERY relevant mapped field matches (after safe normalization)
+// another row already kept in this batch or already present in Supabase. Tag plays NO
+// part in this comparison — a lead under a different tag than an existing match is
+// STILL the same duplicate lead, never imported as a second record. Tag-name
+// uniqueness is a completely separate, independent check (see getActiveTagSet /
+// the tag-conflict flow in CsvImporter.tsx and AICopilotDrawer.tsx) that runs before
+// this and never influences whether a LEAD counts as a duplicate. Filename is never
+// part of this comparison either (see lib/csvFileRegistry.ts for the unrelated,
 // file-content-hash-based "already uploaded this exact file" check).
 //
 // `options.includeDuplicates` — set only after the caller showed the user the
@@ -1291,7 +1293,7 @@ export const bulkImportLeads = async (
   let dedupeResult: ReturnType<typeof dedupeLeadRows> | null = null;
   if (!includeDuplicates) {
     const existingIndex = await buildExistingIndexFor(newLeadsList);
-    dedupeResult = dedupeLeadRows(newLeadsList, 'csvTag', existingIndex);
+    dedupeResult = dedupeLeadRows(newLeadsList, existingIndex);
   }
 
   const uniqueItems = includeDuplicates ? newLeadsList : dedupeResult!.kept;
