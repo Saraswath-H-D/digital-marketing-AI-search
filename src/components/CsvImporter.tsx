@@ -7,7 +7,6 @@ import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFi
 import { getActiveTagSet } from '../lib/supabase.ts';
 import FileAlreadyUploadedModal from './FileAlreadyUploadedModal.tsx';
 import ImportDuplicateChoiceModal from './ImportDuplicateChoiceModal.tsx';
-import TagAlreadyInUseModal from './TagAlreadyInUseModal.tsx';
 
 // Same normalization used everywhere else a tag gets compared (dedupe.ts,
 // leadStorage.ts's leadMatchesTag, supabase.ts's getActiveTagSet) — hyphens/underscores/
@@ -36,10 +35,8 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
   const [activeTab, setActiveTab] = useState<'mapping' | 'preview'>('mapping');
   const [fileHash, setFileHash] = useState<string | null>(null);
   const [pendingFileConflict, setPendingFileConflict] = useState<{ existingTags: string[]; newTag: string | null } | null>(null);
-  const [pendingTagReuse, setPendingTagReuse] = useState<{ tag: string } | null>(null);
-  const [pendingDuplicateChoice, setPendingDuplicateChoice] = useState<{ preview: DuplicatePreviewResult; finalTag: string | null } | null>(null);
+  const [pendingDuplicateChoice, setPendingDuplicateChoice] = useState<{ preview: DuplicatePreviewResult; finalTag: string | null; tagAlreadyExists: boolean } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const tagInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -205,62 +202,33 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
       // persists.)
     }
 
-    await checkTagReuseThenImport(finalTag);
+    await checkTagAndDuplicatesThenImport(finalTag);
   };
 
-  // Tag-reuse check — a separate concern from both the file-level check above and the
-  // lead-level check below. Only fires for an explicit, non-blank tag that already has
-  // live leads under it; an untagged upload never triggers this (there's no specific tag
-  // identity to warn about). Tag names must be unique per upload — this never offers a
-  // "keep using it anyway" bypass; the import cannot continue until a free tag name is
-  // provided (see TagAlreadyInUseModal) or the user cancels.
-  const checkTagReuseThenImport = async (finalTag: string | null) => {
-    if (finalTag) {
-      const activeTags = await getActiveTagSet();
-      if (activeTags && activeTags.has(normalizeTagKey(finalTag))) {
-        setPendingTagReuse({ tag: finalTag });
-        return;
-      }
-    }
-    await checkLeadDuplicatesThenImport(finalTag);
-  };
-
-  // Re-validates whatever tag name the user just typed into the conflict modal. Only
-  // resolves `ok: true` once it's confirmed free — TagAlreadyInUseModal keeps asking
-  // otherwise (even if they typed back the exact same conflicting name), so the import
-  // can never proceed under a still-taken tag name.
-  const handleTagConflictSubmit = async (newTag: string): Promise<{ ok: boolean }> => {
-    const activeTags = await getActiveTagSet();
-    if (activeTags && activeTags.has(normalizeTagKey(newTag))) {
-      return { ok: false };
-    }
-    setPendingTagReuse(null);
-    setImportTag(newTag);
-    await checkLeadDuplicatesThenImport(newTag);
-    return { ok: true };
-  };
-
-  const handleTagConflictCancel = () => {
-    setPendingTagReuse(null);
-    setInfoMessage('Import cancelled — nothing was added.');
-  };
-
-  // Lead-level duplicate check — a completely separate check from the file-level one
-  // above (see lib/dedupe.ts). Runs whether an explicit tag was typed in or the upload
-  // is untagged — the comparison is about the lead data + tag, never the filename. Only
-  // asks when it actually finds duplicates; a clean file imports immediately with no
-  // extra step.
-  const checkLeadDuplicatesThenImport = async (finalTag: string | null) => {
+  // Combines two INDEPENDENT checks into one pre-import popup: "does this tag already
+  // have leads under it?" and "do any of this file's leads already exist?" (see
+  // lib/dedupe.ts — tag plays no part in that second comparison, whether an explicit tag
+  // was typed in or the upload is untagged). Reusing an existing tag is normal and is
+  // NEVER blocked or forced to be renamed — it's reported alongside the duplicate
+  // breakdown in one combined popup (see ImportDuplicateChoiceModal), or skipped
+  // entirely when the tag is fresh (or none was given) AND every lead in the file is
+  // genuinely new.
+  const checkTagAndDuplicatesThenImport = async (finalTag: string | null) => {
     setIsCheckingDuplicates(true);
+    let tagAlreadyExists = false;
     let preview: DuplicatePreviewResult;
     try {
+      if (finalTag) {
+        const activeTags = await getActiveTagSet();
+        tagAlreadyExists = !!(activeTags && activeTags.has(normalizeTagKey(finalTag)));
+      }
       preview = await previewBulkImportDuplicates(buildFinalData(finalTag));
     } finally {
       setIsCheckingDuplicates(false);
     }
 
-    if (preview.duplicatesSkipped > 0) {
-      setPendingDuplicateChoice({ preview, finalTag });
+    if (tagAlreadyExists || preview.duplicatesSkipped > 0) {
+      setPendingDuplicateChoice({ preview, finalTag, tagAlreadyExists });
       return;
     }
     await doActualImport(finalTag, false);
@@ -283,11 +251,11 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
       return;
     }
 
-    // "Upload Both" — proceed with the new tag; the lead-level duplicate check (see
-    // checkLeadDuplicatesThenImport) still runs normally and will still ask before
+    // "Upload Both" — proceed with the new tag; the tag-exists + duplicate check (see
+    // checkTagAndDuplicatesThenImport) still runs normally and will still ask before
     // creating any duplicate lead records, even though the file itself is now
     // associated with two tags.
-    await checkLeadDuplicatesThenImport(conflict.newTag);
+    await checkTagAndDuplicatesThenImport(conflict.newTag);
   };
 
   // Extract sample value for Row 1 preview
@@ -575,7 +543,6 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                       <Tag className="w-4 h-4" />
                     </div>
                     <input
-                      ref={tagInputRef}
                       id="csv-import-tag-input"
                       type="text"
                       value={importTag}
@@ -646,19 +613,11 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     )}
 
     {isOpen && (
-      <TagAlreadyInUseModal
-        isOpen={!!pendingTagReuse}
-        tag={pendingTagReuse?.tag || ''}
-        onSubmit={handleTagConflictSubmit}
-        onCancel={handleTagConflictCancel}
-      />
-    )}
-
-    {isOpen && (
       <ImportDuplicateChoiceModal
         isOpen={!!pendingDuplicateChoice}
         preview={pendingDuplicateChoice?.preview || null}
         fileName={file?.name}
+        tagAlreadyExists={pendingDuplicateChoice?.tagAlreadyExists || false}
         onChoose={handleDuplicateChoice}
         onCancel={() => setPendingDuplicateChoice(null)}
       />

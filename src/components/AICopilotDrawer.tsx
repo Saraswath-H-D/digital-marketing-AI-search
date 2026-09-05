@@ -14,7 +14,6 @@ import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFi
 import { getActiveTagSet } from '../lib/supabase.ts';
 import DuplicateLeadsModal from './DuplicateLeadsModal.tsx';
 import ImportDuplicateChoiceModal from './ImportDuplicateChoiceModal.tsx';
-import TagAlreadyInUseModal from './TagAlreadyInUseModal.tsx';
 
 // Same normalization used everywhere else a tag gets compared (dedupe.ts,
 // leadStorage.ts's leadMatchesTag, supabase.ts's getActiveTagSet itself).
@@ -112,23 +111,20 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
   const [duplicateModalResult, setDuplicateModalResult] = useState<BulkImportResult | null>(null);
   const [duplicateModalCsvName, setDuplicateModalCsvName] = useState<string | undefined>(undefined);
-  // Pre-import choice: set only when a dry-run duplicate check finds this upload
-  // contains leads that already exist, mixed with genuinely new ones — asked every time
-  // that happens, whether a tag was given for the upload or not (see
-  // ImportDuplicateChoiceModal / previewBulkImportDuplicates).
+  // Pre-import choice: set whenever the tag resolved for this upload already has leads
+  // under it, OR a dry-run duplicate check finds this upload contains leads that
+  // already exist (or both) — one combined popup covering both independent checks (see
+  // ImportDuplicateChoiceModal / previewBulkImportDuplicates / getActiveTagSet), asked
+  // regardless of whether a tag was given for the upload or not. Reusing an existing tag
+  // is never blocked — it's reported here, never forces a rename.
   const [pendingDuplicateChoice, setPendingDuplicateChoice] = useState<{
     leadsWithTag: any[];
     finalTag: string | null;
     preview: DuplicatePreviewResult;
     csvName: string;
     csvHash: string | null;
+    tagAlreadyExists: boolean;
   } | null>(null);
-  // Set only when the tag resolved for this upload already has live leads under it —
-  // asked every time that happens (see TagAlreadyInUseModal), independent of the file
-  // and lead-level checks above/below. Holds the whole attached CSV (not just its name),
-  // because by the time the user answers, handleCsvUploadCommand's own `attachedCsv`
-  // state has already been cleared.
-  const [pendingTagReuse, setPendingTagReuse] = useState<{ csv: AttachedCsv; finalTag: string } | null>(null);
 
   // Outreach Pitch Form States
   const [outreachAngle, setOutreachAngle] = useState<string>('Value-First Pitch');
@@ -434,13 +430,12 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
 
   const sayInChat = (text: string) => setChatLogs(prev => [...prev, { id: (Date.now() + 1).toString(), sender: 'assistant', text, timestamp: nowStamp() }]);
 
-  // Runs the actual import for a resolved tag + lead-duplicate choice — only ever called
-  // after the file-level conflict check, the tag-reuse check, AND the lead-level
-  // duplicate preview (see previewThenImportForCsv / checkTagReuseThenImportForCsv, and
-  // the ImportDuplicateChoiceModal handler below) have all been settled. Component-scoped
-  // (not a closure over a specific `attachedCsv`) so a modal callback firing after the
-  // CSV attachment has already been cleared can still call it with the csvName/csvHash
-  // it captured earlier.
+  // Runs the actual import for a resolved tag + duplicate choice — only ever called
+  // after the file-level conflict check AND the combined tag+duplicate check (see
+  // checkTagAndDuplicatesThenImportForCsv and the ImportDuplicateChoiceModal handler
+  // below) have both been settled. Component-scoped (not a closure over a specific
+  // `attachedCsv`) so a modal callback firing after the CSV attachment has already been
+  // cleared can still call it with the csvName/csvHash it captured earlier.
   const runImportForCsv = async (
     leadsWithTag: any[],
     finalTag: string | null,
@@ -498,14 +493,15 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     await runImportForCsv(pending.leadsWithTag, pending.finalTag, pending.csvName, pending.csvHash, choice === 'full-file');
   };
 
-  // Lead-level duplicate check — separate from the file-level one below (see
-  // lib/dedupe.ts). Runs whether an explicit tag was resolved for this upload or not
-  // (finalTag may be null) — the comparison is about the lead data + tag, never the
-  // filename. Only asks when it actually finds duplicates mixed with new leads; a clean
-  // file imports immediately with no extra step. Component-scoped for the same reason as
-  // runImportForCsv — the tag-reuse "Keep" choice below needs to call this after
-  // attachedCsv has already been cleared.
-  const previewThenImportForCsv = async (csv: AttachedCsv, finalTag: string | null) => {
+  // Combines two INDEPENDENT checks into one pre-import popup: "does this tag already
+  // have leads under it?" and "do any of this file's leads already exist?" (see
+  // lib/dedupe.ts — tag plays no part in that second comparison, whether an explicit tag
+  // was typed in or the upload is untagged). Reusing an existing tag is normal and is
+  // NEVER blocked or forced to be renamed — it's reported alongside the duplicate
+  // breakdown in one combined popup (see ImportDuplicateChoiceModal), or skipped
+  // entirely when the tag is fresh (or none was given) AND every lead in the file is
+  // genuinely new.
+  const checkTagAndDuplicatesThenImportForCsv = async (csv: AttachedCsv, finalTag: string | null) => {
     const mapping = buildAutoMapping(csv.headers);
     const mappedLeads = mapRowsToLeads(csv.rows, mapping, csv.headers);
 
@@ -514,58 +510,27 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       return;
     }
 
+    let tagAlreadyExists = false;
+    if (finalTag) {
+      const activeTags = await getActiveTagSet();
+      tagAlreadyExists = !!(activeTags && activeTags.has(normalizeTagKey(finalTag)));
+    }
+
     const leadsWithTag = mappedLeads.map((l: any) => ({ ...l, csvTag: finalTag }));
     const preview = await previewBulkImportDuplicates(leadsWithTag);
 
-    if (preview.duplicatesSkipped > 0) {
-      setPendingDuplicateChoice({ leadsWithTag, finalTag, preview, csvName: csv.name, csvHash: csv.hash });
-      sayInChat(`I found ${preview.duplicatesSkipped} duplicate lead${preview.duplicatesSkipped === 1 ? '' : 's'} and ${preview.uniqueRows} new lead${preview.uniqueRows === 1 ? '' : 's'} in "${csv.name}"${finalTag ? ` (tag "${finalTag}")` : ''}. Choose how to import it from the popup.`);
+    if (tagAlreadyExists || preview.duplicatesSkipped > 0) {
+      setPendingDuplicateChoice({ leadsWithTag, finalTag, preview, csvName: csv.name, csvHash: csv.hash, tagAlreadyExists });
+      sayInChat(`I found ${preview.duplicatesSkipped} duplicate lead${preview.duplicatesSkipped === 1 ? '' : 's'} and ${preview.uniqueRows} new lead${preview.uniqueRows === 1 ? '' : 's'} in "${csv.name}"${finalTag ? ` (tag "${finalTag}")` : ''}${tagAlreadyExists ? ' — that tag already has leads under it' : ''}. Choose how to import it from the popup.`);
       return;
     }
     await runImportForCsv(leadsWithTag, finalTag, csv.name, csv.hash, false);
   };
 
-  // Tag-reuse check — a separate concern from the file-level and lead-level checks. Only
-  // fires for an explicit, non-blank tag that already has live leads under it (never for
-  // an untagged upload — there's no specific tag identity to warn about). Tag names must
-  // be unique per upload — this never offers a "keep using it anyway" bypass; the import
-  // cannot continue until a free tag name is provided (see TagAlreadyInUseModal) or the
-  // user cancels.
-  const checkTagReuseThenImportForCsv = async (csv: AttachedCsv, finalTag: string | null) => {
-    if (finalTag) {
-      const activeTags = await getActiveTagSet();
-      if (activeTags && activeTags.has(normalizeTagKey(finalTag))) {
-        setPendingTagReuse({ csv, finalTag });
-        sayInChat(`The tag "${finalTag}" is already being used. Please enter a different tag name in the popup before I import this file.`);
-        return;
-      }
-    }
-    await previewThenImportForCsv(csv, finalTag);
-  };
-
-  // Re-validates whatever tag name the user just typed into the conflict modal. Only
-  // resolves `ok: true` once it's confirmed free — TagAlreadyInUseModal keeps asking
-  // otherwise (even if they typed back the exact same conflicting name), so the import
-  // can never proceed under a still-taken tag name.
-  const handleTagConflictSubmitForCsv = async (newTag: string): Promise<{ ok: boolean }> => {
-    const activeTags = await getActiveTagSet();
-    if (activeTags && activeTags.has(normalizeTagKey(newTag))) {
-      return { ok: false };
-    }
-    const pending = pendingTagReuse;
-    setPendingTagReuse(null);
-    if (pending) await previewThenImportForCsv(pending.csv, newTag);
-    return { ok: true };
-  };
-
-  const handleTagConflictCancelForCsv = () => {
-    setPendingTagReuse(null);
-    sayInChat('Import cancelled — nothing was added.');
-  };
-
   // Executes the CSV-via-chat upload flow: tag resolution (Case A–D) → file-level
-  // duplicate check (separate from lead-level duplicates) → tag-reuse check → import.
-  // Runs instead of handleExecuteNLCommand whenever a CSV is currently attached.
+  // duplicate check (separate from lead-level duplicates) → combined tag+duplicate
+  // check → import. Runs instead of handleExecuteNLCommand whenever a CSV is currently
+  // attached.
   const handleCsvUploadCommand = async () => {
     const csv = attachedCsv;
     if (!csv) return;
@@ -590,7 +555,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     // this — a deleted CSV is always treated as brand new, its old tag never restored.
     const checkFileThenImport = async (finalTag: string | null) => {
       if (!csv.hash) {
-        await checkTagReuseThenImportForCsv(csv, finalTag);
+        await checkTagAndDuplicatesThenImportForCsv(csv, finalTag);
         return;
       }
       const conflict = await resolveFileConflict(csv.hash, finalTag);
@@ -611,7 +576,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       if (conflict.wasPreviouslyDeleted) {
         say(`This CSV was previously deleted, so I'm treating this as a new upload.`);
       }
-      await checkTagReuseThenImportForCsv(csv, finalTag);
+      await checkTagAndDuplicatesThenImportForCsv(csv, finalTag);
     };
 
     try {
@@ -626,7 +591,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       if (wasAwaitingFileConflict) {
         const lower = messageText.toLowerCase();
         if (/\bboth\b/.test(lower)) {
-          await checkTagReuseThenImportForCsv(csv, pendingImportTag);
+          await checkTagAndDuplicatesThenImportForCsv(csv, pendingImportTag);
         } else if (/\b(one|only|single|skip|existing)\b/.test(lower)) {
           say(`Kept this CSV under its existing tag. Nothing new was imported.`);
         } else {
@@ -1320,17 +1285,11 @@ Operon AI Growth Team`;
         csvName={duplicateModalCsvName}
       />
 
-      <TagAlreadyInUseModal
-        isOpen={!!pendingTagReuse}
-        tag={pendingTagReuse?.finalTag || ''}
-        onSubmit={handleTagConflictSubmitForCsv}
-        onCancel={handleTagConflictCancelForCsv}
-      />
-
       <ImportDuplicateChoiceModal
         isOpen={!!pendingDuplicateChoice}
         preview={pendingDuplicateChoice?.preview || null}
         fileName={pendingDuplicateChoice?.csvName}
+        tagAlreadyExists={pendingDuplicateChoice?.tagAlreadyExists || false}
         onChoose={handleDuplicateChoiceForCsv}
         onCancel={() => {
           setPendingDuplicateChoice(null);

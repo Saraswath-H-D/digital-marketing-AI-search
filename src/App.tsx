@@ -110,6 +110,7 @@ export default function App() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [allFilteredIds, setAllFilteredIds] = useState<number[]>([]);
   const [totalLeads, setTotalLeads] = useState(0);
+  const [isSyncingData, setIsSyncingData] = useState(false);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [creditBalance, setCreditBalance] = useState(100); // Simulate Operon Credit System
@@ -275,49 +276,57 @@ export default function App() {
     fetchLeads();
   }, [filters, page, limit]);
 
-  // Single Master Source of Truth Live Database Sync
-  useEffect(() => {
-    const syncLiveDatabase = async () => {
-      try {
-        const res = await pullLeadsFromSupabase();
-        const localLeads = getStoredLeads();
-        const trashLeads = getTrashLeads();
-        const deletedEmailSet = new Set(trashLeads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
-        // A blank-contact lead (no email at all) has no reliable email to delete by in
-        // Supabase — deleteLeadFromSupabase skips it, so its remote row lives on and
-        // this sync would otherwise pull it straight back every time (the old
-        // `!cleanEmail || cleanEmail === '-'` check below always kept it, trashed or
-        // not). Match it against trash the same way addLeadsToTrash/restoreLeadsFromTrash
-        // already do for these — by firstName+lastName+organization — so a deleted
-        // no-email contact stops reappearing on the next sync.
-        const deletedNameKeySet = new Set(
-          trashLeads
-            .filter(l => !l.email || l.email.trim() === '' || l.email.trim() === '-')
-            .map(l => `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`)
-        );
-        const isTrashed = (l: Lead) => {
-          const cleanEmail = (l.email || '').toLowerCase().trim();
-          if (cleanEmail && cleanEmail !== '-') return deletedEmailSet.has(cleanEmail);
-          const nameKey = `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`;
-          return deletedNameKeySet.has(nameKey);
-        };
+  // Single Master Source of Truth Live Database Sync — pulls the authoritative lead list
+  // from Supabase and reconciles local storage against it (never trusting local storage's
+  // own count on its own). Extracted to component scope, not just this mount effect, so
+  // the "Data Sync" toolbar button below can trigger the exact same real re-pull on
+  // demand — that button used to only re-read the already-cached local list, which could
+  // never actually fix a local/Supabase count mismatch since it never touched Supabase.
+  const syncLiveDatabase = async () => {
+    try {
+      const res = await pullLeadsFromSupabase();
+      const localLeads = getStoredLeads();
+      const trashLeads = getTrashLeads();
+      const deletedEmailSet = new Set(trashLeads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
+      // A blank-contact lead (no email at all) has no reliable email to delete by in
+      // Supabase — deleteLeadFromSupabase skips it, so its remote row lives on and
+      // this sync would otherwise pull it straight back every time (the old
+      // `!cleanEmail || cleanEmail === '-'` check below always kept it, trashed or
+      // not). Match it against trash the same way addLeadsToTrash/restoreLeadsFromTrash
+      // already do for these — by firstName+lastName+organization — so a deleted
+      // no-email contact stops reappearing on the next sync.
+      const deletedNameKeySet = new Set(
+        trashLeads
+          .filter(l => !l.email || l.email.trim() === '' || l.email.trim() === '-')
+          .map(l => `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`)
+      );
+      const isTrashed = (l: Lead) => {
+        const cleanEmail = (l.email || '').toLowerCase().trim();
+        if (cleanEmail && cleanEmail !== '-') return deletedEmailSet.has(cleanEmail);
+        const nameKey = `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`;
+        return deletedNameKeySet.has(nameKey);
+      };
 
-        if (res.success && res.leads.length > 0) {
-          // Filter out deleted trash leads
-          const activeRemoteLeads = res.leads.filter(l => !isTrashed(l));
+      if (res.success && res.leads.length > 0) {
+        // Filter out deleted trash leads
+        const activeRemoteLeads = res.leads.filter(l => !isTrashed(l));
 
-          saveStoredLeads(activeRemoteLeads);
-        } else if (localLeads.length > 0) {
-          const activeLocalLeads = localLeads.filter(l => !isTrashed(l));
-          saveStoredLeads(activeLocalLeads);
-          await pushLeadsToSupabase(activeLocalLeads);
-        }
-        fetchLeads();
-        fetchFilterOptions();
-      } catch (err) {
-        console.error('Initial Supabase auto-sync failed:', err);
+        saveStoredLeads(activeRemoteLeads);
+      } else if (localLeads.length > 0) {
+        const activeLocalLeads = localLeads.filter(l => !isTrashed(l));
+        saveStoredLeads(activeLocalLeads);
+        await pushLeadsToSupabase(activeLocalLeads);
       }
-    };
+      fetchLeads();
+      fetchFilterOptions();
+      return true;
+    } catch (err) {
+      console.error('Supabase sync failed:', err);
+      return false;
+    }
+  };
+
+  useEffect(() => {
     syncLiveDatabase();
   }, []);
 
@@ -1125,17 +1134,23 @@ export default function App() {
                 )}
               </button>
 
-              {/* Enrichment action button (Screenshot 1) */}
-              <button 
+              {/* Enrichment action button (Screenshot 1) — actually re-pulls from
+                  Supabase now (see syncLiveDatabase). It used to only re-read the
+                  already-cached local list under a "Syncing database records..." label,
+                  so it could never actually fix a local-vs-Supabase count mismatch. */}
+              <button
+                disabled={isSyncingData}
                 onClick={async () => {
-                  showStatus('Syncing database records and refreshing scores...', 'success');
-                  await fetchLeads();
-                  showStatus('Contact data synchronized successfully!', 'success');
+                  setIsSyncingData(true);
+                  showStatus('Syncing with Supabase...', 'success');
+                  const ok = await syncLiveDatabase();
+                  setIsSyncingData(false);
+                  showStatus(ok ? 'Contact data synchronized with Supabase!' : 'Sync failed — check your Supabase connection.', ok ? 'success' : 'error');
                 }}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--surface-hover)] bg-[var(--surface-card)] shadow-3xs cursor-pointer text-[var(--text-secondary)] font-medium transition-colors"
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--surface-hover)] bg-[var(--surface-card)] shadow-3xs cursor-pointer text-[var(--text-secondary)] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <RefreshCw className="w-3.5 h-3.5 text-gray-500" />
-                <span>Data Sync</span>
+                <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${isSyncingData ? 'animate-spin' : ''}`} />
+                <span>{isSyncingData ? 'Syncing...' : 'Data Sync'}</span>
                 <span className="px-1.5 py-0.2 text-3xs font-extrabold bg-amber-50 text-amber-700 rounded-full border border-amber-200 scale-90">
                   Ready
                 </span>
