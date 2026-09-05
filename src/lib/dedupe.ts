@@ -14,17 +14,30 @@
 // Fields that carry genuine lead "content" for duplicate comparison — excludes
 // auto-generated/system bookkeeping fields (and the tag field, which plays no part in
 // this comparison at all — see the module comment above).
+//
+// approvalStatus and emailStatus are deliberately NOT in this list (moved to
+// SYSTEM_ONLY_FIELDS below) — this was a real, confirmed bug: bulkImportLeads defaults
+// approvalStatus to the literal string "approved" on every lead it creates (never left
+// blank), and a lead round-tripped through Supabase similarly picks up
+// emailStatus = "Verified" (pushLeadsToSupabase's own column default) on its next pull.
+// Neither default reflects anything the CSV actually said — they're the app's own
+// operational bookkeeping. But a freshly parsed CSV row being checked for duplicates
+// has neither field set at all (most CSVs have no such columns), so its signature
+// omitted them while an already-imported lead's signature always included them —
+// two different signatures for what should be the identical record, so genuine
+// duplicates against ANY already-imported lead were silently never detected. Confirmed
+// end-to-end against a real Supabase round trip before fixing.
 const CORE_CONTENT_FIELDS = [
   'firstName', 'lastName', 'email', 'phone', 'jobTitle', 'organization',
-  'city', 'state', 'country', 'sourceName', 'emailStatus', 'seniority',
+  'city', 'state', 'country', 'sourceName', 'seniority',
   'department', 'industry', 'companySize', 'linkedinUrl', 'website',
-  'companyLinkedinUrl', 'questions', 'approvalStatus',
+  'companyLinkedinUrl', 'questions',
 ];
 
 const SYSTEM_ONLY_FIELDS = new Set([
   'id', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked',
   'registrationTime', '_csvHeaders', 'csvTag', 'tags', 'aiScore', 'aiValueReasons',
-  'notes', 'intent', 'technologies',
+  'notes', 'intent', 'technologies', 'approvalStatus', 'emailStatus',
 ]);
 
 function normalizeEmail(v: string): string {
