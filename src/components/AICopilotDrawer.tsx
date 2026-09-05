@@ -548,6 +548,16 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
     setIsProcessingCsv(true);
 
     const say = sayInChat;
+    // Set true only by the "wait for the next message to answer this" branches below
+    // (file-conflict reply not understood, tag reply empty, tag needs clarification).
+    // Real bug this fixes: `finally` used to call removeAttachedCsv() unconditionally,
+    // which resets awaitingTagAnswer/awaitingFileConflictAnswer/attachedCsv to
+    // false/null immediately after this same function had just set them true to ask a
+    // follow-up question — in the same synchronous pass, so React only ever committed
+    // the "false" value. The next message the user sent (e.g. "yes") then found
+    // attachedCsv already null and fell through to plain natural-language search
+    // instead of ever answering the question that was just asked.
+    let keepAttachment = false;
 
     // File-level duplicate check — separate from lead-level exact duplicates. Runs
     // right before import, once the tag to use is known. Only a still-ACTIVE prior
@@ -567,6 +577,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       if (conflict.status === 'different-active-tag') {
         setPendingImportTag(finalTag);
         setAwaitingFileConflictAnswer(true);
+        keepAttachment = true; // asking a follow-up question — closure over the outer flag
         say(`This CSV file has already been uploaded with a different tag (${conflict.activeTags.join(', ')}). Would you like to **upload both** (keep the same lead data, add "${tagLabel}" alongside the existing tag) or **consider only one file** (skip this — keep it as ${conflict.activeTags.join(', ')})?`);
         return;
       }
@@ -590,12 +601,16 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
 
       if (wasAwaitingFileConflict) {
         const lower = messageText.toLowerCase();
-        if (/\bboth\b/.test(lower)) {
+        // A bare "yes"/"yeah"/"sure" etc. is a completely natural reply to a question
+        // phrased as "would you like to X, or Y?" — reads as agreeing with the first
+        // (recommended) option, "upload both", the same way a person would take it.
+        if (/\bboth\b/.test(lower) || /^(yes|yeah|yep|yup|sure|ok|okay)\.?!?$/.test(lower)) {
           await checkTagAndDuplicatesThenImportForCsv(csv, pendingImportTag);
         } else if (/\b(one|only|single|skip|existing)\b/.test(lower)) {
           say(`Kept this CSV under its existing tag. Nothing new was imported.`);
         } else {
           say('Please reply "upload both" or "consider only one file."');
+          keepAttachment = true;
           setIsProcessingCsv(false);
           return; // keep waiting
         }
@@ -609,6 +624,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
         // reply counts as the tag itself here, no "... tag" phrasing required.
         if (!messageText) {
           say("I still need a tag name, or let me know to leave these untagged.");
+          keepAttachment = true;
           setIsProcessingCsv(false);
           return; // keep attachedCsv + awaitingTagAnswer, ask again
         }
@@ -622,6 +638,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
         if (tagRes.needsClarification) {
           setAwaitingTagAnswer(true);
           say(tagRes.clarificationQuestion!);
+          keepAttachment = true;
           setIsProcessingCsv(false);
           return; // keep attachedCsv, wait for the next message to answer it
         }
@@ -634,7 +651,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       say(`I couldn't complete this import — ${err?.message || 'an unexpected error occurred'}. Nothing further was changed.`);
     } finally {
       setIsProcessingCsv(false);
-      removeAttachedCsv();
+      if (!keepAttachment) removeAttachedCsv();
     }
   };
 
