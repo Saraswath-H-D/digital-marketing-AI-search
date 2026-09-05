@@ -1,6 +1,6 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
-import { pushLeadsToSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, deleteAllLeadsFromSupabase, getSupabaseConfig, getLastConfirmedDeletedEmails, getExistingLeadIndexForSignatures } from '../lib/supabase.ts';
+import { pushLeadsToSupabase, pullLeadsFromSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, deleteAllLeadsFromSupabase, getSupabaseConfig, getLastConfirmedDeletedEmails, getExistingLeadIndexForSignatures } from '../lib/supabase.ts';
 import { dedupeLeadRows, buildDuplicateSignature } from '../lib/dedupe.ts';
 
 const STORAGE_KEY = 'operon_leads_v9';
@@ -1348,6 +1348,18 @@ export const bulkImportLeads = async (
   if (createdLeads.length > 0 && getSupabaseConfig().autoSync) {
     try {
       supabaseResult = await pushLeadsToSupabase(createdLeads);
+      if (supabaseResult.success) {
+        // Re-sync local storage from Supabase's own confirmed state rather than trusting
+        // the optimistic local append above — this is what keeps the app's displayed
+        // record count matching Supabase exactly. pushLeadsToSupabase's `success` only
+        // means "at least one row made it" (a batch can partially fail column/schema
+        // issues and still report success); re-pulling reflects exactly what actually
+        // landed, dropping anything that silently didn't. Best-effort: if the re-pull
+        // itself fails, the optimistic local state from saveStoredLeads above stands —
+        // still better than nothing, just not re-verified against Supabase this round.
+        const pull = await pullLeadsFromSupabase();
+        if (pull.success) saveStoredLeads(pull.leads);
+      }
     } catch (err: any) {
       console.error('Auto-sync import to Supabase failed:', err);
       supabaseResult = { success: false, count: 0, error: err?.message || 'Sync failed' };

@@ -792,13 +792,26 @@ const cleanSyntheticEmail = (raw: string): string => {
   return cleanEmail;
 };
 
+// "-" (and the other blank-placeholder strings this app writes for an empty field —
+// see cleanVal/getFixedHeaderValue) is NOT a real tag value; it's just how a column with
+// nothing in it gets stored. Treating it as one was a real bug: `source_name` defaults to
+// literally "-" for any lead with no real source (pushLeadsToSupabase's `source_name:
+// l.sourceName || '-'`), so on a table that hasn't run the csv_tag column migration yet,
+// EVERY existing untagged lead was deriving tag="-" here — which never matches the "(no
+// tag)" bucket a fresh untagged upload's signature actually uses (buildDuplicateSignature
+// in dedupe.ts), so untagged duplicates against real existing data were silently never
+// detected. This must return null for those exact same placeholders instead.
+const isBlankPlaceholder = (v: string): boolean => !v || v === '-' || v === 'undefined' || v === 'null';
+
 const extractRowTagAndExtraTags = (row: any, restoredMeta: Record<string, any>): { tag: string | null; extraTags: string[] } => {
   let tag: string | null = null;
-  if (row.csv_tag) tag = String(row.csv_tag).trim();
-  else if (restoredMeta.csvTag) tag = String(restoredMeta.csvTag).trim();
+  const csvTagCol = row.csv_tag ? String(row.csv_tag).trim() : '';
+  const csvTagMeta = restoredMeta.csvTag ? String(restoredMeta.csvTag).trim() : '';
+  if (!isBlankPlaceholder(csvTagCol)) tag = csvTagCol;
+  else if (!isBlankPlaceholder(csvTagMeta)) tag = csvTagMeta;
   else {
     const src = (row.source_name || row.source || '').trim();
-    tag = src || null;
+    tag = isBlankPlaceholder(src) ? null : src;
   }
   let extraTags: string[] = [];
   if (row.tags) {
@@ -984,24 +997,15 @@ export const getExistingLeadIndexForSignatures = async (
   const CHUNK = 200;
 
   try {
-    // Rollout-safety precheck: rows pushed before duplicate_signature existed (or not
-    // re-synced since) carry duplicate_signature = NULL, which the indexed lookup below
-    // can never match against a real candidate signature — silently missing genuine
-    // duplicates against that old data. A cheap indexed count (not a data download) is
-    // enough to know whether that's a risk right now; if so, fall back to the full scan
-    // until every row has been backfilled, so correctness never regresses mid-rollout.
-    const { count: unmigratedCount, error: countError } = await client
-      .from(tableName)
-      .select('id', { count: 'exact', head: true })
-      .is('duplicate_signature', null);
-
-    if (countError?.code === '42703') {
-      return getExistingLeadIndexFullScan(new Set(uniqueSigs), activeConfig);
-    }
-    if (!countError && (unmigratedCount ?? 0) > 0) {
-      return getExistingLeadIndexFullScan(new Set(uniqueSigs), activeConfig);
-    }
-
+    // NOTE: an earlier version of this function ran a `head: true` count precheck here
+    // to detect a not-yet-backfilled duplicate_signature column before trusting the
+    // indexed query below. Verified against a real Supabase/PostgREST instance, a
+    // `head: true` request returns no body, so a missing-column error on it comes back
+    // as `{ message: '' }` with NO `.code` field — the precheck's own error handling
+    // could never actually recognize it, so it silently did nothing (real query errors
+    // are handled correctly). Removed rather than left in as dead/misleading code —
+    // the loop below's own 42703 handling on the main (non-head) query is what actually
+    // catches a missing column, and that DOES return a real error code, confirmed live.
     for (let i = 0; i < uniqueSigs.length; i += CHUNK) {
       const chunk = uniqueSigs.slice(i, i + CHUNK);
       const { data, error } = await client
