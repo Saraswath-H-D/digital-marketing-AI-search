@@ -107,6 +107,32 @@ const safeAtob = (b64: string): string => {
   }
 };
 
+// A now-fixed bug in pullLeadsFromSupabase's row mapping (`...row` spread) used to leak
+// raw Supabase column names (first_name, last_name, job_title, company_name,
+// registration_time, approval_status, source_name, phone_number, employee_size,
+// person_linkedin_url, company_linkedin_url, email_status, csv_tag) onto the app-level
+// Lead object as extra properties. dedupe.ts's exact-duplicate signature treats any
+// unrecognized field as a real custom CSV column and includes it — so any lead that was
+// ever pulled while that bug was live got these redundant keys captured into its own
+// `questions` metadata blob (see customMeta in pushLeadsToSupabase) and re-persisted on
+// every subsequent push, permanently poisoning its duplicate signature even after the
+// mapping itself was fixed. Stripping them back out wherever that metadata is decoded is
+// what actually self-heals already-affected leads on their next read, instead of only
+// stopping new contamination going forward.
+const LEGACY_DB_COLUMN_KEYS = new Set([
+  'first_name', 'last_name', 'job_title', 'company_name', 'registration_time',
+  'approval_status', 'source_name', 'phone_number', 'employee_size', 'company_size',
+  'person_linkedin_url', 'company_linkedin_url', 'email_status', 'csv_tag',
+  'seniority_level', 'dept', 'sector', 'source', 'created_at', 'organization',
+]);
+const stripLegacyDbColumnKeys = (meta: Record<string, any>): Record<string, any> => {
+  const clean: Record<string, any> = {};
+  Object.keys(meta).forEach(k => {
+    if (!LEGACY_DB_COLUMN_KEYS.has(k)) clean[k] = meta[k];
+  });
+  return clean;
+};
+
 // Columns confirmed missing from the live table's schema cache, learned during this
 // browser session. Reset on saveSupabaseConfig() since a different project/table may
 // have a different (or freshly-fixed) schema.
@@ -478,7 +504,7 @@ export const pullLeadsFromSupabase = async (
         const metaMatch = cleanQuestions.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
         if (metaMatch) {
           try {
-            restoredCustomMeta = JSON.parse(safeAtob(metaMatch[1]));
+            restoredCustomMeta = stripLegacyDbColumnKeys(JSON.parse(safeAtob(metaMatch[1])));
           } catch (e) {}
         }
         cleanQuestions = cleanQuestions.replace(/__META_B64__:[A-Za-z0-9+/=]+(\n|$)/g, '').trim();
@@ -486,7 +512,7 @@ export const pullLeadsFromSupabase = async (
         const metaMatch = cleanQuestions.match(/__META__:(.+?)(\n|$)/);
         if (metaMatch) {
           try {
-            restoredCustomMeta = JSON.parse(metaMatch[1]);
+            restoredCustomMeta = stripLegacyDbColumnKeys(JSON.parse(metaMatch[1]));
           } catch (e) {}
         }
         cleanQuestions = cleanQuestions.replace(/__META__:.+?(\n|$)/g, '').trim();
@@ -499,7 +525,20 @@ export const pullLeadsFromSupabase = async (
       }
 
       return {
-        ...row,
+        // Deliberately NOT `...row` — every field this app actually uses is mapped
+        // explicitly below. Spreading the raw Supabase row here used to leave its
+        // snake_case columns (first_name, job_title, company_name, registration_time,
+        // approval_status, source_name, phone_number, employee_size, etc.) sitting
+        // alongside their camelCase equivalents on the Lead object. dedupe.ts's exact-
+        // duplicate signature treats any field it doesn't recognize as a real extra CSV
+        // column and includes it — so every lead pulled from Supabase carried these
+        // redundant snake_case entries into its own signature, while a freshly parsed
+        // CSV row never did. That mismatch is what made a lead already sitting in
+        // Supabase fail to match an identical re-upload: two objects with the same real
+        // content but a different set of keys hash to two different signatures. Once
+        // written into a lead's `questions` metadata blob (see customMeta below) this
+        // also persisted across every future pull, silently poisoning duplicate
+        // detection for that lead forever.
         ...restoredCustomMeta, // Restore all custom flexible CSV key-values onto lead object!
         _csvHeaders: Array.from(allExtractedHeadersSet),
         id: index + 1, // Always assign clean sequential ID starting from 1
@@ -809,10 +848,17 @@ const extractRowTagAndExtraTags = (row: any, restoredMeta: Record<string, any>):
   const csvTagMeta = restoredMeta.csvTag ? String(restoredMeta.csvTag).trim() : '';
   if (!isBlankPlaceholder(csvTagCol)) tag = csvTagCol;
   else if (!isBlankPlaceholder(csvTagMeta)) tag = csvTagMeta;
-  else {
-    const src = (row.source_name || row.source || '').trim();
-    tag = isBlankPlaceholder(src) ? null : src;
-  }
+  // Deliberately NO further fallback to source_name here. An earlier version of this
+  // function treated a row's source_name as a stand-in tag when no real csv_tag/csvTag
+  // was recorded — but sourceName is a lead's own, independent field (where THIS person
+  // came from, e.g. "WhatsApp Invitation"), never the upload batch's tag identity (see
+  // bulkImportLeads: "csvTag is the upload batch's own identity... independent of
+  // sourceName"). Conflating the two meant a genuinely untagged lead with a real
+  // sourceName derived a non-null tag here, while a fresh untagged re-upload of that
+  // same lead correctly computes tag=null — two different signature buckets for what
+  // should be the same one, so the duplicate was silently never detected. A row with no
+  // real recorded tag now consistently resolves to null, the same "(no-tag)" bucket
+  // buildDuplicateSignature uses for any untagged upload.
   let extraTags: string[] = [];
   if (row.tags) {
     try {
@@ -870,7 +916,7 @@ export const getActiveTagSet = async (config?: SupabaseConfig): Promise<Set<stri
         const q = row.questions || '';
         const metaMatch = q.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
         if (metaMatch) {
-          try { restoredMeta = JSON.parse(safeAtob(metaMatch[1])); } catch { /* ignore malformed metadata */ }
+          try { restoredMeta = stripLegacyDbColumnKeys(JSON.parse(safeAtob(metaMatch[1]))); } catch { /* ignore malformed metadata */ }
         }
         const { tag, extraTags } = extractRowTagAndExtraTags(row, restoredMeta);
         if (tag) active.add(normalizeTagKey(tag));
@@ -896,7 +942,7 @@ const rowToLeadShaped = (row: any): { leadShaped: Record<string, any>; tag: stri
   const q = row.questions || '';
   const metaMatch = q.match(/__META_B64__:([A-Za-z0-9+/=]+)/);
   if (metaMatch) {
-    try { restoredMeta = JSON.parse(safeAtob(metaMatch[1])); } catch { /* ignore malformed metadata */ }
+    try { restoredMeta = stripLegacyDbColumnKeys(JSON.parse(safeAtob(metaMatch[1]))); } catch { /* ignore malformed metadata */ }
   }
 
   const { tag } = extractRowTagAndExtraTags(row, restoredMeta);
