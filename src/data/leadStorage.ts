@@ -970,18 +970,22 @@ export const deleteLead = async (id: number): Promise<{ error?: string }> => {
   const target = allLeads.find(l => l.id === id);
   if (!target) return {};
 
+  // Prefer _rawEmail (the row's real, un-scrubbed email — see pullLeadsFromSupabase)
+  // when present, so a blank-contact lead (displayed email always "-") can actually be
+  // deleted from Supabase for real instead of the delete having nothing to target.
+  const deleteEmail = (target as any)._rawEmail || target.email;
   let supabaseError: string | undefined;
   try {
-    const result = await deleteLeadFromSupabase({ email: target.email, id: target.id });
+    const result = await deleteLeadFromSupabase({ email: deleteEmail, id: target.id });
     if (!result.success) supabaseError = result.error || 'Could not confirm this contact was deleted from Supabase.';
   } catch (err: any) {
     console.error('Delete sync to Supabase failed:', err);
     supabaseError = err?.message || 'Delete sync to Supabase failed';
   }
 
-  // A blank-contact row has no reliable email to delete by at all (deleteLeadFromSupabase
-  // always reports failure for those) — still remove it locally rather than get stuck.
-  const isBlankContact = !target.email || target.email === '-';
+  // A blank-contact row with no real email at all (not even a raw synthetic one) has no
+  // reliable identifier to delete by — still remove it locally rather than get stuck.
+  const isBlankContact = !deleteEmail || deleteEmail === '-';
   if (!supabaseError || isBlankContact) {
     const updated = allLeads.filter(l => l.id !== id);
     saveStoredLeads(updated);
@@ -1015,6 +1019,11 @@ export const bulkDeleteLeads = async (ids: number[]): Promise<{ count: number; e
   }
 
   const isConfirmedRemoved = (l: Lead) => {
+    // Check _rawEmail first — a blank-contact lead's displayed email is always "-", but
+    // bulkDeleteLeadsFromSupabase actually targets (and Supabase confirms deletion by)
+    // its real, un-scrubbed email (see pullLeadsFromSupabase).
+    const rawEmail = ((l as any)._rawEmail || '').trim().toLowerCase();
+    if (rawEmail && rawEmail !== '-' && confirmedEmails.has(rawEmail)) return true;
     const email = (l.email || '').trim().toLowerCase();
     return email && email !== '-' && confirmedEmails.has(email);
   };

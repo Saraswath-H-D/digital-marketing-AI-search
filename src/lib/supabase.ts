@@ -542,6 +542,15 @@ export const pullLeadsFromSupabase = async (
         ...restoredCustomMeta, // Restore all custom flexible CSV key-values onto lead object!
         _csvHeaders: Array.from(allExtractedHeadersSet),
         id: index + 1, // Always assign clean sequential ID starting from 1
+        // The row's real, un-scrubbed email — kept ONLY so a blank-contact lead (whose
+        // synthetic contact_blank_...@imported.com email is deliberately shown as "-" in
+        // `email` below, cosmetic only) can still actually be deleted from Supabase by
+        // its real identity, instead of the delete silently having nothing to target and
+        // the row living on forever (see deleteLead / bulkDeleteLeadsFromSupabase, which
+        // now prefer this over `email` when present). Never displayed, never compared —
+        // starts with `_` so buildDuplicateSignature ignores it like any other internal
+        // field.
+        _rawEmail: row.email || null,
         firstName: row.first_name || row.firstName || '-',
         lastName: row.last_name || row.lastName || '',
         email: cleanEmail,
@@ -645,9 +654,12 @@ export const bulkDeleteLeadsFromSupabase = async (
   const tableName = activeConfig.tableName || 'registration_contacts';
   // Deliberately NOT deleting by `id` here — see deleteLeadFromSupabase's comment.
   // Local ids are a display-order renumbering (1..N per pull), not the real primary
-  // key, so `.in('id', ...)` would delete arbitrary unrelated rows.
+  // key, so `.in('id', ...)` would delete arbitrary unrelated rows. Prefer `_rawEmail`
+  // (the row's real, un-scrubbed email — see pullLeadsFromSupabase) when present, so a
+  // blank-contact lead — whose displayed `email` is always "-" — can still actually be
+  // deleted from Supabase instead of silently having nothing to target.
   const emailsToDelete = leads
-    .map(l => (l.email || '').trim())
+    .map(l => ((l as any)._rawEmail || l.email || '').trim())
     .filter(e => e && e !== '-' && e !== 'undefined' && e !== 'null');
 
   lastConfirmedDeletedEmails = new Set();

@@ -287,14 +287,23 @@ export default function App() {
       const res = await pullLeadsFromSupabase();
       const localLeads = getStoredLeads();
       const trashLeads = getTrashLeads();
-      const deletedEmailSet = new Set(trashLeads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e && e !== '-'));
       // A blank-contact lead (no email at all) has no reliable email to delete by in
-      // Supabase — deleteLeadFromSupabase skips it, so its remote row lives on and
-      // this sync would otherwise pull it straight back every time (the old
-      // `!cleanEmail || cleanEmail === '-'` check below always kept it, trashed or
-      // not). Match it against trash the same way addLeadsToTrash/restoreLeadsFromTrash
-      // already do for these — by firstName+lastName+organization — so a deleted
-      // no-email contact stops reappearing on the next sync.
+      // Supabase — deleteLeadFromSupabase skips it, so its remote row lives on and this
+      // sync would otherwise pull it straight back every time. Match it against trash
+      // the same way addLeadsToTrash/restoreLeadsFromTrash already do for these — by
+      // firstName+lastName+organization — so a deleted no-email contact stops
+      // reappearing on the next sync.
+      //
+      // Deliberately NOT doing the equivalent by email for leads that DO have one: this
+      // used to permanently blacklist any row Supabase returns under that email, forever
+      // — a real bug, not a feature. A real-email lead's delete is already confirmed
+      // against Supabase before it's ever removed locally (see deleteLead/
+      // bulkDeleteLeads/deleteLeadsByTag), so if Supabase still returns a row under that
+      // email, that's either a delete that didn't propagate (rare — and the row
+      // genuinely still exists, so it should show) or, just as likely, a deliberate
+      // later re-upload of that same email — which this used to hide silently and
+      // permanently, exactly the record-count-mismatch bug this sync exists to prevent.
+      // Supabase's own current answer always wins for anything with a real email.
       const deletedNameKeySet = new Set(
         trashLeads
           .filter(l => !l.email || l.email.trim() === '' || l.email.trim() === '-')
@@ -302,7 +311,7 @@ export default function App() {
       );
       const isTrashed = (l: Lead) => {
         const cleanEmail = (l.email || '').toLowerCase().trim();
-        if (cleanEmail && cleanEmail !== '-') return deletedEmailSet.has(cleanEmail);
+        if (cleanEmail && cleanEmail !== '-') return false;
         const nameKey = `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`;
         return deletedNameKeySet.has(nameKey);
       };
