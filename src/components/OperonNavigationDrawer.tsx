@@ -6,7 +6,6 @@ import {
   Building,
   List,
   Database,
-  Send,
   Mail,
   Phone,
   CheckSquare,
@@ -34,7 +33,7 @@ interface OperonNavigationDrawerProps {
 // rgba(99,102,241,.22)/#A5B4FC), tooltip = dark chip to the right on hover).
 // Views that already render real content in App.tsx's routing (no popup needed —
 // clicking just switches the main content area).
-const REAL_VIEWS = new Set(['Contacts', 'Sequences', 'Messages', 'Phone Calls', 'Tasks', 'Deliverability', 'Settings']);
+const REAL_VIEWS = new Set(['Contacts', 'Messages', 'Phone Calls', 'Tasks', 'Deliverability', 'Settings']);
 
 export default function OperonNavigationDrawer({
   activeView,
@@ -134,7 +133,6 @@ export default function OperonNavigationDrawer({
 
         {divider}
 
-        {renderItem('Sequences', <Send className="w-5 h-5" />, '3')}
         {renderItem('Messages', <Mail className="w-5 h-5" />)}
         {renderItem('Phone Calls', <Phone className="w-5 h-5" />)}
         {renderItem('Tasks', <CheckSquare className="w-5 h-5" />, '12')}

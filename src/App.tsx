@@ -1688,7 +1688,7 @@ export default function App() {
               <div key="analytics-view" className="flex-1 overflow-y-auto page-enter">
                 <AnalyticsView leads={leads} />
               </div>
-            ) : activeView === 'Sequences' || activeView === 'Messages' || activeView === 'Phone Calls' || activeView === 'Tasks' ? (
+            ) : activeView === 'Messages' || activeView === 'Phone Calls' || activeView === 'Tasks' ? (
               <div key="outreach-view" className="flex-1 overflow-y-auto page-enter">
                 <OutreachView leads={leads} onShowMessage={showStatus} />
               </div>
