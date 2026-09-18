@@ -87,6 +87,7 @@ export default function FiltersSidebar({
     if (filters.intents?.length) count += filters.intents.length;
     if (filters.technologies?.length) count += filters.technologies.length;
     if (filters.sources?.length) count += filters.sources.length;
+    if (filters.csvTags?.length) count += filters.csvTags.length;
     if (filters.statuses?.length) count += filters.statuses.length;
     if (filters.tags?.length) count += filters.tags.length;
     if (filters.savedOnly) count += 1;
@@ -108,6 +109,7 @@ export default function FiltersSidebar({
       states: [],
       countries: [],
       sources: [],
+      csvTags: [],
       statuses: [],
       savedOnly: false,
       netNewOnly: false,
@@ -577,14 +579,26 @@ export default function FiltersSidebar({
             'bg-cyan-600'
           )}
 
-          {/* Lead Source & CSV Tags */}
+          {/* Lead Source */}
           {renderFilterAccordion(
             'sources',
-            'Lead Source & Tag',
+            'Lead Source',
             <Tag className="w-3.5 h-3.5" />,
             filterOptions.sources || [],
             filters.sources || [],
             (val) => toggleArrayFilter('sources', val),
+            'bg-cyan-600'
+          )}
+
+          {/* CSV Tag — the upload-batch identity (separate from Lead Source above), its
+              own dedicated section so a tag can be searched/filtered on its own. */}
+          {renderFilterAccordion(
+            'csvTags',
+            'CSV Tag',
+            <Tag className="w-3.5 h-3.5" />,
+            filterOptions.csvTags || [],
+            filters.csvTags || [],
+            (val) => toggleArrayFilter('csvTags', val),
             'bg-cyan-600'
           )}
 

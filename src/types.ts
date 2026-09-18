@@ -82,6 +82,9 @@ export interface FilterOptions {
   companies: string[];
   cities: string[];
   sources: string[];
+  // Distinct csv_tag values (the upload-batch identity — separate from sourceName,
+  // see Lead.csvTag's doc comment), surfaced as its own dedicated filter section.
+  csvTags?: string[];
   statuses: string[];
   customFilters?: Record<string, string[]>;
   seniorities?: string[];
@@ -101,6 +104,7 @@ export interface Filters {
   companies: string[];
   cities: string[];
   sources: string[];
+  csvTags?: string[];
   statuses: string[];
   customFilters?: Record<string, string[]>;
   savedOnly: boolean;

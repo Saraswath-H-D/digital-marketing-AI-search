@@ -640,17 +640,19 @@ export const getFilterOptions = (): FilterOptions => {
     cities: getUniqueForAliases(['city', 'location', 'town', 'address'], true),
     states: getUniqueForAliases(['state', 'province', 'region']),
     countries: getUniqueForAliases(['country', 'nation']),
-    // Merge in distinct csvTag values alongside sourceName-aliased values — with the
-    // dedicated CSV Tag search box removed, this is now the only surfaced list of tag
-    // options, so a lead whose only tag identity is csvTag (blank sourceName) must
-    // still show up here to stay filterable.
-    sources: (() => {
-      const base = new Set(getUniqueForAliases(['sourcename', 'source', 'leadsource']));
+    sources: getUniqueForAliases(['sourcename', 'source', 'leadsource']),
+    // Distinct csv_tag values (the upload-batch identity, independent of sourceName —
+    // see Lead.csvTag's doc comment), derived from live lead data so it reflects every
+    // tag actually in use regardless of which browser/session created it. Its own
+    // dedicated "CSV Tag" filter section in FiltersSidebar, separate from "Lead Source
+    // & Tag" above.
+    csvTags: (() => {
+      const set = new Set<string>();
       leads.forEach(l => {
         const tag = (l.csvTag || '').trim();
-        if (tag && tag !== '-') base.add(tag);
+        if (tag && tag !== '-') set.add(tag);
       });
-      return Array.from(base).sort();
+      return Array.from(set).sort();
     })(),
     statuses: getUniqueForAliases(['approvalstatus', 'status', 'approved', 'state']),
     seniorities: ['C-Suite', 'VP / Vice President', 'Director', 'Manager', 'Owner / Partner', 'Entry Level'],
@@ -719,6 +721,12 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
       const matchesSource = vals.some(v => lowerSelected.includes(v.toLowerCase()));
       const matchesCsvTag = filters.sources.some(s => leadMatchesTag(l, s));
       if (!matchesSource && !matchesCsvTag) return false;
+    }
+
+    if (filters.csvTags && filters.csvTags.length > 0) {
+      const tag = (l.csvTag || '').trim().toLowerCase();
+      const lowerSelected = filters.csvTags.map(t => t.toLowerCase());
+      if (!tag || !lowerSelected.includes(tag)) return false;
     }
 
     if (filters.statuses && filters.statuses.length > 0) {
