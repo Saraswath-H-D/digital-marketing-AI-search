@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Lead } from '../types.ts';
+import { Lead, Company, CustomICP } from '../types.ts';
 import { setActiveHeaders, getActiveHeaders } from '../data/leadStorage.ts';
-import { buildDuplicateSignature, ExistingRecordRef } from './dedupe.ts';
+import { buildDuplicateSignature, buildCompanyDuplicateSignature, ExistingRecordRef } from './dedupe.ts';
 
 const SUPABASE_CONFIG_KEY = 'operon_supabase_config_v1';
 const LEGACY_SUPABASE_CONFIG_KEY = 'apollo_supabase_config_v1';
@@ -282,6 +282,13 @@ export const pushLeadsToSupabase = async (
       // copy in `questions` on tables that haven't run the csv_tag migration yet — the
       // existing missing-column retry loop below drops this key and retries automatically).
       csv_tag: (l as any).csvTag ?? null,
+      // Which group(s)/pod(s) this lead belongs to — labeling/filtering only, see
+      // Lead.podTags's doc comment in types.ts. JSON-as-text array, same pattern as
+      // the `tags` column below (replaces the old single-value pod_tag column, which
+      // is left in place unmigrated purely as a read-fallback — see
+      // pullLeadsFromSupabase). Missing-column retry (below) drops this automatically
+      // on tables that haven't run the pod_tags migration yet.
+      pod_tags: Array.isArray((l as any).podTags) && (l as any).podTags.length > 0 ? JSON.stringify((l as any).podTags) : null,
       tags: Array.isArray((l as any).tags) && (l as any).tags.length > 0 ? JSON.stringify((l as any).tags) : null,
       // The exact-duplicate identity this row was imported under (every normalized
       // content field — tag plays NO part in it, see lib/dedupe.ts). Stored so a future
@@ -564,6 +571,20 @@ export const pullLeadsFromSupabase = async (
         // Prefer the real csv_tag column (tables that ran the migration); fall back to
         // the legacy base64-encoded copy restored from `questions` for older rows.
         csvTag: row.csv_tag || restoredCustomMeta.csvTag || null,
+        // Prefer the new pod_tags array column; fall back to wrapping the legacy
+        // single-value pod_tag (or its base64-encoded copy) in a one-element array, so
+        // a row that only ever got the old column written doesn't silently lose its
+        // pod association just because pod_tags was never backfilled.
+        podTags: (() => {
+          if (row.pod_tags) {
+            try {
+              const parsed = JSON.parse(row.pod_tags);
+              if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            } catch { /* fall through to legacy single-value column */ }
+          }
+          const legacy = row.pod_tag || restoredCustomMeta.podTag;
+          return legacy ? [String(legacy)] : [];
+        })(),
         tags: (() => {
           if (!row.tags) return undefined;
           try {
@@ -1094,6 +1115,315 @@ export const getExistingLeadIndexForSignatures = async (
   return index;
 };
 
+// ==================== COMPANIES ====================
+// A separate table from registration_contacts, with its own exact-duplicate identity
+// (see lib/dedupe.ts's buildCompanyDuplicateSignature) and the same tag-scoped-but-
+// content-independent rule as leads. `podTags` is a labeling/filtering convenience only
+// — see the doc comment on Company.podTags in src/types.ts for why this is NOT a real
+// access-control boundary (RLS policies below are public, same as registration_contacts).
+// This is a brand-new table (no legacy schema to migrate around), so these functions are
+// intentionally leaner than their Lead equivalents — no missing-column self-heal, no
+// synthetic-email placeholder handling, no explicit id management (Postgres assigns ids
+// itself; the local cache renumbers on every pull exactly like leads already do).
+// pushCompaniesToSupabase upserts-by-domain when a domain is present (so
+// companyStorage.ts's duplicate-merge path can update an existing central record
+// in-place instead of erroring or duplicating it) and falls back to a plain insert for
+// domain-less rows, which have no reliable identifier to upsert against.
+const COMPANIES_TABLE = 'companies';
+
+export const pushCompaniesToSupabase = async (
+  companies: Company[],
+  config?: SupabaseConfig
+): Promise<{ success: boolean; count: number; error?: string }> => {
+  if (!companies || companies.length === 0) return { success: true, count: 0 };
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return { success: false, count: 0, error: 'Supabase credentials not configured.' };
+
+  const rows = companies.map(c => ({
+    name: c.name || '',
+    domain: c.domain || null,
+    linkedin_url: c.linkedinUrl || '',
+    industry: c.industry || '',
+    employee_size: c.companySize || '',
+    city: c.city || '',
+    state: c.state || '',
+    country: c.country || '',
+    tags: Array.isArray(c.tags) && c.tags.length > 0 ? JSON.stringify(c.tags) : null,
+    // Which group(s)/pod(s) this company belongs to — JSON-as-text array, same pattern
+    // as `tags` above (replaces the old single-value pod_tag column, left in place
+    // unmigrated purely as a read-fallback — see pullCompaniesFromSupabase).
+    pod_tags: Array.isArray(c.podTags) && c.podTags.length > 0 ? JSON.stringify(c.podTags) : null,
+    // Computed the same way a fresh CSV row's signature would be, so a future
+    // duplicate check against this row actually matches (see getExistingCompanyIndexForSignatures).
+    duplicate_signature: buildCompanyDuplicateSignature(c as any).signature || null,
+  }));
+
+  // A row WITH a domain can safely upsert on it (companies_domain_key's partial unique
+  // index makes that a real conflict target) — this is what lets a duplicate-merge
+  // write (see companyStorage.ts's bulkImportCompanies) update the existing row
+  // in-place by domain instead of erroring or creating a second one. A row with no
+  // domain has no reliable identifier to upsert against, so it always falls back to a
+  // plain insert, same as before.
+  const rowsWithDomain = rows.filter(r => r.domain);
+  const rowsWithoutDomain = rows.filter(r => !r.domain);
+
+  const BATCH_SIZE = 500;
+  let totalPushed = 0;
+  let lastError = '';
+
+  const pushBatches = async (batchRows: Record<string, any>[], useUpsert: boolean) => {
+    for (let i = 0; i < batchRows.length; i += BATCH_SIZE) {
+      const batch = batchRows.slice(i, i + BATCH_SIZE);
+      try {
+        const query = useUpsert
+          ? client.from(COMPANIES_TABLE).upsert(batch, { onConflict: 'domain' })
+          : client.from(COMPANIES_TABLE).insert(batch);
+        const { error } = await query;
+        if (!error) { totalPushed += batch.length; continue; }
+        console.warn(`Companies push chunk at index ${i} warning:`, error.message);
+        lastError = error.message;
+        for (const row of batch) {
+          const rowQuery = useUpsert
+            ? client.from(COMPANIES_TABLE).upsert([row], { onConflict: 'domain' })
+            : client.from(COMPANIES_TABLE).insert([row]);
+          const { error: rowErr } = await rowQuery;
+          if (!rowErr) totalPushed += 1;
+          else lastError = rowErr.message;
+        }
+      } catch (err: any) {
+        console.warn(`Exception during companies push chunk at index ${i}:`, err);
+        lastError = err?.message || 'Push error';
+      }
+    }
+  };
+
+  await pushBatches(rowsWithDomain, true);
+  await pushBatches(rowsWithoutDomain, false);
+
+  return { success: totalPushed > 0, count: totalPushed, error: totalPushed === 0 ? lastError : undefined };
+};
+
+export const pullCompaniesFromSupabase = async (
+  config?: SupabaseConfig
+): Promise<{ success: boolean; companies: Company[]; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return { success: false, companies: [], error: 'Supabase credentials not configured.' };
+
+  try {
+    let allData: any[] = [];
+    let from = 0;
+    const PAGE_SIZE = 1000;
+    while (true) {
+      const { data, error } = await client
+        .from(COMPANIES_TABLE)
+        .select('*')
+        .range(from, from + PAGE_SIZE - 1)
+        .order('id', { ascending: false });
+      if (error) {
+        if (allData.length === 0) return { success: false, companies: [], error: error.message };
+        break;
+      }
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    const mapped: Company[] = allData.map((row: any, index: number) => {
+      let tags: string[] = [];
+      try {
+        const parsed = row.tags ? JSON.parse(row.tags) : [];
+        if (Array.isArray(parsed)) tags = parsed.map((t: any) => String(t).trim()).filter(Boolean);
+      } catch { /* ignore malformed tags */ }
+      return {
+        id: index + 1, // renumbered per pull, same convention as pullLeadsFromSupabase
+        name: row.name || '',
+        domain: row.domain || null,
+        linkedinUrl: row.linkedin_url || '',
+        industry: row.industry || '',
+        companySize: row.employee_size || '',
+        city: row.city || '',
+        state: row.state || '',
+        country: row.country || '',
+        tags,
+        // Same new-column-with-legacy-fallback read as pullLeadsFromSupabase's podTags.
+        podTags: (() => {
+          if (row.pod_tags) {
+            try {
+              const parsed = JSON.parse(row.pod_tags);
+              if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            } catch { /* fall through to legacy single-value column */ }
+          }
+          return row.pod_tag ? [String(row.pod_tag)] : [];
+        })(),
+        createdAt: row.created_at || new Date().toISOString(),
+      };
+    });
+    return { success: true, companies: mapped };
+  } catch (err: any) {
+    return { success: false, companies: [], error: err?.message || 'Pull failed' };
+  }
+};
+
+// The "compare against existing Supabase companies" half of the exact-duplicate rule —
+// queries only the signatures this batch could actually match, same efficiency
+// reasoning as getExistingLeadIndexForSignatures. No full-scan fallback here: unlike
+// registration_contacts, this table has no pre-existing legacy rows to migrate around
+// (it's created fresh by the SQL below), so a missing-column/table error just means the
+// SQL hasn't been run yet — best-effort empty result rather than a fallback scan.
+export const getExistingCompanyIndexForSignatures = async (
+  signatures: string[],
+  config?: SupabaseConfig
+): Promise<Map<string, ExistingRecordRef>> => {
+  const index = new Map<string, ExistingRecordRef>();
+  const uniqueSigs = Array.from(new Set(signatures.filter(Boolean)));
+  if (uniqueSigs.length === 0) return index;
+
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return index;
+
+  const CHUNK = 200;
+  try {
+    for (let i = 0; i < uniqueSigs.length; i += CHUNK) {
+      const chunk = uniqueSigs.slice(i, i + CHUNK);
+      const { data, error } = await client
+        .from(COMPANIES_TABLE)
+        .select('name, duplicate_signature')
+        .in('duplicate_signature', chunk);
+      if (error) return index; // table/column not set up yet, or a real query error
+      (data || []).forEach((row: any) => {
+        const signature = row.duplicate_signature;
+        if (!signature) return;
+        index.set(signature, { signature, leadName: row.name || 'Unknown company', email: '' });
+      });
+    }
+  } catch (err) {
+    console.warn('getExistingCompanyIndexForSignatures failed:', err);
+  }
+  return index;
+};
+
+// Deletes a company by its most reliable identifier — domain when present (closest
+// equivalent to email's role for leads), falling back to an exact name match. Same
+// caveat as everywhere else in this app: no real foreign keys, so this never touches
+// any contact whose organization string happens to match.
+export const deleteCompanyFromSupabase = async (
+  identifier: { domain?: string | null; name?: string },
+  config?: SupabaseConfig
+): Promise<{ success: boolean; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return { success: false, error: 'Supabase client missing' };
+
+  try {
+    if (identifier.domain) {
+      const { error } = await client.from(COMPANIES_TABLE).delete().eq('domain', identifier.domain);
+      return { success: !error, error: error?.message };
+    }
+    if (identifier.name) {
+      const { error } = await client.from(COMPANIES_TABLE).delete().eq('name', identifier.name);
+      return { success: !error, error: error?.message };
+    }
+    return { success: false, error: 'No reliable identifier to delete by' };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Delete operation failed' };
+  }
+};
+
+// ==================== CUSTOM ICPs ====================
+// Saved Job Titles + Industries combinations, reusable as filters/campaign targeting.
+// Same lean, no-legacy-migration shape as the companies table above (brand-new table,
+// Postgres-assigned ids, public RLS — see the SQL in generateSupabaseSQL below).
+const CUSTOM_ICPS_TABLE = 'custom_icps';
+
+export const pushCustomICPToSupabase = async (
+  icp: CustomICP,
+  config?: SupabaseConfig
+): Promise<{ success: boolean; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return { success: false, error: 'Supabase credentials not configured.' };
+
+  try {
+    const { error } = await client.from(CUSTOM_ICPS_TABLE).insert([{
+      name: icp.name,
+      job_titles: JSON.stringify(icp.jobTitles || []),
+      industries: JSON.stringify(icp.industries || []),
+    }]);
+    return { success: !error, error: error?.message };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Push failed' };
+  }
+};
+
+export const pullCustomICPsFromSupabase = async (
+  config?: SupabaseConfig
+): Promise<{ success: boolean; icps: CustomICP[]; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return { success: false, icps: [], error: 'Supabase credentials not configured.' };
+
+  try {
+    let allData: any[] = [];
+    let from = 0;
+    const PAGE_SIZE = 1000;
+    while (true) {
+      const { data, error } = await client
+        .from(CUSTOM_ICPS_TABLE)
+        .select('*')
+        .range(from, from + PAGE_SIZE - 1)
+        .order('id', { ascending: false });
+      if (error) {
+        if (allData.length === 0) return { success: false, icps: [], error: error.message };
+        break;
+      }
+      if (!data || data.length === 0) break;
+      allData = allData.concat(data);
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+
+    const parseArray = (raw: any): string[] => {
+      try {
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.map((v: any) => String(v).trim()).filter(Boolean) : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const mapped: CustomICP[] = allData.map((row: any) => ({
+      id: row.id,
+      name: row.name || '',
+      jobTitles: parseArray(row.job_titles),
+      industries: parseArray(row.industries),
+      createdAt: row.created_at || new Date().toISOString(),
+    }));
+    return { success: true, icps: mapped };
+  } catch (err: any) {
+    return { success: false, icps: [], error: err?.message || 'Pull failed' };
+  }
+};
+
+export const deleteCustomICPFromSupabase = async (
+  id: number,
+  config?: SupabaseConfig
+): Promise<{ success: boolean; error?: string }> => {
+  const activeConfig = config || getSupabaseConfig();
+  const client = getSupabaseClient(activeConfig);
+  if (!client) return { success: false, error: 'Supabase client missing' };
+
+  try {
+    const { error } = await client.from(CUSTOM_ICPS_TABLE).delete().eq('id', id);
+    return { success: !error, error: error?.message };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Delete operation failed' };
+  }
+};
+
 export const generateSupabaseSQL = (tableName: string = 'registration_contacts'): string => {
 
   return `-- Copy and run this SQL script in your Supabase Project SQL Editor (https://supabase.com/dashboard/project/_/sql):
@@ -1162,6 +1492,13 @@ ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS tags TEXT;
 -- edit that round-trips the row), at which point it's filled in automatically.
 ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS duplicate_signature TEXT;
 CREATE INDEX IF NOT EXISTS ${tableName}_duplicate_signature_idx ON public.${tableName} (duplicate_signature);
+-- pod_tag: legacy single-value group/pod column, kept unmigrated as a read-fallback —
+-- see Lead.podTags's doc comment in src/types.ts. Purely additive.
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS pod_tag TEXT;
+-- pod_tags: which group(s)/pod(s) this lead belongs to — JSON array as text, same
+-- pattern as the tags column, a labeling/filtering convenience only, NOT a security
+-- boundary (see Lead.podTags's doc comment in src/types.ts). Purely additive.
+ALTER TABLE public.${tableName} ADD COLUMN IF NOT EXISTS pod_tags TEXT;
 
 -- 2b. Make sure email actually carries the unique constraint the app upserts against
 -- (safe to re-run; no-ops if it's already there under this name). This is intentionally
@@ -1198,5 +1535,73 @@ CREATE POLICY "Allow public delete access" ON public.${tableName} FOR DELETE USI
 -- OPTIONAL: If your existing table in Supabase has rows with old IDs (e.g. 1000+),
 -- run this single line to re-number all existing rows starting from 1 (1, 2, 3...):
 -- UPDATE public.${tableName} SET id = sub.new_id FROM (SELECT ctid, ROW_NUMBER() OVER (ORDER BY created_at ASC) as new_id FROM public.${tableName}) sub WHERE public.${tableName}.ctid = sub.ctid;
+
+-- 4. Companies table — separate from ${tableName}, its own exact-duplicate identity
+-- (see lib/dedupe.ts's buildCompanyDuplicateSignature). RLS policies below are the
+-- same unrestricted-public pattern as above — pod_tags is a labeling/filtering
+-- convenience only, NOT real per-pod access control (see Company.podTags's doc comment
+-- in src/types.ts for why). Ids are NOT explicitly managed here (unlike ${tableName}
+-- above) — this is a brand-new table with no legacy id history to work around, so
+-- Postgres's own IDENTITY sequencing is left in place.
+CREATE TABLE IF NOT EXISTS public.companies (
+  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  name TEXT,
+  domain TEXT,
+  linkedin_url TEXT,
+  industry TEXT,
+  employee_size TEXT,
+  city TEXT,
+  state TEXT,
+  country TEXT,
+  tags TEXT,
+  pod_tag TEXT,
+  duplicate_signature TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+-- pod_tags: which group(s)/pod(s) this company belongs to — JSON array as text,
+-- replacing the single-value pod_tag column above (left in place unmigrated purely as
+-- a read-fallback — see pullCompaniesFromSupabase). A CREATE TABLE IF NOT EXISTS above
+-- won't retroactively add this to a table created before this column existed, so it's
+-- added explicitly here, same additive pattern as ${tableName}'s own ALTER statements.
+ALTER TABLE public.companies ADD COLUMN IF NOT EXISTS pod_tags TEXT;
+CREATE INDEX IF NOT EXISTS companies_duplicate_signature_idx ON public.companies (duplicate_signature);
+-- Unique only when a domain is actually present — a partial index so any number of
+-- companies with no domain can coexist without conflicting with each other.
+CREATE UNIQUE INDEX IF NOT EXISTS companies_domain_key ON public.companies (domain) WHERE domain IS NOT NULL AND domain <> '';
+
+ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read access" ON public.companies;
+DROP POLICY IF EXISTS "Allow public insert access" ON public.companies;
+DROP POLICY IF EXISTS "Allow public update access" ON public.companies;
+DROP POLICY IF EXISTS "Allow public delete access" ON public.companies;
+
+CREATE POLICY "Allow public read access" ON public.companies FOR SELECT USING (true);
+CREATE POLICY "Allow public insert access" ON public.companies FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update access" ON public.companies FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete access" ON public.companies FOR DELETE USING (true);
+
+-- 5. Custom ICPs table — saved Job Titles + Industries combinations for reuse as
+-- filters/campaign targeting, modeled directly on the companies table above (same
+-- unrestricted-public RLS pattern; no real per-user/per-pod access control here either).
+CREATE TABLE IF NOT EXISTS public.custom_icps (
+  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  name TEXT NOT NULL,
+  job_titles TEXT,
+  industries TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.custom_icps ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow public read access" ON public.custom_icps;
+DROP POLICY IF EXISTS "Allow public insert access" ON public.custom_icps;
+DROP POLICY IF EXISTS "Allow public update access" ON public.custom_icps;
+DROP POLICY IF EXISTS "Allow public delete access" ON public.custom_icps;
+
+CREATE POLICY "Allow public read access" ON public.custom_icps FOR SELECT USING (true);
+CREATE POLICY "Allow public insert access" ON public.custom_icps FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update access" ON public.custom_icps FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete access" ON public.custom_icps FOR DELETE USING (true);
 `;
 };

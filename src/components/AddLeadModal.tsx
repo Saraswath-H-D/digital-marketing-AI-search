@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, UserPlus, Mail, Building, Briefcase, MapPin, Phone, MessageSquare, Tag, CheckCircle } from 'lucide-react';
+import { X, UserPlus, Mail, Building, Briefcase, MapPin, Map, Globe2, Phone, MessageSquare, Tag, CheckCircle, Award, Factory, Linkedin, Users2 } from 'lucide-react';
+import SearchableSelect from './SearchableSelect.tsx';
+import { SENIORITY_OPTIONS, INDUSTRY_OPTIONS, EMPLOYEE_SIZE_OPTIONS } from '../lib/optionConstants.ts';
+import { getStoredCompanies } from '../data/companyStorage.ts';
 
 interface AddLeadModalProps {
   isOpen: boolean;
@@ -19,12 +22,35 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
   const [organization, setOrganization] = useState('');
   const [jobTitle, setJobTitle] = useState('');
   const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [country, setCountry] = useState('');
+  const [linkedinUrl, setLinkedinUrl] = useState('');
   const [phone, setPhone] = useState('');
   const [approvalStatus, setApprovalStatus] = useState('approved');
   const [sourceName, setSourceName] = useState('Manual Entry');
   const [questions, setQuestions] = useState('');
+  const [seniority, setSeniority] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [companySize, setCompanySize] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Best-effort "associate with the appropriate company where possible": on leaving
+  // the Company/Organization field, look up the central Companies database for an
+  // exact (case-insensitive) name match and auto-fill any still-blank Industry/
+  // Employee Size/City/State/Country from it. Convenience only — never overwrites a
+  // value the user already typed, and there's no relational FK created here.
+  const handleOrgBlur = () => {
+    const typed = organization.trim().toLowerCase();
+    if (!typed) return;
+    const match = getStoredCompanies().find(c => c.name.trim().toLowerCase() === typed);
+    if (!match) return;
+    if (!industry && match.industry) setIndustry(match.industry);
+    if (!companySize && match.companySize) setCompanySize(match.companySize);
+    if (!city && match.city) setCity(match.city);
+    if (!state && match.state) setState(match.state);
+    if (!country && match.country) setCountry(match.country);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,10 +68,16 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
       organization,
       jobTitle,
       city,
+      state,
+      country,
+      linkedinUrl,
       phone,
       approvalStatus,
       sourceName,
       questions,
+      seniority,
+      industry,
+      companySize,
     });
 
     setIsSubmitting(false);
@@ -57,10 +89,16 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
       setOrganization('');
       setJobTitle('');
       setCity('');
+      setState('');
+      setCountry('');
+      setLinkedinUrl('');
       setPhone('');
       setApprovalStatus('approved');
       setSourceName('Manual Entry');
       setQuestions('');
+      setSeniority('');
+      setIndustry('');
+      setCompanySize('');
       onClose();
     } else {
       setError('Failed to create lead. Please check your credentials and try again.');
@@ -185,6 +223,7 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                       type="text"
                       value={organization}
                       onChange={(e) => setOrganization(e.target.value)}
+                      onBlur={handleOrgBlur}
                       placeholder="e.g. TrilliantDigital"
                       className="glass-input pl-9 pr-3 !text-sm"
                     />
@@ -229,6 +268,63 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                   </div>
                 </div>
 
+                {/* State */}
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                    State
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
+                      <Map className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={state}
+                      onChange={(e) => setState(e.target.value)}
+                      placeholder="e.g. Karnataka"
+                      className="glass-input pl-9 pr-3 !text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Country */}
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                    Country
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
+                      <Globe2 className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={country}
+                      onChange={(e) => setCountry(e.target.value)}
+                      placeholder="e.g. India"
+                      className="glass-input pl-9 pr-3 !text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* LinkedIn Profile URL */}
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
+                    LinkedIn Profile URL
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
+                      <Linkedin className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={linkedinUrl}
+                      onChange={(e) => setLinkedinUrl(e.target.value)}
+                      placeholder="e.g. linkedin.com/in/..."
+                      className="glass-input pl-9 pr-3 !text-sm"
+                    />
+                  </div>
+                </div>
+
                 {/* Source Name */}
                 <div>
                   <label className="block text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">
@@ -251,6 +347,36 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
                     </select>
                   </div>
                 </div>
+
+                {/* Seniority — searchable */}
+                <SearchableSelect
+                  label="Seniority"
+                  value={seniority}
+                  onChange={setSeniority}
+                  options={SENIORITY_OPTIONS}
+                  placeholder="Type to search seniority..."
+                  icon={<Award className="w-4 h-4" />}
+                />
+
+                {/* Industry — searchable */}
+                <SearchableSelect
+                  label="Industry"
+                  value={industry}
+                  onChange={setIndustry}
+                  options={INDUSTRY_OPTIONS}
+                  placeholder="Type to search industries..."
+                  icon={<Factory className="w-4 h-4" />}
+                />
+
+                {/* Employee Size — searchable */}
+                <SearchableSelect
+                  label="Employee Size"
+                  value={companySize}
+                  onChange={setCompanySize}
+                  options={EMPLOYEE_SIZE_OPTIONS}
+                  placeholder="Type to search employee size..."
+                  icon={<Users2 className="w-4 h-4" />}
+                />
               </div>
 
               {/* Approval Status */}

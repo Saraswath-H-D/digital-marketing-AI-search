@@ -27,6 +27,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
   const [headerMapping, setHeaderMapping] = useState<Record<string, string>>({});
   const [parsedData, setParsedData] = useState<any[]>([]);
   const [importTag, setImportTag] = useState('');
+  const [podTag, setPodTag] = useState('');
   const [error, setError] = useState('');
   const [infoMessage, setInfoMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -128,6 +129,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     setHeaderMapping({});
     setParsedData([]);
     setImportTag('');
+    setPodTag('');
     setFileHash(null);
   };
 
@@ -146,14 +148,20 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
   // app is built to avoid — see lib/dedupe.ts's "(no-tag)" bucket, which only works
   // correctly when every untagged upload actually passes null here). Shared by the
   // duplicate-preview check and the real import so both see the exact same rows.
-  const buildFinalData = (finalTag: string | null) =>
-    parsedData.map(item => ({
+  const buildFinalData = (finalTag: string | null) => {
+    // Pod/Group Tag — which pod this import belongs to (see CompanyImporter.tsx's
+    // identical field). Independent of csvTag: one is the upload batch's own identity,
+    // the other is group/pod membership (see Lead.podTags's doc comment in types.ts).
+    const finalPodTag = podTag.trim() ? podTag.trim().replace(/\s+/g, '-') : null;
+    return parsedData.map(item => ({
       ...item,
       csvTag: finalTag,
+      podTag: finalPodTag,
       // Carried the same way _csvHeaders already is, so callers (App.tsx) can label the
       // duplicate popup with the real filename instead of falling back to the tag.
       _csvFileName: file?.name || 'CSV Import',
     }));
+  };
 
   // Runs the actual import — only ever called after the file-level conflict check, the
   // tag-reuse check, AND the lead-level duplicate choice (see handleImportSubmit) have
@@ -289,7 +297,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-[var(--text-primary)] tracking-tight">Bulk Import Contacts & Mapping</h3>
-                  <p className="text-2xs text-[var(--text-muted)] font-medium">Upload CSV, map header columns, and import into Operon directory & Supabase</p>
+                  <p className="text-2xs text-[var(--text-muted)] font-medium">Upload CSV, map header columns, and import into Opaeron directory & Supabase</p>
                 </div>
               </div>
               <button
@@ -563,6 +571,24 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                   </div>
                 </div>
 
+                {/* Pod / Group Tag — same optional field as CompanyImporter.tsx */}
+                <div className="flex-1">
+                  <label htmlFor="csv-import-pod-input" className="micro-label block mb-1.5">Pod / Group Tag (optional)</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-violet-600">
+                      <Tag className="w-4 h-4" />
+                    </div>
+                    <input
+                      id="csv-import-pod-input"
+                      type="text"
+                      value={podTag}
+                      onChange={(e) => setPodTag(e.target.value)}
+                      placeholder="Which pod is this for? (e.g. Pod-A)"
+                      className="glass-input pl-9 pr-3 !text-xs font-bold"
+                    />
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-end space-x-2.5">
                   <button
                     type="button"
@@ -580,7 +606,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                     {isUploading ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Importing to Operon & Supabase...</span>
+                        <span>Importing to Opaeron & Supabase...</span>
                       </>
                     ) : isCheckingDuplicates ? (
                       <>

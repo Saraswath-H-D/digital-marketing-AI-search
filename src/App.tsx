@@ -15,9 +15,7 @@ import {
   addLead, 
   updateLead, 
   deleteLead, 
-  bulkDeleteLeads, 
-  deleteLeadsByTag,
-  getStoredCsvTags,
+  bulkDeleteLeads,
   addCsvTag,
   removeCsvTag,
   bulkImportLeads,
@@ -45,6 +43,8 @@ import OutreachView from './components/OutreachView.tsx';
 import SavedSearchesModal from './components/SavedSearchesModal.tsx';
 import SectionInfoModal, { SectionModalKind } from './components/SectionInfoModal.tsx';
 import DataEnhancementModal from './components/DataEnhancementModal.tsx';
+import CompaniesView from './components/CompaniesView.tsx';
+import { addCompany, bulkImportCompanies } from './data/companyStorage.ts';
 
 import { 
   Search, 
@@ -64,7 +64,6 @@ import {
   Lock,
   Bookmark,
   Users,
-  Tag,
   ChevronLeft,
   ChevronRight,
   MoreVertical,
@@ -118,7 +117,11 @@ export default function App() {
   const [stats, setStats] = useState({ total: 0, netNew: 0, saved: 0 });
 
   // AI Copilot & Navigation States
-  const [activeView, setActiveView] = useState('Contacts');
+  const [activeView, setActiveView] = useState('Database');
+  // Which sub-view the "Database" nav item shows — People (the Contacts table) or
+  // Companies. Purely local UI state, not a separate top-level activeView, since both
+  // renderers already exist and just get switched between within one nav entry.
+  const [databaseSubView, setDatabaseSubView] = useState<'People' | 'Companies'>('People');
   const [selectedLeadForDrawer, setSelectedLeadForDrawer] = useState<Lead | null>(null);
   const [showTeammatesModal, setShowTeammatesModal] = useState(false);
   const [showSavedSearchesModal, setShowSavedSearchesModal] = useState(false);
@@ -173,8 +176,6 @@ export default function App() {
   // General States
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false);
-  const [tagSearchInput, setTagSearchInput] = useState('');
-  const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
   const [mainSearchDropdownOpen, setMainSearchDropdownOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -386,10 +387,11 @@ export default function App() {
     }
   };
 
-  // Applied from a sidebar section popup (Organizations / Directories / Bookmarks) —
-  // jump to the Contact Directory pre-filtered on that value.
+  // Applied from a sidebar section popup (Directories / Bookmarks) — jump to the
+  // People sub-view of the Database, pre-filtered on that value.
   const handleApplyFilterFromSection = (kind: 'organization' | 'city' | 'source' | 'saved', value?: string) => {
-    setActiveView('Contacts');
+    setActiveView('Database');
+    setDatabaseSubView('People');
     setSearchInput('');
     if (kind === 'saved') {
       setFilters(prev => ({ ...prev, search: '', companies: [], cities: [], sources: [], savedOnly: true }));
@@ -479,6 +481,36 @@ export default function App() {
       return true;
     } catch (err) {
       console.error('Create lead failed:', err);
+    }
+    return false;
+  };
+
+  // Add Company Action Handler — mirrors handleAddLead
+  const handleAddCompany = async (companyData: any) => {
+    try {
+      await addCompany(companyData);
+      showStatus('Company created & synced to Supabase!', 'success');
+      return true;
+    } catch (err) {
+      console.error('Create company failed:', err);
+    }
+    return false;
+  };
+
+  // Import Companies Action Handler — mirrors handleImportLeads
+  const handleImportCompanies = async (items: any[], options?: { includeDuplicates?: boolean }) => {
+    try {
+      const result = await bulkImportCompanies(items, options);
+      if (result.duplicatesSkipped > 0) {
+        const mergedNote = result.mergedIntoExisting > 0 ? `, ${result.mergedIntoExisting} merged into existing records` : '';
+        showStatus(`Import Complete — Total: ${result.totalRows}, Duplicate companies: ${result.duplicatesSkipped}${mergedNote}, New imported: ${result.count}.`, 'success');
+      } else {
+        showStatus(`Imported ${result.count} new companies & synced live to Supabase!`, 'success');
+      }
+      return true;
+    } catch (err) {
+      console.error('Company import action failed:', err);
+      showStatus('An error occurred during company CSV import.', 'error');
     }
     return false;
   };
@@ -614,7 +646,8 @@ export default function App() {
         // ask before this point whenever there are duplicates) — this is the final
         // summary confirming what that choice actually did.
         setIsDuplicateModalOpen(true);
-        showStatus(`Import Complete — Total: ${result.totalRows}, Duplicate leads: ${result.duplicatesSkipped}, New leads imported: ${result.count}, Leads skipped: ${result.duplicatesSkipped}, Tag: ${tagLabel}.`, 'success');
+        const mergedNote = result.mergedIntoExisting > 0 ? ` ${result.mergedIntoExisting} merged into existing records.` : '';
+        showStatus(`Import Complete — Total: ${result.totalRows}, Duplicate leads: ${result.duplicatesSkipped}, New leads imported: ${result.count}, Leads skipped: ${result.duplicatesSkipped}, Tag: ${tagLabel}.${mergedNote}`, 'success');
       } else if (options?.includeDuplicates) {
         showStatus(`Import Complete — Total: ${result.totalRows}, all ${result.count} rows imported including duplicates, Tag: ${tagLabel}.`, 'success');
       } else {
@@ -769,8 +802,9 @@ export default function App() {
           contactsCount={leads.length}
         />
 
-        {/* Left Side Filters Bar */}
-        {showFiltersSidebar && (
+        {/* Left Side Filters Bar — hidden on the Companies sub-view since Filters
+            targets Lead/Contact fields, not Company fields. */}
+        {showFiltersSidebar && !(activeView === 'Database' && databaseSubView === 'Companies') && (
           <FiltersSidebar
             filters={filters}
             setFilters={setFilters}
@@ -793,7 +827,7 @@ export default function App() {
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <h1 className="text-base font-black tracking-tight font-display text-[var(--text-primary)]">OPERON ENTERPRISE AI</h1>
+                  <h1 className="text-base font-black tracking-tight font-display text-[var(--text-primary)]">OPAERON ENTERPRISE AI</h1>
                   <span className="role-badge-text super-admin text-xs tracking-tight uppercase">
                     Super Admin
                   </span>
@@ -816,20 +850,6 @@ export default function App() {
                 ) : (
                   <Sun className="w-5 h-5 text-amber-400" />
                 )}
-              </button>
-
-              {/* Supabase Live Status Pill */}
-              <button
-                onClick={() => setIsSupabaseOpen(true)}
-                className="pill-control cursor-pointer space-x-2 text-[var(--text-primary)]"
-                title="Supabase PostgreSQL Database Connected"
-              >
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
-                <Database className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="font-mono text-emerald-700 dark:text-emerald-400 text-xs font-bold">Supabase Connected</span>
               </button>
 
               {/* Operon Credit Balance */}
@@ -865,11 +885,11 @@ export default function App() {
                 <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Verified leads in system</p>
               </div>
 
-              {/* Card 2: Supabase Storage */}
+              {/* Card 2: Data Sync */}
               <div className="p-4 glass-card relative overflow-hidden group">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
                 <div className="flex items-center justify-between mb-2">
-                  <span className="micro-label">PostgreSQL Cloud DB</span>
+                  <span className="micro-label">Data Sync</span>
                   <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                     <Database className="w-4 h-4" />
                   </div>
@@ -880,7 +900,7 @@ export default function App() {
                     Auto-Sync
                   </span>
                 </div>
-                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Table: <code className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">registration_contacts</code></p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Your data stays synced automatically.</p>
               </div>
 
               {/* Card 3: Operon AI Copilot */}
@@ -1389,192 +1409,6 @@ export default function App() {
                   </button>
                 </form>
 
-                {/* 2. CSV Tag Search Bar & Delete Tag Button (Stacked Vertically at Bottom) */}
-                <div className="flex flex-col space-y-1.5 w-full sm:w-64 shrink-0">
-                  <div className="relative w-full">
-                    <div className="relative w-full">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-violet-600">
-                        <Tag className="w-3.5 h-3.5" />
-                      </span>
-                      <input
-                        type="text"
-                        value={tagSearchInput}
-                        onFocus={() => setTagDropdownOpen(true)}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setTagSearchInput(val);
-                          setFilters(prev => ({
-                            ...prev,
-                            sources: val.trim() ? [val.trim()] : []
-                          }));
-                          setPage(1);
-                        }}
-                        placeholder="Search CSV Tag (e.g. Q3-Marketing)..."
-                        className="search-pill pr-8 text-xs font-bold placeholder-violet-400 !bg-violet-50/30 dark:!bg-violet-500/10 !border-violet-200"
-                      />
-                      {tagSearchInput && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTagSearchInput('');
-                            setFilters(prev => ({ ...prev, sources: [] }));
-                            setPage(1);
-                          }}
-                          className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-violet-400 hover:text-violet-700"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* CSV Tag Autocomplete Suggestions Dropdown */}
-                    {tagDropdownOpen && (() => {
-                      // ONLY show custom tags explicitly created by the user during CSV uploads!
-                      // Derive suggestions straight from the actual current lead data (not the
-                      // separate, per-browser-only getStoredCsvTags() registry) — that registry
-                      // only gets written when a CSV is imported in *this* browser, so a fresh
-                      // session or a different device pulling the same data from Supabase would
-                      // otherwise see zero suggestions, even for genuine tags.
-                      const normalizeTag = (s: string) => s.trim().toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ');
-                      const mockSourcesToIgnore = new Set([
-                        'facebook ads',
-                        'old registrants email campaign',
-                        'whatsapp invitation',
-                        'registration report',
-                        'manual entry',
-                        'contacts',
-                        'leads',
-                        'export',
-                        'data',
-                        'file',
-                        'sheet',
-                        'supabase',
-                        'null',
-                        'undefined'
-                      ]);
-
-                      // A genuine CSV upload tag is assigned to a whole batch of contacts at
-                      // once, never just one — so also require more than a single contact to
-                      // actually carry it. This catches junk the ignore-list can't name up
-                      // front, like a data-quality bug where a contact's own name ended up in
-                      // their own sourceName field (one contact each, never a real "tag").
-                      const tagUsageCount = new Map<string, number>();
-                      // csvTag is always a deliberate, explicit batch identifier (typed by the
-                      // user or defaulted to the filename at upload time) — never a data-quality
-                      // leak the way a stray sourceName can be — so any csvTag value qualifies
-                      // regardless of how many rows carry it.
-                      const explicitCsvTags = new Set<string>();
-                      getStoredLeads().forEach(l => {
-                        const src = (l.sourceName || '').trim();
-                        if (src && src !== '-') {
-                          tagUsageCount.set(src, (tagUsageCount.get(src) || 0) + 1);
-                        }
-                        const tag = (l.csvTag || '').trim();
-                        if (tag && tag !== '-') explicitCsvTags.add(tag);
-                      });
-
-                      const combinedTags = new Set([...getStoredCsvTags(), ...Array.from(tagUsageCount.keys()), ...explicitCsvTags]);
-
-                      const csvImportTags = Array.from(combinedTags).filter(t => {
-                        if (!t || t === '-' || t.trim() === '') return false;
-                        if (mockSourcesToIgnore.has(normalizeTag(t))) return false;
-                        return explicitCsvTags.has(t) || (tagUsageCount.get(t) || 0) > 1;
-                      });
-
-                      if (csvImportTags.length === 0) return null;
-
-                      return (
-                        <>
-                          <div 
-                            className="fixed inset-0 z-40" 
-                            onClick={() => setTagDropdownOpen(false)}
-                          />
-                          <div className="absolute left-0 right-0 mt-1 bg-[var(--surface-card-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-1.5 z-45 max-h-56 overflow-y-auto animate-fadeIn">
-                            <div className="px-3 py-1 text-4xs font-extrabold uppercase tracking-wider text-violet-600 border-b border-violet-100 mb-1 flex items-center justify-between">
-                              <span>Your Uploaded CSV Tags</span>
-                              <span className="text-[9px] bg-violet-100 text-violet-700 px-1.5 py-0.2 rounded-full font-bold">{csvImportTags.length} active</span>
-                            </div>
-                            {csvImportTags
-                              .filter(s => s.toLowerCase().includes(tagSearchInput.toLowerCase()))
-                              .map((tag) => {
-                                const isSelected = filters.sources.includes(tag);
-                                return (
-                                  <button
-                                    key={tag}
-                                    onClick={() => {
-                                      setTagSearchInput(tag);
-                                      setFilters(prev => ({ ...prev, sources: [tag] }));
-                                      setPage(1);
-                                      setTagDropdownOpen(false);
-                                    }}
-                                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between font-semibold hover:bg-violet-50 transition-colors cursor-pointer ${
-                                      isSelected ? 'text-violet-700 bg-violet-50 font-extrabold' : 'text-slate-700'
-                                    }`}
-                                  >
-                                    <div className="flex items-center space-x-2 truncate">
-                                      <Tag className="w-3 h-3 text-violet-500 shrink-0" />
-                                      <span className="truncate font-bold">#{tag}</span>
-                                    </div>
-                                    {isSelected && <Check className="w-3.5 h-3.5 text-violet-600 shrink-0" />}
-                                  </button>
-                                );
-                              })}
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Red Delete Tagged CSV Button (Placed Directly at Bottom of Tag Search Bar) */}
-                  <button
-                    type="button"
-                    disabled={!tagSearchInput.trim()}
-                    onClick={async () => {
-                      const tagToDelete = tagSearchInput.trim();
-                      if (!tagToDelete) return;
-
-                      const confirmDelete = window.confirm(
-                        `⚠️ Are you sure you want to PERMANENTLY DELETE all contact data tagged with "${tagToDelete}" from your local directory and Supabase database?`
-                      );
-
-                      if (confirmDelete) {
-                        showStatus(`Deleting contacts tagged with "${tagToDelete}"...`, 'success');
-                        const { count: deletedCount, error: deleteError } = await deleteLeadsByTag(tagToDelete);
-
-                        setTagSearchInput('');
-                        setFilters(prev => ({ ...prev, sources: [] }));
-                        setPage(1);
-                        await fetchLeads();
-                        await fetchFilterOptions();
-
-                        if (deleteError) {
-                          showStatus(
-                            `Deleted ${deletedCount} contact(s) confirmed in Supabase, but some records tagged "${tagToDelete}" could not be verified as removed (${deleteError}). They were left in place rather than risk hiding data that's still really there — try again in a moment.`,
-                            'error'
-                          );
-                        } else {
-                          showStatus(
-                            `Successfully deleted ${deletedCount} contact(s) tagged with "${tagToDelete}" from system & Supabase database.`,
-                            'success'
-                          );
-                        }
-                      }
-                    }}
-                    title={
-                      tagSearchInput.trim() 
-                        ? `Delete all contacts tagged with "${tagSearchInput.trim()}"` 
-                        : "Type or select a CSV tag above to enable deletion"
-                    }
-                    className={`w-full inline-flex items-center justify-center space-x-1.5 px-3 py-1.5 text-2xs font-extrabold rounded-xl transition-all shadow-2xs cursor-pointer ${
-                      tagSearchInput.trim()
-                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-200 active:scale-95'
-                        : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-70'
-                    }`}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    <span>Delete Tagged CSV Data</span>
-                  </button>
-                </div>
               </div>
 
               {/* Super 3D Action Buttons */}
@@ -1681,24 +1515,67 @@ export default function App() {
             )}
           </div>
 
+          {/* Database sub-view switcher — People (Contacts) vs Companies, both living
+              under the single "Database" nav item instead of as separate top-level
+              nav tabs. */}
+          {activeView === 'Database' && (
+            <div className="px-6 pt-3 pb-1 flex items-center gap-2 shrink-0 bg-[var(--surface-card-header)] border-b border-[var(--border-subtle)]">
+              <button
+                onClick={() => setDatabaseSubView('People')}
+                className={`px-3.5 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                  databaseSubView === 'People'
+                    ? 'bg-violet-600 text-white shadow-xs'
+                    : 'bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] border border-[var(--border-subtle)]'
+                }`}
+              >
+                People
+              </button>
+              <button
+                onClick={() => setDatabaseSubView('Companies')}
+                className={`px-3.5 py-1.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
+                  databaseSubView === 'Companies'
+                    ? 'bg-violet-600 text-white shadow-xs'
+                    : 'bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] border border-[var(--border-subtle)]'
+                }`}
+              >
+                Companies
+              </button>
+              {databaseSubView === 'People' && (
+                <button
+                  onClick={() => setShowSavedSearchesModal(true)}
+                  className="ml-auto inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-black rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] text-[var(--text-secondary)] cursor-pointer"
+                >
+                  <Bookmark className="w-3.5 h-3.5 text-violet-600" />
+                  <span>Saved ICPs</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* View Content Routing */}
           <div className="flex-1 overflow-hidden flex flex-col relative">
-            
-            {activeView === 'Deliverability' || activeView === 'Settings' ? (
+
+            {activeView === 'Settings' ? (
               <div key="analytics-view" className="flex-1 overflow-y-auto page-enter">
                 <AnalyticsView leads={leads} />
               </div>
-            ) : activeView === 'Messages' || activeView === 'Phone Calls' || activeView === 'Tasks' ? (
+            ) : activeView === 'Messages' ? (
               <div key="outreach-view" className="flex-1 overflow-y-auto page-enter">
                 <OutreachView leads={leads} onShowMessage={showStatus} />
               </div>
+            ) : activeView === 'Database' && databaseSubView === 'Companies' ? (
+              <CompaniesView
+                onImport={handleImportCompanies}
+                onAdd={handleAddCompany}
+                onShowMessage={showStatus}
+              />
             ) : (
               <div key="contacts-view" className="page-enter flex-1 flex flex-col min-h-0">
                 {isLoadingLeads && (
                   <div className="absolute inset-0 z-20 bg-[var(--surface-base)]/70 backdrop-blur-3xs flex items-center justify-center">
                     <div className="flex flex-col items-center space-y-3">
                       <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-xs font-semibold text-[var(--text-muted)] tracking-wide">Syncing Operon lead directory...</span>
+                      <span className="text-xs font-semibold text-[var(--text-muted)] tracking-wide">Syncing Opaeron lead directory...</span>
                     </div>
                   </div>
                 )}
@@ -1932,8 +1809,9 @@ export default function App() {
       <SavedSearchesModal
         isOpen={showSavedSearchesModal}
         onClose={() => setShowSavedSearchesModal(false)}
-        onApplySearch={(f) => {
-          setFilters(f);
+        filterOptions={filterOptions}
+        onApplySearch={(icp) => {
+          setFilters(prev => ({ ...prev, jobTitles: icp.jobTitles, industries: icp.industries }));
           setPage(1);
         }}
         onShowMessage={showStatus}

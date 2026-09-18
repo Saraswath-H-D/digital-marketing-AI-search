@@ -1,7 +1,7 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
 import { pushLeadsToSupabase, pullLeadsFromSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, deleteAllLeadsFromSupabase, getSupabaseConfig, getLastConfirmedDeletedEmails, getExistingLeadIndexForSignatures } from '../lib/supabase.ts';
-import { dedupeLeadRows, buildDuplicateSignature } from '../lib/dedupe.ts';
+import { dedupeLeadRows, buildDuplicateSignature, DuplicateMatch } from '../lib/dedupe.ts';
 
 const STORAGE_KEY = 'operon_leads_v9';
 const LEGACY_STORAGE_KEY = 'apollo_leads_v9';
@@ -640,11 +640,25 @@ export const getFilterOptions = (): FilterOptions => {
     cities: getUniqueForAliases(['city', 'location', 'town', 'address'], true),
     states: getUniqueForAliases(['state', 'province', 'region']),
     countries: getUniqueForAliases(['country', 'nation']),
-    sources: getUniqueForAliases(['sourcename', 'source', 'leadsource']),
+    // Merge in distinct csvTag values alongside sourceName-aliased values — with the
+    // dedicated CSV Tag search box removed, this is now the only surfaced list of tag
+    // options, so a lead whose only tag identity is csvTag (blank sourceName) must
+    // still show up here to stay filterable.
+    sources: (() => {
+      const base = new Set(getUniqueForAliases(['sourcename', 'source', 'leadsource']));
+      leads.forEach(l => {
+        const tag = (l.csvTag || '').trim();
+        if (tag && tag !== '-') base.add(tag);
+      });
+      return Array.from(base).sort();
+    })(),
     statuses: getUniqueForAliases(['approvalstatus', 'status', 'approved', 'state']),
     seniorities: ['C-Suite', 'VP / Vice President', 'Director', 'Manager', 'Owner / Partner', 'Entry Level'],
     companySizes: ['1-10 employees', '11-50 employees', '51-200 employees', '201-500 employees', '501-1000 employees', '1000+ employees'],
-    industries: ['Software & SaaS', 'Financial Services', 'Healthcare & Biotech', 'Marketing & Advertising', 'E-Commerce & Retail', 'Education & Research', 'Consulting & IT'],
+    // Derived from live Lead.industry data (matching jobTitles/companies/cities below)
+    // instead of a hardcoded list, so the Industry filter only ever offers values that
+    // actually exist among current leads.
+    industries: getUniqueForAliases(['industry', 'sector']),
     emailStatuses: ['Valid / Safe', 'Risky / Catch-all', 'Invalid / Bounce'],
     intents: ['High Intent', 'Medium Intent', 'Low Intent'],
     technologies: ['React', 'Salesforce', 'HubSpot', 'AWS', 'Google Cloud', 'Stripe', 'Node.js', 'WordPress'],
@@ -916,6 +930,12 @@ export const addLead = async (newLeadData: Partial<Lead>): Promise<Lead> => {
     jobTitle: normalizeNameOrTitle(newLeadData.jobTitle),
     questions: cleanVal(newLeadData.questions),
     sourceName: newLeadData.sourceName && String(newLeadData.sourceName).trim() ? String(newLeadData.sourceName).trim().replace(/\s+/g, '-') : 'Manual-Entry',
+    seniority: newLeadData.seniority ? cleanVal(newLeadData.seniority) : undefined,
+    industry: newLeadData.industry ? cleanVal(newLeadData.industry) : undefined,
+    state: newLeadData.state ? normalizeNameOrTitle(newLeadData.state) : undefined,
+    country: newLeadData.country ? normalizeNameOrTitle(newLeadData.country) : undefined,
+    linkedinUrl: newLeadData.linkedinUrl ? cleanVal(newLeadData.linkedinUrl) : undefined,
+    companySize: newLeadData.companySize ? cleanVal(newLeadData.companySize) : undefined,
     createdAt: new Date().toISOString(),
     isSaved: false,
     emailUnlocked: false,
@@ -1196,6 +1216,10 @@ export interface BulkImportResult {
   uniqueRows: number;
   duplicatesSkipped: number;
   duplicateLeadNames: string[];
+  // How many of the "duplicates" above were actually merged into their existing
+  // central record (blank fields enriched, this import's pod tag added) rather than
+  // silently discarded — see mergeDuplicateLeadsIntoExisting.
+  mergedIntoExisting: number;
 }
 
 export interface DuplicatePreviewResult {
@@ -1275,6 +1299,68 @@ export const previewBulkImportDuplicates = async (
   };
 };
 
+// For every duplicate row detected on import, merge/enrich the EXISTING central record
+// instead of silently discarding the import row: (a) fill any blank field on the
+// existing record from the new row's non-blank value — never overwrite an existing
+// non-blank value with re-uploaded data, (b) append this import's pod tag to the
+// existing record's podTags array (deduped), (c) push the merged record back to
+// Supabase. This is the mechanism that lets two different pods independently upload
+// the same real person without creating a duplicate record, while still recording that
+// both pods now use/own it — see Lead.podTags's doc comment in types.ts. Only merges
+// records this browser already has a local copy of (matched by email) — a duplicate
+// matched only against a remote Supabase row from another device/session is left alone
+// rather than guessing at fields this browser can't see.
+const mergeDuplicateLeadsIntoExisting = async (
+  duplicates: DuplicateMatch<Partial<Lead>>[],
+  importPodTag: string | null
+): Promise<number> => {
+  if (duplicates.length === 0) return 0;
+
+  const allLeads = getStoredLeads();
+  const byEmail = new Map(allLeads.filter(l => l.email && l.email !== '-').map(l => [l.email.trim().toLowerCase(), l]));
+  const mergedById = new Map<number, Lead>();
+
+  duplicates.forEach(dup => {
+    const email = (dup.existing.email || '').trim().toLowerCase();
+    const existingLead = email ? byEmail.get(email) : undefined;
+    if (!existingLead) return; // no local copy to merge into — leave it alone
+
+    const base = mergedById.get(existingLead.id) || existingLead;
+    const incoming = dup.row;
+    const enriched: Lead = { ...base };
+    (Object.keys(incoming) as (keyof Lead)[]).forEach(key => {
+      if (key === 'id' || key === 'podTags') return;
+      const existingVal: any = (base as any)[key];
+      const incomingVal: any = (incoming as any)[key];
+      const isBlank = existingVal === undefined || existingVal === null || existingVal === '' || existingVal === '-';
+      const hasValue = incomingVal !== undefined && incomingVal !== null && incomingVal !== '' && incomingVal !== '-';
+      if (isBlank && hasValue) (enriched as any)[key] = incomingVal;
+    });
+    const podSet = new Set(base.podTags || []);
+    if (importPodTag) podSet.add(importPodTag);
+    enriched.podTags = Array.from(podSet);
+
+    mergedById.set(existingLead.id, enriched);
+  });
+
+  if (mergedById.size === 0) return 0;
+
+  const mergedLeads = Array.from(mergedById.values());
+  const byId = new Map(allLeads.map(l => [l.id, l]));
+  mergedLeads.forEach(m => byId.set(m.id, m));
+  saveStoredLeads(Array.from(byId.values()));
+
+  if (getSupabaseConfig().autoSync) {
+    try {
+      await pushLeadsToSupabase(mergedLeads);
+    } catch (err) {
+      console.error('Auto-sync merged duplicate leads failed:', err);
+    }
+  }
+
+  return mergedLeads.length;
+};
+
 // Bulk Import Leads — enforces the exact-duplicate rule (see lib/dedupe.ts): a row is a
 // duplicate ONLY when EVERY relevant mapped field matches (after safe normalization)
 // another row already kept in this batch or already present in Supabase. Tag plays NO
@@ -1300,9 +1386,15 @@ export const bulkImportLeads = async (
   const includeDuplicates = options?.includeDuplicates === true;
 
   let dedupeResult: ReturnType<typeof dedupeLeadRows> | null = null;
+  let mergedIntoExisting = 0;
   if (!includeDuplicates) {
     const existingIndex = await buildExistingIndexFor(newLeadsList);
     dedupeResult = dedupeLeadRows(newLeadsList, existingIndex);
+
+    const batchPodTag = (newLeadsList[0] as any)?.podTag && String((newLeadsList[0] as any).podTag).trim()
+      ? String((newLeadsList[0] as any).podTag).trim().replace(/\s+/g, '-')
+      : null;
+    mergedIntoExisting = await mergeDuplicateLeadsIntoExisting(dedupeResult.duplicates, batchPodTag);
   }
 
   const uniqueItems = includeDuplicates ? newLeadsList : dedupeResult!.kept;
@@ -1327,6 +1419,13 @@ export const bulkImportLeads = async (
       ? String(item.csvTag).trim().replace(/\s+/g, '-')
       : null;
     if (csvTagVal) addCsvTag(csvTagVal);
+    // podTag (singular) is what the importer UI collects — one import is one pod's
+    // action, mirroring CompanyImporter.tsx's "Pod / Group Tag" field — separate from
+    // csvTag (which identifies the upload batch itself). Not auto-registered as a
+    // suggestible tag the way csvTag is; wrapped into the stored podTags array below.
+    const podTagVal = (item as any).podTag && String((item as any).podTag).trim()
+      ? String((item as any).podTag).trim().replace(/\s+/g, '-')
+      : null;
     return {
       ...item,
       id: maxId,
@@ -1342,6 +1441,7 @@ export const bulkImportLeads = async (
       questions: cleanVal(item.questions),
       sourceName: cleanSourceName,
       csvTag: csvTagVal,
+      podTags: podTagVal ? [podTagVal] : [],
       createdAt: new Date().toISOString(),
       isSaved: false,
       emailUnlocked: true,
@@ -1386,6 +1486,7 @@ export const bulkImportLeads = async (
     // report should reflect what really happened, not what the check would have skipped.
     duplicatesSkipped: includeDuplicates ? 0 : dedupeResult!.duplicatesSkipped,
     duplicateLeadNames: includeDuplicates ? [] : dedupeResult!.duplicateLeadNames,
+    mergedIntoExisting: includeDuplicates ? 0 : mergedIntoExisting,
   };
 
   lastImportReport = {

@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Home, Building, List, Bookmark, Users, TrendingUp, Clock, MapPin, Tag } from 'lucide-react';
+import { X, Home, List, Bookmark, Users, TrendingUp, Clock, MapPin, Tag } from 'lucide-react';
 import { Lead } from '../types.ts';
 
-export type SectionModalKind = 'Home' | 'Organizations' | 'Directories' | 'Bookmarks';
+export type SectionModalKind = 'Home' | 'Directories' | 'Bookmarks';
 
 interface SectionInfoModalProps {
   section: SectionModalKind | null;
@@ -15,7 +15,6 @@ interface SectionInfoModalProps {
 
 const SECTION_META: Record<SectionModalKind, { icon: React.ReactNode; title: string; subtitle: string }> = {
   Home: { icon: <Home className="w-4 h-4" />, title: 'Home Overview', subtitle: 'Your directory at a glance' },
-  Organizations: { icon: <Building className="w-4 h-4" />, title: 'Organizations', subtitle: 'Contacts grouped by company' },
   Directories: { icon: <List className="w-4 h-4" />, title: 'Directories', subtitle: 'Browse by city or source' },
   Bookmarks: { icon: <Bookmark className="w-4 h-4" />, title: 'Bookmarked Contacts', subtitle: 'Contacts you\'ve saved' },
 };
@@ -33,15 +32,6 @@ export default function SectionInfoModal({ section, leads, onClose, onApplyFilte
       .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
       .slice(0, 5);
     return { total, saved, approved, pending, rejected, recent };
-  }, [leads]);
-
-  const orgGroups = useMemo(() => {
-    const map = new Map<string, number>();
-    leads.forEach(l => {
-      const org = (l.organization || '').trim();
-      if (org && org !== '-') map.set(org, (map.get(org) || 0) + 1);
-    });
-    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 25);
   }, [leads]);
 
   const cityGroups = useMemo(() => {
@@ -123,25 +113,6 @@ export default function SectionInfoModal({ section, leads, onClose, onApplyFilte
                     </div>
                   </div>
                 </>
-              )}
-
-              {section === 'Organizations' && (
-                <div className="space-y-1.5">
-                  {orgGroups.length === 0 ? (
-                    <p className="text-xs text-[var(--text-muted)] italic text-center py-6">No organizations found in your contacts yet.</p>
-                  ) : (
-                    orgGroups.map(([org, count]) => (
-                      <button
-                        key={org}
-                        onClick={() => { onApplyFilter('organization', org); onClose(); }}
-                        className="w-full flex items-center justify-between px-3 py-2 bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--surface-hover)] transition-colors cursor-pointer text-left"
-                      >
-                        <span className="text-xs font-semibold text-[var(--text-primary)] truncate">{org}</span>
-                        <span className="text-3xs font-bold text-[var(--text-muted)] shrink-0 ml-2">{count} contact{count !== 1 ? 's' : ''}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
               )}
 
               {section === 'Directories' && (

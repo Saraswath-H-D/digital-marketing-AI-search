@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Filters, FilterOptions } from '../types.ts';
-import { formatHeaderName } from '../data/leadStorage.ts';
-import { 
+import SearchableSelect from './SearchableSelect.tsx';
+import {
   ChevronDown, 
   ChevronUp,
   X, 
@@ -65,18 +65,11 @@ export default function FiltersSidebar({
 
   // Option Search strings for each category
   const [optionSearches, setOptionSearches] = useState<Record<string, string>>({});
-  
-  // Dedicated Job Title Search Input
-  const [jobTitleInput, setJobTitleInput] = useState('');
 
   // Toggle accordion section
   const toggleSection = (key: string) => {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
   };
-
-  // CSV Columns filter options
-  const customFiltersObj = filterOptions.customFilters || {};
-  const totalCustomColumnCount = Object.keys(customFiltersObj).length;
 
   // Active filter counts
   const activeCounts = useMemo(() => {
@@ -356,107 +349,17 @@ export default function FiltersSidebar({
             </button>
 
             {openSections.jobTitles && (
-              <div className="p-3 bg-[var(--surface-card-elevated)] rounded-2xl border border-[var(--border-subtle)] shadow-xs space-y-2.5 mt-1 animate-fadeIn super-3d-card">
-                {/* Dedicated Job Title Search & Add Bar */}
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (jobTitleInput.trim()) {
-                      const cleanTitle = jobTitleInput.trim();
-                      if (!filters.jobTitles?.includes(cleanTitle)) {
-                        setFilters(prev => ({
-                          ...prev,
-                          jobTitles: [...(prev.jobTitles || []), cleanTitle]
-                        }));
-                      }
-                      setJobTitleInput('');
-                    }
-                  }}
-                  className="relative flex items-center space-x-1.5"
-                >
-                  <div className="relative flex-1">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none text-violet-500">
-                      <Search className="w-3.5 h-3.5" />
-                    </span>
-                    <input
-                      type="text"
-                      value={jobTitleInput}
-                      onChange={(e) => setJobTitleInput(e.target.value)}
-                      placeholder="Type or search job title (e.g. CEO)..."
-                      className="glass-input pl-8 pr-7 !py-1.5 !text-xs focus:!border-violet-500 font-bold placeholder-slate-400"
-                    />
-                    {jobTitleInput && (
-                      <button
-                        type="button"
-                        onClick={() => setJobTitleInput('')}
-                        className="absolute inset-y-0 right-0 flex items-center pr-2 text-[var(--text-muted)] hover:text-violet-600 cursor-pointer"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={!jobTitleInput.trim()}
-                    className="px-2.5 py-1.5 text-xs font-black bg-violet-600 hover:bg-violet-700 text-white rounded-xl disabled:opacity-40 transition-all cursor-pointer shrink-0 shadow-2xs"
-                  >
-                    + Add
-                  </button>
-                </form>
-
-                {/* Active Selected Job Title Chips */}
-                {filters.jobTitles && filters.jobTitles.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1 pb-1 border-b border-violet-100">
-                    {filters.jobTitles.map(t => (
-                      <span
-                        key={t}
-                        className="inline-flex items-center space-x-1 px-2 py-0.5 text-[10px] font-black bg-violet-100 text-violet-950 border border-violet-300 rounded-lg shadow-2xs"
-                      >
-                        <span className="truncate max-w-[140px]">{t}</span>
-                        <button
-                          type="button"
-                          onClick={() => toggleArrayFilter('jobTitles', t)}
-                          className="hover:text-violet-600 focus:outline-none cursor-pointer"
-                        >
-                          <X className="w-2.5 h-2.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Matching Job Title Database Options */}
-                <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-thin pr-1">
-                  {((filterOptions.jobTitles || []).filter(opt => 
-                    !jobTitleInput.trim() || opt.toLowerCase().includes(jobTitleInput.trim().toLowerCase())
-                  )).length === 0 ? (
-                    <p className="text-2xs text-[var(--text-muted)] italic py-1 text-center">No matching titles in database. Press "+ Add" above to use "{jobTitleInput.trim()}".</p>
-                  ) : (
-                    ((filterOptions.jobTitles || []).filter(opt => 
-                      !jobTitleInput.trim() || opt.toLowerCase().includes(jobTitleInput.trim().toLowerCase())
-                    )).map(val => {
-                      const isChecked = (filters.jobTitles || []).includes(val);
-                      return (
-                        <label 
-                          key={val} 
-                          className={`flex items-center space-x-2 py-1 px-2 rounded-xl cursor-pointer text-xs transition-colors border ${
-                            isChecked 
-                              ? 'bg-[var(--accent-primary-soft)] border-violet-300 text-[var(--accent-section)] font-black shadow-2xs' 
-                              : 'hover:bg-[var(--surface-hover)] border-transparent text-[var(--text-secondary)] font-semibold'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggleArrayFilter('jobTitles', val)}
-                            className="w-3.5 h-3.5 rounded-sm text-violet-600 border-violet-300 focus:ring-violet-500 cursor-pointer accent-violet-600"
-                          />
-                          <span className="truncate">{val}</span>
-                        </label>
-                      );
-                    })
-                  )}
-                </div>
+              <div className="p-3 bg-[var(--surface-card-elevated)] rounded-2xl border border-[var(--border-subtle)] shadow-xs mt-1 animate-fadeIn super-3d-card">
+                <SearchableSelect
+                  multiple
+                  allowFreeText
+                  label="Job Titles & Roles"
+                  value={filters.jobTitles || []}
+                  onChange={(v) => setFilters(prev => ({ ...prev, jobTitles: v }))}
+                  options={filterOptions.jobTitles || []}
+                  placeholder="Type or search job title (e.g. CEO)..."
+                  icon={<Briefcase className="w-3.5 h-3.5" />}
+                />
               </div>
             )}
           </div>
@@ -583,16 +486,53 @@ export default function FiltersSidebar({
             'bg-emerald-600'
           )}
 
-          {/* Industry Sectors */}
-          {renderFilterAccordion(
-            'industry',
-            'Industry & Sector',
-            <Layers className="w-3.5 h-3.5" />,
-            filterOptions.industries || ['Software & SaaS', 'Financial Services', 'Healthcare & Biotech', 'Marketing & Advertising', 'E-Commerce & Retail', 'Education & Research', 'Consulting & IT'],
-            filters.industries || [],
-            (val) => toggleArrayFilter('industries', val),
-            'bg-emerald-600'
-          )}
+          {/* Industry Sectors — searchable multi-select over live Industry data (not a
+              free-add field: only industries actually present in the data are useful
+              as filters, so allowFreeText is off here, unlike Job Titles above). */}
+          <div className="select-none">
+            <button
+              onClick={() => toggleSection('industry')}
+              className={`w-full flex items-center justify-between py-2.5 px-3 rounded-2xl border transition-all duration-200 text-left cursor-pointer group super-3d-card ${
+                filters.industries && filters.industries.length > 0
+                  ? 'bg-[var(--accent-primary-soft)] border-violet-300 text-[var(--accent-section)] font-black shadow-xs'
+                  : 'bg-[var(--surface-card)] hover:bg-[var(--surface-hover)] border-[var(--border-subtle)] text-[var(--text-secondary)] font-bold'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5 min-w-0">
+                <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 border ${
+                  filters.industries && filters.industries.length > 0 ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-[var(--accent-primary-soft)] text-emerald-600 border-[var(--border-subtle)]'
+                }`}>
+                  <Layers className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-xs tracking-tight truncate max-w-[150px]">Industry & Sector</span>
+              </div>
+              <div className="flex items-center space-x-1.5 shrink-0">
+                {filters.industries && filters.industries.length > 0 && (
+                  <span className="px-2 py-0.5 text-[9px] font-black text-white rounded-full bg-emerald-600">
+                    {filters.industries.length}
+                  </span>
+                )}
+                <div className="w-5 h-5 rounded-full bg-[var(--accent-primary-soft)] border border-[var(--border-subtle)] flex items-center justify-center">
+                  {openSections.industry ? <ChevronUp className="w-3 h-3 text-violet-700" /> : <ChevronDown className="w-3 h-3 text-violet-700" />}
+                </div>
+              </div>
+            </button>
+
+            {openSections.industry && (
+              <div className="p-3 bg-[var(--surface-card-elevated)] rounded-2xl border border-[var(--border-subtle)] shadow-xs mt-1 animate-fadeIn super-3d-card">
+                <SearchableSelect
+                  multiple
+                  allowFreeText={false}
+                  label="Industry & Sector"
+                  value={filters.industries || []}
+                  onChange={(v) => setFilters(prev => ({ ...prev, industries: v }))}
+                  options={filterOptions.industries || []}
+                  placeholder="Search industry..."
+                  icon={<Layers className="w-3.5 h-3.5" />}
+                />
+              </div>
+            )}
+          </div>
 
           {/* Tech Stack & Technologies */}
           {renderFilterAccordion(
@@ -666,46 +606,6 @@ export default function FiltersSidebar({
             </button>
           </div>
         </div>
-
-        {/* SECTION 4: CSV CUSTOM COLUMNS */}
-        {totalCustomColumnCount > 0 && (
-          <div className="pt-2 border-t border-[var(--border-subtle)] space-y-2">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-black tracking-widest text-[var(--accent-section)] uppercase flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-pink-600" />
-                CSV COLUMN FILTERS ({totalCustomColumnCount})
-              </span>
-            </div>
-
-            {Object.entries(customFiltersObj).map(([columnName, options]) => {
-              const selectedCustomValues = (filters.customFilters && filters.customFilters[columnName]) || [];
-              return renderFilterAccordion(
-                `csv_${columnName}`,
-                formatHeaderName(columnName),
-                <SlidersHorizontal className="w-3.5 h-3.5" />,
-                options,
-                selectedCustomValues,
-                (val) => {
-                  setFilters(prev => {
-                    const currentCustom = prev.customFilters || {};
-                    const currentColVals = currentCustom[columnName] || [];
-                    const updatedColVals = currentColVals.includes(val)
-                      ? currentColVals.filter(v => v !== val)
-                      : [...currentColVals, val];
-                    return {
-                      ...prev,
-                      customFilters: {
-                        ...currentCustom,
-                        [columnName]: updatedColVals
-                      }
-                    };
-                  });
-                },
-                'bg-pink-600'
-              );
-            })}
-          </div>
-        )}
 
       </div>
 

@@ -1,6 +1,6 @@
 {
-  "name": "Operon Attendees Lead Directory",
-  "description": "An interactive Operon style lead finder and attendee list with local storage persistence and AI Copilot.",
+  "name": "Opaeron Attendees Lead Directory",
+  "description": "An interactive Opaeron style lead finder and attendee list with local storage persistence and AI Copilot.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

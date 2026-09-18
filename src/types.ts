@@ -40,6 +40,41 @@ export interface Lead {
   // stamped identically on every row in the batch, so searching/selecting/deleting by
   // tag reliably captures the whole upload regardless of individual sourceName values.
   csvTag?: string | null;
+  // Which group(s)/pod(s) this lead belongs to — a labeling/filtering convenience
+  // only, NOT an access-control boundary (this app has no enforced authentication and
+  // Supabase RLS is fully public — see podTags on Company for the same caveat in one
+  // place, not repeated on every field). An array (not a single value) so the same
+  // central record can belong to multiple pods without duplicating it — see the
+  // merge-on-duplicate-import logic in leadStorage.ts's bulkImportLeads.
+  podTags?: string[];
+}
+
+export interface Company {
+  id: number;
+  name: string;
+  domain: string | null;
+  linkedinUrl?: string | null;
+  industry?: string | null;
+  companySize?: string | null; // "Employee Size" in the Add Single Company form
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  // User-defined, freeform "Company Tags" — distinct from podTags below (those are
+  // group/pod membership; this is arbitrary, editable, multi-value tagging, same
+  // relationship as Lead.tags vs Lead.csvTag).
+  tags?: string[];
+  // Which group(s)/pod(s) this company belongs to — same labeling-only caveat as
+  // Lead.podTags above: NOT a security/access-control boundary. This app has no
+  // enforced authentication anywhere (Firebase login is cosmetic) and Supabase's
+  // row-level security policies are public (`USING (true)`) for every operation, so
+  // podTags only filters what the CURRENT app UI chooses to show — it never restricts
+  // who can read or write a record. Real per-pod privacy would require actual
+  // authentication wired into Supabase RLS, which is a separate, larger project. An
+  // array so a company uploaded independently by two different pods collapses onto
+  // ONE central record carrying both pods, instead of duplicating — see the
+  // merge-on-duplicate-import logic in companyStorage.ts's bulkImportCompanies.
+  podTags?: string[];
+  createdAt: string;
 }
 
 export interface FilterOptions {
@@ -99,6 +134,18 @@ export interface SavedSearch {
   lastUpdated: string;
   createdDate: string;
   filters: Filters;
+}
+
+// A named, reusable Ideal Customer Profile — narrower than SavedSearch (which embeds a
+// whole arbitrary Filters snapshot): an ICP is deliberately scoped to just Job Titles +
+// Industries, matching how it's defined and applied to future searches/campaign
+// targeting.
+export interface CustomICP {
+  id: number;
+  name: string;
+  jobTitles: string[];
+  industries: string[];
+  createdAt: string;
 }
 
 export interface OutreachCampaign {

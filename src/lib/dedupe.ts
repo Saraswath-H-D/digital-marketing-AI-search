@@ -38,6 +38,11 @@ const SYSTEM_ONLY_FIELDS = new Set([
   'id', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked',
   'registrationTime', '_csvHeaders', 'csvTag', 'tags', 'aiScore', 'aiValueReasons',
   'notes', 'intent', 'technologies', 'approvalStatus', 'emailStatus',
+  // podTags (group/pod membership) must never affect duplicate detection either — same
+  // reasoning as csvTag/tags above, and the specific mechanism that lets the same real
+  // person, uploaded independently by two different pods, collapse onto one signature
+  // so the import layer can merge/re-tag instead of duplicating.
+  'podTags', 'podTag',
 ]);
 
 function normalizeEmail(v: string): string {
@@ -101,6 +106,53 @@ export function buildDuplicateSignature(
   return { signature: parts.join('|'), comparedFields };
 }
 
+// Company equivalent of CORE_CONTENT_FIELDS above — same exact-duplicate philosophy
+// (every field must match after normalization, tag plays no part), just the field set
+// for a Company record instead of a Lead. `domain` is the closest equivalent to email's
+// role for contacts (the most reliable single identifier a CSV would provide), but it's
+// still just one field among equals here — a domain match alone does NOT short-circuit
+// the comparison, consistent with the rest of this file.
+const COMPANY_CORE_CONTENT_FIELDS = [
+  'name', 'domain', 'industry', 'companySize', 'city', 'state', 'country', 'linkedinUrl',
+];
+
+const COMPANY_SYSTEM_ONLY_FIELDS = new Set(['id', 'createdAt', 'podTags', 'tags']);
+
+// Company signature builder — same shape/contract as buildDuplicateSignature, own field
+// list (see COMPANY_CORE_CONTENT_FIELDS above). podTags/tags are excluded the same way
+// csvTag/tags are excluded for leads: group/pod membership or a freeform tag never
+// makes two otherwise-identical companies "different" — this is exactly what lets the
+// same real company, uploaded independently by two different pods, collapse onto one
+// signature so the import layer can merge/re-tag instead of duplicating.
+export function buildCompanyDuplicateSignature(
+  company: Record<string, any>
+): { signature: string; comparedFields: Record<string, string> } {
+  const comparedFields: Record<string, string> = {};
+
+  const keys = new Set<string>(COMPANY_CORE_CONTENT_FIELDS);
+  Object.keys(company).forEach(k => {
+    if (!COMPANY_SYSTEM_ONLY_FIELDS.has(k) && !k.startsWith('_') && !COMPANY_CORE_CONTENT_FIELDS.includes(k)) {
+      keys.add(k);
+    }
+  });
+
+  const parts: string[] = [];
+  Array.from(keys).sort().forEach(field => {
+    const norm = normalizeFieldValue(field, (company as any)[field]);
+    if (norm) {
+      parts.push(`${field}=${norm}`);
+      comparedFields[field] = norm;
+    }
+  });
+
+  return { signature: parts.join('|'), comparedFields };
+}
+
+export function companyNameOf(company: Record<string, any>): string {
+  const name = (company.name || '').trim();
+  return name || (company.domain || 'Unknown company');
+}
+
 // Deliberately explicit, non-ambiguous field name (leadName, never a tag) — a lead's
 // display identity must never be confused with its tag in this data structure, so a
 // future edit can't silently swap them the way a generic `name`/`label` could.
@@ -145,29 +197,40 @@ function leadNameOf(lead: Record<string, any>): string {
  * against each other within this same batch. First occurrence of a signature wins;
  * later ones are reported as duplicates (never silently merged, never silently
  * dropped).
+ *
+ * Defaults to the Lead signature/name logic (every existing call site keeps working
+ * unchanged); pass `buildSignature`/`nameOf` to reuse this same engine for a different
+ * record shape — e.g. `dedupeLeadRows(companies, index, { buildSignature:
+ * buildCompanyDuplicateSignature, nameOf: (c) => c.name })` for Companies.
  */
 export function dedupeLeadRows<T extends Record<string, any>>(
   rows: T[],
-  existingIndex: Map<string, ExistingRecordRef> = new Map()
+  existingIndex: Map<string, ExistingRecordRef> = new Map(),
+  options?: {
+    buildSignature?: (row: T) => { signature: string; comparedFields: Record<string, string> };
+    nameOf?: (row: T) => string;
+  }
 ): DedupeBatchResult<T> {
+  const buildSignature = options?.buildSignature || buildDuplicateSignature;
+  const nameOf = options?.nameOf || leadNameOf;
   const seenThisBatch = new Map<string, ExistingRecordRef>();
   const kept: T[] = [];
   const duplicates: DuplicateMatch<T>[] = [];
   const duplicateLeadNames = new Set<string>();
 
   for (const row of rows) {
-    const { signature, comparedFields } = buildDuplicateSignature(row);
+    const { signature, comparedFields } = buildSignature(row);
     const existing = existingIndex.get(signature) || seenThisBatch.get(signature);
 
     if (existing) {
-      const leadName = leadNameOf(row);
+      const leadName = nameOf(row);
       duplicateLeadNames.add(leadName);
       duplicates.push({ row, signature, comparedFields, leadName, existing });
       continue;
     }
 
     const email = (row.email && String(row.email).trim() !== '-') ? String(row.email).trim() : '';
-    seenThisBatch.set(signature, { signature, leadName: leadNameOf(row), email });
+    seenThisBatch.set(signature, { signature, leadName: nameOf(row), email });
     kept.push(row);
   }
 

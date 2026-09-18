@@ -37,6 +37,23 @@ export const SYSTEM_FIELDS: SystemField[] = [
   { key: 'questions', label: 'Questions to Speaker', required: false, aliases: ['questions', 'question', 'questions to speaker', 'attendee questions', 'comments', 'remarks'] },
 ];
 
+// Companies field set — same SystemField shape, own field list/aliases. Reuses
+// autoDetectAllColumns/parseCsvFile below (both already take a fields param or overlap
+// enough with SYSTEM_FIELDS' aliases — company name/city/state/country/industry/
+// employee size/linkedin — that header-row detection works for a company CSV too
+// without needing its own scoring pass).
+export const COMPANY_FIELDS: SystemField[] = [
+  { key: 'name', label: 'Company Name', required: true, aliases: ['company name', 'companyname', 'company', 'organization', 'name', 'org', 'business name'] },
+  { key: 'domain', label: 'Company Domain', required: false, aliases: ['company domain', 'domain', 'website', 'company website', 'url', 'web'] },
+  { key: 'linkedinUrl', label: 'Company LinkedIn Profile URL', required: false, aliases: ['company linkedin url', 'company linkedin', 'linkedin url', 'linkedin', 'company_linkedin_url'] },
+  { key: 'industry', label: 'Industry', required: false, aliases: ['industry', 'sector', 'market sector', 'industry_name'] },
+  { key: 'companySize', label: 'Employee Size', required: false, aliases: ['employee size', 'company size', 'employee headcount', 'headcount', 'number of employees', 'employees', 'company_size', 'employee_size'] },
+  { key: 'tags', label: 'Company Tags', required: false, aliases: ['company tags', 'tags', 'tag'] },
+  { key: 'city', label: 'City', required: false, aliases: ['city', 'city_name', 'town'] },
+  { key: 'state', label: 'State', required: false, aliases: ['state', 'province', 'region'] },
+  { key: 'country', label: 'Country', required: false, aliases: ['country', 'nation'] },
+];
+
 // Scan every system field against every CSV column and produce a collision-free
 // mapping: all fields get a shot at an EXACT synonym match first (so e.g. an "Email
 // Status" column is claimed by the emailStatus field before the email field's looser
@@ -184,16 +201,50 @@ export function parseCsvFile(file: File): Promise<ParseCsvResult> {
 }
 
 // Best-effort automatic header→field mapping, including the "single full-name column"
-// fallback used when no separate first/last name columns were detected.
-export function buildAutoMapping(headers: string[]): Record<string, string> {
-  const initialMapping = autoDetectAllColumns(SYSTEM_FIELDS, headers);
-  if (!initialMapping.firstName) {
+// fallback used when no separate first/last name columns were detected. Defaults to
+// SYSTEM_FIELDS (leads) so every existing call site keeps working unchanged; pass
+// `fields: COMPANY_FIELDS` to reuse this same engine for a Companies CSV.
+export function buildAutoMapping(headers: string[], fields: SystemField[] = SYSTEM_FIELDS): Record<string, string> {
+  const initialMapping = autoDetectAllColumns(fields, headers);
+  if (fields === SYSTEM_FIELDS && !initialMapping.firstName) {
     const fullNameCol = headers.find(h => ['full name', 'fullname', 'contact name', 'attendee name', 'name'].includes(h.toLowerCase().trim()));
     if (fullNameCol) {
       initialMapping.firstName = fullNameCol;
     }
   }
   return initialMapping;
+}
+
+// Map raw CSV rows into company-shaped objects using a given header mapping — same
+// contract as mapRowsToLeads (does NOT set podTag; callers stamp that themselves).
+export function mapRowsToCompanies(rows: Record<string, string>[], headerMapping: Record<string, string>): any[] {
+  return rows.map((r: any) => {
+    const getVal = (sysKey: string): string => {
+      const mappedCsvHeader = headerMapping[sysKey];
+      if (!mappedCsvHeader || r[mappedCsvHeader] === undefined || r[mappedCsvHeader] === null) {
+        return '';
+      }
+      return String(r[mappedCsvHeader]).trim();
+    };
+
+    const name = getVal('name');
+    if (!name) return null; // a company row with no name at all isn't a usable record
+
+    const tagsRaw = getVal('tags');
+    const companyObj: any = {
+      name: normalizeNameOrTitle(name),
+      domain: getVal('domain') || null,
+      linkedinUrl: getVal('linkedinUrl'),
+      industry: getVal('industry'),
+      companySize: getVal('companySize'),
+      tags: tagsRaw ? tagsRaw.split(/[,;]/).map(t => t.trim()).filter(Boolean) : [],
+      city: normalizeCityName(getVal('city')),
+      state: getVal('state'),
+      country: getVal('country'),
+    };
+
+    return companyObj;
+  }).filter(Boolean);
 }
 
 // Map raw CSV rows (keyed by original header) into lead-shaped objects using a given

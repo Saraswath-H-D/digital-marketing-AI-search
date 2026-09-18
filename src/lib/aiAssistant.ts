@@ -730,7 +730,7 @@ function parseCommandLocally(
     let chatResponse = '';
 
     if (GREETING_RE.test(clean) || CAPABILITY_RE.test(clean)) {
-      chatResponse = `Hi! I'm your Operon AI Assistant. I can:\n• Search or filter leads in plain English ("Find CEOs in Hyderabad")\n• Add, update, or delete a lead ("Add lead VP Sales at Acme Corp")\n• Import a CSV — just attach one and tell me the tag (or none)\n• Summarize what's currently on your page\n• Answer questions about your last CSV import (duplicates, counts)\n\nWhat would you like to do?`;
+      chatResponse = `Hi! I'm your Opaeron AI Assistant. I can:\n• Search or filter leads in plain English ("Find CEOs in Hyderabad")\n• Add, update, or delete a lead ("Add lead VP Sales at Acme Corp")\n• Import a CSV — just attach one and tell me the tag (or none)\n• Summarize what's currently on your page\n• Answer questions about your last CSV import (duplicates, counts)\n\nWhat would you like to do?`;
     } else if (EXISTENCE_QUESTION_RE.test(clean) && !/\bcompan(y|ies)\b|\bcit(y|ies)\b|\blocation\b/i.test(clean)) {
       chatResponse = totalCount > 0
         ? `Yes — there ${totalCount === 1 ? 'is' : 'are'} currently ${totalCount} lead${totalCount === 1 ? '' : 's'} in the system${count !== totalCount ? ` (${count} shown in the current view)` : ''}.`
@@ -787,7 +787,7 @@ function parseCommandLocally(
 
   return {
     action: 'chat',
-    explanation: `I am your Operon AI Assistant. I can search records, summarize page context, answer questions based on chat history, or edit contacts.`
+    explanation: `I am your Opaeron AI Assistant. I can search records, summarize page context, answer questions based on chat history, or edit contacts.`
   };
 }
 

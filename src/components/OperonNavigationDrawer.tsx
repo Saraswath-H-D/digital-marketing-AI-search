@@ -2,16 +2,12 @@ import React from 'react';
 import {
   Home,
   Sparkles,
-  Users,
   Building,
   List,
   Database,
   Mail,
-  Phone,
-  CheckSquare,
   Bookmark,
   UserPlus,
-  Activity,
   Settings
 } from 'lucide-react';
 
@@ -32,8 +28,11 @@ interface OperonNavigationDrawerProps {
 // hover bg rgba(255,255,255,.6)+#475569, active bg #fff/#6366F1 (dark:
 // rgba(99,102,241,.22)/#A5B4FC), tooltip = dark chip to the right on hover).
 // Views that already render real content in App.tsx's routing (no popup needed —
-// clicking just switches the main content area).
-const REAL_VIEWS = new Set(['Contacts', 'Messages', 'Phone Calls', 'Tasks', 'Deliverability', 'Settings']);
+// clicking just switches the main content area). 'Database' is the single nav entry
+// for the central prospect database — App.tsx renders a People/Companies sub-view
+// switcher inside it, rather than exposing Contacts/Organizations as separate
+// top-level rail items.
+const REAL_VIEWS = new Set(['Database', 'Messages', 'Settings']);
 
 export default function OperonNavigationDrawer({
   activeView,
@@ -62,22 +61,26 @@ export default function OperonNavigationDrawer({
       return;
     }
     if (REAL_VIEWS.has(name)) {
-      if (name !== 'Contacts') onShowMessage(`"${name}" view activated!`, 'success');
+      if (name !== 'Database') onShowMessage(`"${name}" view activated!`, 'success');
       return;
     }
-    // Home, Organizations, Directories, Bookmarks — no dedicated full-page view yet,
-    // so surface a real popup instead of silently falling back to the Contacts table.
+    // Home, Directories, Bookmarks — no dedicated full-page view yet, so surface a
+    // real popup instead of silently falling back to the Contacts table.
     onOpenSectionModal?.(name);
   };
 
-  const renderItem = (name: string, icon: React.ReactNode, badge?: string) => {
+  // `name` is the internal identifier (matches App.tsx's activeView routing and
+  // REAL_VIEWS above); `label` is what's actually shown on screen, defaulting to
+  // `name` — kept as an override option for a future item whose on-screen label needs
+  // to differ from its routing name.
+  const renderItem = (name: string, icon: React.ReactNode, badge?: string, label: string = name) => {
     const isActive = activeView === name;
     return (
       <button
         key={name}
         onClick={() => handleItemClick(name)}
         className="flex flex-col items-center gap-1 w-full cursor-pointer"
-        title={name}
+        title={label}
       >
         <div className={`sidebar-item relative ${isActive ? 'active' : ''}`}>
           {icon}
@@ -94,7 +97,7 @@ export default function OperonNavigationDrawer({
           }`}
           style={{ maxWidth: '78px' }}
         >
-          {name}
+          {label}
         </span>
       </button>
     );
@@ -107,7 +110,7 @@ export default function OperonNavigationDrawer({
       {/* Logo mark — Design.md §6: 44×44 rounded 0.875rem, indigo→purple gradient, sparkle SVG */}
       <div
         className="w-11 h-11 rounded-[0.875rem] bg-[linear-gradient(135deg,#6366F1,#7C3AED)] text-white flex items-center justify-center shrink-0 shadow-sm mb-4"
-        title="Operon"
+        title="Opaeron"
       >
         <Sparkles className="w-5 h-5" />
       </div>
@@ -126,21 +129,17 @@ export default function OperonNavigationDrawer({
 
         {divider}
 
-        {renderItem('Contacts', <Users className="w-5 h-5" />, contactsCount !== undefined ? String(contactsCount) : undefined)}
-        {renderItem('Organizations', <Building className="w-5 h-5" />)}
+        {renderItem('Database', <Building className="w-5 h-5" />, contactsCount !== undefined ? String(contactsCount) : undefined)}
         {renderItem('Directories', <List className="w-5 h-5" />)}
         {renderItem('Data Enhancement', <Database className="w-5 h-5" />, 'PRO')}
 
         {divider}
 
         {renderItem('Messages', <Mail className="w-5 h-5" />)}
-        {renderItem('Phone Calls', <Phone className="w-5 h-5" />)}
-        {renderItem('Tasks', <CheckSquare className="w-5 h-5" />, '12')}
 
         {divider}
 
         {renderItem('Bookmarks', <Bookmark className="w-5 h-5" />)}
-        {renderItem('Deliverability', <Activity className="w-5 h-5" />)}
         {renderItem('Settings', <Settings className="w-5 h-5" />)}
       </nav>
 
