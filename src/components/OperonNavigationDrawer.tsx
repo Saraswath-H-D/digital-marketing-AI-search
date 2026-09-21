@@ -117,13 +117,13 @@ export default function OperonNavigationDrawer({
 
       {/*
         Nav items — icon + name label, grouped by hairline dividers.
-        Deliberately NOT overflow-y-auto: mixing overflow-y:auto with overflow-x:visible
-        isn't actually possible (the CSS spec computes overflow-x to auto too whenever
-        overflow-y isn't visible), which would silently clip the hover tooltips that
-        extend past the 96px rail to the right. The icon rail's total height comfortably
-        fits the shell's 95vh in practice, so a scroll container isn't needed here.
+        overflow-y-auto + min-h-0 so items scroll into reach instead of being clipped
+        when the rail's content is taller than the shell's 95vh (.app-shell clips with
+        overflow:hidden — see index.css). Tooltips here are just native `title`
+        attributes, not custom elements extending past the rail, so there's no
+        horizontal-clipping tradeoff to worry about.
       */}
-      <nav className="flex-1 flex flex-col items-center gap-1.5">
+      <nav className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-1.5">
         {renderItem('Home', <Home className="w-5 h-5" />)}
         {renderItem('AI Assistant', <Sparkles className="w-5 h-5" />, 'NEW')}
 
