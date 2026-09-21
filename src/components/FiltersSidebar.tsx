@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Filters, FilterOptions } from '../types.ts';
 import SearchableSelect from './SearchableSelect.tsx';
 import {
@@ -43,7 +43,24 @@ export default function FiltersSidebar({
 }: FiltersSidebarProps) {
   // Global filter search state
   const [filterSearch, setFilterSearch] = useState('');
-  
+
+  // CSV Tag / List — dedicated search-pill state (Design.md §9: "every Search… field
+  // matches the signature pill", so this gets its own always-visible pill input rather
+  // than living inside a checkbox accordion like the other categories below).
+  const [csvTagQuery, setCsvTagQuery] = useState('');
+  const [csvTagDropdownOpen, setCsvTagDropdownOpen] = useState(false);
+  const csvTagBoxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (csvTagBoxRef.current && !csvTagBoxRef.current.contains(e.target as Node)) {
+        setCsvTagDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Custom Accordion Open/Closed State
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     persona: true,
@@ -99,6 +116,15 @@ export default function FiltersSidebar({
   }, [filters]);
 
   const hasActiveFilters = activeCounts > 0;
+
+  const csvTagFilteredOptions = useMemo(() => {
+    const all = filterOptions.csvTags || [];
+    const selected = filters.csvTags || [];
+    const q = csvTagQuery.trim().toLowerCase();
+    return all
+      .filter(t => !selected.includes(t))
+      .filter(t => !q || t.toLowerCase().includes(q));
+  }, [filterOptions.csvTags, filters.csvTags, csvTagQuery]);
 
   const handleClearAll = () => {
     setFilters(prev => ({
@@ -309,6 +335,87 @@ export default function FiltersSidebar({
 
       {/* Categorized Filters Accordion Body */}
       <div className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-thin">
+
+        {/* SECTION 0: CSV TAG / LIST — the upload-batch identity (see Lead.csvTag's doc
+            comment in types.ts), promoted to its own dedicated, always-visible
+            search-pill section rather than a buried checkbox accordion: comparable to
+            Apollo's "Lists" filter, a tag/list identity is a primary organizing
+            category, not a secondary data-quality signal. Design.md §9: "every
+            'Search …' field matches [the signature pill]" — same .search-pill class as
+            the global filter search above. */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] font-black tracking-widest text-[var(--accent-section)] uppercase flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-cyan-600" />
+              CSV Tag / List
+            </span>
+            {filters.csvTags && filters.csvTags.length > 0 && (
+              <span className="px-2 py-0.5 text-[9px] font-black text-white bg-cyan-600 rounded-full">
+                {filters.csvTags.length}
+              </span>
+            )}
+          </div>
+
+          <div ref={csvTagBoxRef} className="relative">
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-cyan-500">
+                <Tag className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                value={csvTagQuery}
+                onChange={(e) => { setCsvTagQuery(e.target.value); setCsvTagDropdownOpen(true); }}
+                onFocus={() => setCsvTagDropdownOpen(true)}
+                placeholder="Search CSV tag / list..."
+                className="search-pill pr-8 text-xs font-bold placeholder-slate-400"
+              />
+              {csvTagQuery && (
+                <button
+                  type="button"
+                  onClick={() => setCsvTagQuery('')}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-[var(--text-muted)] hover:text-cyan-600 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {filters.csvTags && filters.csvTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {filters.csvTags.map(t => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center space-x-1 px-2 py-0.5 text-[10px] font-black bg-cyan-100 text-cyan-950 border border-cyan-300 rounded-lg shadow-2xs"
+                  >
+                    <span className="truncate max-w-[140px]">{t}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleArrayFilter('csvTags', t)}
+                      className="hover:text-cyan-700 focus:outline-none cursor-pointer"
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {csvTagDropdownOpen && csvTagFilteredOptions.length > 0 && (
+              <div className="absolute z-20 mt-1.5 w-full max-h-48 overflow-y-auto bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl shadow-lg">
+                {csvTagFilteredOptions.map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => { toggleArrayFilter('csvTags', opt); setCsvTagQuery(''); }}
+                    className="w-full text-left px-3.5 py-2 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* SECTION 1: PEOPLE FILTERS */}
         <div className="space-y-2">
@@ -587,18 +694,6 @@ export default function FiltersSidebar({
             filterOptions.sources || [],
             filters.sources || [],
             (val) => toggleArrayFilter('sources', val),
-            'bg-cyan-600'
-          )}
-
-          {/* CSV Tag — the upload-batch identity (separate from Lead Source above), its
-              own dedicated section so a tag can be searched/filtered on its own. */}
-          {renderFilterAccordion(
-            'csvTags',
-            'CSV Tag',
-            <Tag className="w-3.5 h-3.5" />,
-            filterOptions.csvTags || [],
-            filters.csvTags || [],
-            (val) => toggleArrayFilter('csvTags', val),
             'bg-cyan-600'
           )}
 
