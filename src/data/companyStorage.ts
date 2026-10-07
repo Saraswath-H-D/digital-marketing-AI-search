@@ -1,4 +1,11 @@
 import { Company } from '../types.ts';
+import {
+  pushCompaniesToSupabase,
+  pullCompaniesFromSupabase,
+  getExistingCompanyIndexForSignatures,
+  deleteCompanyFromSupabase,
+  getSupabaseConfig,
+} from '../lib/supabase.ts';
 import { dedupeLeadRows, buildCompanyDuplicateSignature, companyNameOf, ExistingRecordRef, DuplicateMatch } from '../lib/dedupe.ts';
 
 const STORAGE_KEY = 'operon_companies_v1';
@@ -41,8 +48,9 @@ export const saveStoredCompanies = (companies: Company[]): void => {
   }
 };
 
-// Builds duplicate signatures for every company already in local storage — the sole
-// source of truth for "what already exists" now that there's no shared backend.
+// Builds duplicate signatures for every company already in local storage — same
+// local-first, Supabase-second reasoning as leadStorage.ts's buildLocalExistingIndex:
+// duplicate detection must never silently depend on Supabase alone.
 const buildLocalExistingIndex = (): Map<string, ExistingRecordRef> => {
   const index = new Map<string, ExistingRecordRef>();
   getStoredCompanies().forEach(company => {
@@ -54,9 +62,17 @@ const buildLocalExistingIndex = (): Map<string, ExistingRecordRef> => {
 };
 
 const buildExistingIndexFor = async (
-  _newCompaniesList: Partial<Company>[]
+  newCompaniesList: Partial<Company>[]
 ): Promise<Map<string, ExistingRecordRef>> => {
-  return buildLocalExistingIndex();
+  const existingIndex = buildLocalExistingIndex();
+  try {
+    const candidateSignatures = newCompaniesList.map(row => buildCompanyDuplicateSignature(row as any).signature);
+    const remoteIndex = await getExistingCompanyIndexForSignatures(candidateSignatures);
+    remoteIndex.forEach((ref, sig) => existingIndex.set(sig, ref));
+  } catch (err) {
+    console.warn('Existing-Supabase company duplicate check failed — still backed by the local-storage check above', err);
+  }
+  return existingIndex;
 };
 
 export interface CompanyDuplicatePreviewResult {
@@ -87,6 +103,7 @@ export const previewBulkImportCompanyDuplicates = async (
 
 export interface BulkImportCompanyResult {
   count: number;
+  supabaseResult: { success: boolean; count: number; error?: string };
   totalRows: number;
   uniqueRows: number;
   duplicatesSkipped: number;
@@ -98,8 +115,9 @@ export interface BulkImportCompanyResult {
 }
 
 // Mirrors leadStorage.ts's mergeDuplicateLeadsIntoExisting — same "enrich blank fields,
-// append this import's pod tag" behavior, but matched by domain (companies have no
-// email-equivalent identity) falling back to an exact name match.
+// append this import's pod tag, push the merged record back" behavior, but matched by
+// domain (companies have no email-equivalent identity) falling back to an exact name
+// match, same identifier-preference order as deleteCompany/deleteCompanyFromSupabase.
 const mergeDuplicateCompaniesIntoExisting = async (
   duplicates: DuplicateMatch<Partial<Company>>[],
   importPodTag: string | null
@@ -141,6 +159,14 @@ const mergeDuplicateCompaniesIntoExisting = async (
   const byId = new Map(allCompanies.map(c => [c.id, c]));
   mergedCompanies.forEach(m => byId.set(m.id, m));
   saveStoredCompanies(Array.from(byId.values()));
+
+  if (getSupabaseConfig().autoSync) {
+    try {
+      await pushCompaniesToSupabase(mergedCompanies);
+    } catch (err) {
+      console.error('Auto-sync merged duplicate companies failed:', err);
+    }
+  }
 
   return mergedCompanies.length;
 };
@@ -199,8 +225,25 @@ export const bulkImportCompanies = async (
 
   saveStoredCompanies([...createdCompanies, ...allCompanies]);
 
+  let supabaseResult: { success: boolean; count: number; error?: string } = { success: false, count: 0, error: 'Auto-sync disabled' };
+  if (createdCompanies.length > 0 && getSupabaseConfig().autoSync) {
+    try {
+      supabaseResult = await pushCompaniesToSupabase(createdCompanies);
+      if (supabaseResult.success) {
+        // Re-sync from Supabase's confirmed state, same reasoning as bulkImportLeads —
+        // keeps the local/Supabase count from silently drifting apart.
+        const pull = await pullCompaniesFromSupabase();
+        if (pull.success) saveStoredCompanies(pull.companies);
+      }
+    } catch (err: any) {
+      console.error('Auto-sync company import to Supabase failed:', err);
+      supabaseResult = { success: false, count: 0, error: err?.message || 'Sync failed' };
+    }
+  }
+
   return {
     count: createdCompanies.length,
+    supabaseResult,
     totalRows: newCompaniesList.length,
     uniqueRows: uniqueItems.length,
     duplicatesSkipped: includeDuplicates ? 0 : dedupeResult!.duplicatesSkipped,
@@ -235,17 +278,35 @@ export const addCompany = async (data: Partial<Company>): Promise<Company> => {
 
   saveStoredCompanies([company, ...allCompanies]);
 
+  if (getSupabaseConfig().autoSync) {
+    try {
+      await pushCompaniesToSupabase([company]);
+    } catch (err) {
+      console.error('Auto-sync add company to Supabase failed:', err);
+    }
+  }
+
   return company;
 };
 
-// Delete a company locally (no trash/undo flow for companies yet).
+// Delete a company locally + from Supabase (best-effort — mirrors deleteLead's
+// Supabase-first-when-possible reasoning, but a failed remote delete doesn't block the
+// local removal here since there's no trash/undo flow for companies yet).
 export const deleteCompany = async (id: number): Promise<{ error?: string }> => {
   const allCompanies = getStoredCompanies();
   const target = allCompanies.find(c => c.id === id);
   if (!target) return {};
 
+  let error: string | undefined;
+  try {
+    const result = await deleteCompanyFromSupabase({ domain: target.domain, name: target.name });
+    if (!result.success) error = result.error;
+  } catch (err: any) {
+    error = err?.message || 'Delete sync to Supabase failed';
+  }
+
   saveStoredCompanies(allCompanies.filter(c => c.id !== id));
-  return {};
+  return { error };
 };
 
 // Distinct pod-tag values currently present across companies — same derivation style
@@ -253,5 +314,15 @@ export const deleteCompany = async (id: number): Promise<{ error?: string }> => 
 export const getDistinctCompanyPodTags = (): string[] => {
   const set = new Set<string>();
   getStoredCompanies().forEach(c => { (c.podTags || []).forEach(t => set.add(t)); });
+  return Array.from(set).sort();
+};
+
+// Distinct freeform Company Tags values currently present across companies — same
+// derivation style as getDistinctCompanyPodTags above, used to power the "Company Tags"
+// filter in CompaniesView and the autocomplete suggestions in AddCompanyModal, so tags
+// are reused/discovered instead of retyped from scratch every time.
+export const getDistinctCompanyTags = (): string[] => {
+  const set = new Set<string>();
+  getStoredCompanies().forEach(c => { (c.tags || []).forEach(t => set.add(t)); });
   return Array.from(set).sort();
 };

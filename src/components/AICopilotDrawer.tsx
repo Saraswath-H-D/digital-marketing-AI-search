@@ -8,14 +8,15 @@ import {
 } from 'lucide-react';
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { processNaturalLanguageCommand, AICommandResult, resolveCsvTagIntent, NO_TAG_RE, CSV_DELETE_INTENT_RE, interpretFilterQuery } from '../lib/aiAssistant.ts';
-import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory, bulkImportLeads, previewBulkImportDuplicates, DuplicatePreviewResult, getLastImportReport, BulkImportResult, getActiveTagSet } from '../data/leadStorage.ts';
+import { restoreLeadsFromTrash, getTrashLeads, getDeletedHistory, bulkImportLeads, previewBulkImportDuplicates, DuplicatePreviewResult, getLastImportReport, BulkImportResult } from '../data/leadStorage.ts';
 import { parseCsvFile, buildAutoMapping, mapRowsToLeads, isCsvParseError } from '../lib/csvMapping.ts';
 import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
+import { getActiveTagSet } from '../lib/supabase.ts';
 import DuplicateLeadsModal from './DuplicateLeadsModal.tsx';
 import ImportDuplicateChoiceModal from './ImportDuplicateChoiceModal.tsx';
 
 // Same normalization used everywhere else a tag gets compared (dedupe.ts,
-// leadStorage.ts's leadMatchesTag and getActiveTagSet itself).
+// leadStorage.ts's leadMatchesTag, supabase.ts's getActiveTagSet itself).
 const normalizeTagKey = (t: string): string => t.trim().toLowerCase().replace(/[-_\s]+/g, '-');
 
 interface AICopilotDrawerProps {
@@ -444,10 +445,10 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
   ) => {
     // bulkImportLeads runs the exact-duplicate rule itself (every relevant field
     // identical after safe normalization, tag included — see lib/dedupe.ts) against
-    // this batch AND existing local rows, unless the caller already asked and the
-    // user chose to include duplicates.
+    // this batch AND existing central-database rows, unless the caller already asked
+    // and the user chose to include duplicates.
     const importResult = await bulkImportLeads(leadsWithTag, { includeDuplicates });
-    const { count } = importResult;
+    const { count, supabaseResult } = importResult;
 
     if (finalTag) setLastUsedCsvTag(finalTag);
     if (csvHash) recordCsvFileUpload(csvHash, csvName, finalTag, leadsWithTag.length);
@@ -460,12 +461,18 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       `✓ Duplicate leads: ${importResult.duplicatesSkipped}`,
       importedOk ? `✓ New leads imported: ${count}` : `✗ No new leads were imported`,
     ];
+    if (importResult.mergedIntoExisting > 0) {
+      lines.push(`✓ Associated with your pod: ${importResult.mergedIntoExisting} (already existed centrally, now tagged to this upload's pod)`);
+    }
     if (importResult.duplicatesSkipped > 0) {
       lines.push(`✓ Leads skipped: ${importResult.duplicatesSkipped}`);
     } else if (includeDuplicates) {
       lines.push(`✓ Imported every row from the file, including duplicates, as you chose.`);
     }
     lines.push(finalTag ? `✓ Tag: ${finalTag}` : `✓ No tag assigned`);
+    if (!supabaseResult.success && supabaseResult.error) {
+      lines.push(`⚠ Sync issue: ${supabaseResult.error} — contacts were added locally but may not be fully synced to the central database yet.`);
+    }
     sayInChat(lines.join('\n'));
 
     onShowMessage(
@@ -557,7 +564,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
 
     // File-level duplicate check — separate from lead-level exact duplicates. Runs
     // right before import, once the tag to use is known. Only a still-ACTIVE prior
-    // upload (verified against the live local lead list, not just "ever recorded") can
+    // upload (verified live against the central database, not just "ever recorded") can
     // trigger this — a deleted CSV is always treated as brand new, its old tag never
     // restored.
     const checkFileThenImport = async (finalTag: string | null) => {
@@ -580,7 +587,7 @@ export const AICopilotDrawer: React.FC<AICopilotDrawerProps> = ({
       }
       // status === 'new' — either never uploaded, or every prior recorded tag for this
       // exact file has since been deleted. Never restore the old tag; §19 — the current
-      // live local lead list outranks chat history/local registry as proof of what's
+      // central database state outranks chat history/local registry as proof of what's
       // active.
       if (conflict.wasPreviouslyDeleted) {
         say(`This CSV was previously deleted, so I'm treating this as a new upload.`);

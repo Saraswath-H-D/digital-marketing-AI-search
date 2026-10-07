@@ -21,8 +21,10 @@ import {
   bulkImportLeads,
   getActiveHeaders,
   getFixedHeaderValue,
+  getTrashLeads,
   deleteAllLeads
 } from './data/leadStorage.ts';
+import { pullLeadsFromSupabase, pushLeadsToSupabase } from './lib/supabase.ts';
 import { BulkImportResult } from './data/leadStorage.ts';
 import DuplicateLeadsModal from './components/DuplicateLeadsModal.tsx';
 import FiltersSidebar from './components/FiltersSidebar.tsx';
@@ -272,8 +274,66 @@ export default function App() {
     fetchLeads();
   }, [filters, page, limit]);
 
+  // Central-database reconcile — pulls the authoritative lead list from the shared
+  // backend and reconciles local storage against it (never trusting local storage's own
+  // count on its own). This is what actually lets multiple pods converge on one shared
+  // record set: without it, a different browser/device would never see what another pod
+  // uploaded. Runs once on mount; every write elsewhere (add/import/delete) already
+  // pushes its own change immediately, so this only needs to catch up on whatever
+  // happened on OTHER devices/sessions since this one last loaded.
+  const syncLiveDatabase = async () => {
+    try {
+      const res = await pullLeadsFromSupabase();
+      const localLeads = getStoredLeads();
+      const trashLeads = getTrashLeads();
+      // A blank-contact lead (no email at all) has no reliable email to delete by in
+      // the central database — deleteLeadFromSupabase skips it, so its remote row lives
+      // on and this sync would otherwise pull it straight back every time. Match it
+      // against trash the same way addLeadsToTrash/restoreLeadsFromTrash already do for
+      // these — by firstName+lastName+organization — so a deleted no-email contact
+      // stops reappearing on the next sync.
+      //
+      // Deliberately NOT doing the equivalent by email for leads that DO have one: that
+      // would permanently blacklist any row the backend returns under that email,
+      // forever — a real bug, not a feature. A real-email lead's delete is already
+      // confirmed against the backend before it's ever removed locally (see deleteLead/
+      // bulkDeleteLeads/deleteLeadsByTag), so if it still returns a row under that
+      // email, that's either a delete that didn't propagate (rare — and the row
+      // genuinely still exists, so it should show) or a deliberate later re-upload of
+      // that same email — which should never be hidden silently and permanently. The
+      // backend's own current answer always wins for anything with a real email.
+      const deletedNameKeySet = new Set(
+        trashLeads
+          .filter(l => !l.email || l.email.trim() === '' || l.email.trim() === '-')
+          .map(l => `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`)
+      );
+      const isTrashed = (l: Lead) => {
+        const cleanEmail = (l.email || '').toLowerCase().trim();
+        if (cleanEmail && cleanEmail !== '-') return false;
+        const nameKey = `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`;
+        return deletedNameKeySet.has(nameKey);
+      };
 
+      if (res.success && res.leads.length > 0) {
+        const activeRemoteLeads = res.leads.filter(l => !isTrashed(l));
+        saveStoredLeads(activeRemoteLeads);
+      } else if (localLeads.length > 0) {
+        const activeLocalLeads = localLeads.filter(l => !isTrashed(l));
+        saveStoredLeads(activeLocalLeads);
+        await pushLeadsToSupabase(activeLocalLeads);
+      }
+      fetchLeads();
+      fetchFilterOptions();
+      return true;
+    } catch (err) {
+      console.error('Central database sync failed:', err);
+      return false;
+    }
+  };
 
+  useEffect(() => {
+    syncLiveDatabase();
+  }, []);
 
   // Sync main search input with the active filter's search value
   useEffect(() => {
@@ -340,6 +400,9 @@ export default function App() {
 
   // Data Enhancement: apply honest, derived-from-existing-data field fills (never
   // fabricated contact details) as one batch.
+  // Data Enhancement: apply honest, derived-from-existing-data field fills (never
+  // fabricated contact details) as one batch — update locally, then a single push to
+  // the central database for the whole batch rather than one round-trip per contact.
   const handleApplyEnrichment = async (
     updates: Array<{ id: number; field: 'seniority' | 'department' | 'industry'; value: string }>
   ) => {
@@ -347,14 +410,20 @@ export default function App() {
     try {
       const allLeads = getStoredLeads();
       const updateMap = new Map(updates.map(u => [u.id, u]));
+      const changedLeads: Lead[] = [];
 
       const updatedLeads = allLeads.map(l => {
         const u = updateMap.get(l.id);
         if (!u) return l;
-        return { ...l, [u.field]: u.value };
+        const changed = { ...l, [u.field]: u.value };
+        changedLeads.push(changed);
+        return changed;
       });
 
       saveStoredLeads(updatedLeads);
+      if (changedLeads.length > 0) {
+        await pushLeadsToSupabase(changedLeads);
+      }
       setCreditBalance(prev => Math.max(0, prev - updates.length));
       fetchLeads();
       fetchFilterOptions();
@@ -427,11 +496,13 @@ export default function App() {
   const handleImportCompanies = async (items: any[], options?: { includeDuplicates?: boolean }) => {
     try {
       const result = await bulkImportCompanies(items, options);
+      const invalidCount = items[0]?._invalidRowCount || 0;
+      const invalidNote = invalidCount > 0 ? `, Invalid rows skipped: ${invalidCount}` : '';
       if (result.duplicatesSkipped > 0) {
-        const mergedNote = result.mergedIntoExisting > 0 ? `, ${result.mergedIntoExisting} merged into existing records` : '';
-        showStatus(`Import Complete — Total: ${result.totalRows}, Duplicate companies: ${result.duplicatesSkipped}${mergedNote}, New imported: ${result.count}.`, 'success');
+        const mergedNote = result.mergedIntoExisting > 0 ? `, ${result.mergedIntoExisting} associated with your pod (already existed centrally)` : '';
+        showStatus(`Import Complete — Total: ${result.totalRows}, Duplicate companies: ${result.duplicatesSkipped}${mergedNote}, New imported: ${result.count}${invalidNote}.`, 'success');
       } else {
-        showStatus(`Imported ${result.count} new companies!`, 'success');
+        showStatus(`Imported ${result.count} new companies!${invalidNote}`, 'success');
       }
       return true;
     } catch (err) {
@@ -463,11 +534,15 @@ export default function App() {
 
   const executeDeleteLead = async (lead: Lead) => {
     try {
-      await deleteLead(lead.id);
+      const { error } = await deleteLead(lead.id);
       fetchLeads();
       fetchFilterOptions();
       setSelectedIds(prev => prev.filter(id => id !== lead.id));
-      showStatus('Lead deleted.', 'success');
+      if (error) {
+        showStatus(`Could not confirm this contact was deleted from the central database (${error}) — left in place, try again shortly.`, 'error');
+      } else {
+        showStatus('Lead deleted.', 'success');
+      }
     } catch (err) {
       console.error('Delete lead failed:', err);
       showStatus('An error occurred while deleting the lead.', 'error');
@@ -483,12 +558,16 @@ export default function App() {
 
   const executeBulkDelete = async () => {
     try {
-      const { count } = await bulkDeleteLeads(selectedIds);
+      const { count, error } = await bulkDeleteLeads(selectedIds);
       fetchLeads();
       fetchFilterOptions();
       setSelectedIds([]);
       setBulkMenuOpen(false);
-      showStatus(`Deleted ${count} contact(s).`, 'success');
+      if (error) {
+        showStatus(`Deleted ${count} contact(s) confirmed in the central database; the rest couldn't be verified as removed (${error}) and were left in place — try again shortly.`, 'error');
+      } else {
+        showStatus('Bulk deletion complete.', 'success');
+      }
     } catch (err) {
       console.error('Bulk delete failed:', err);
       showStatus('An error occurred during bulk deletion.', 'error');
@@ -558,18 +637,20 @@ export default function App() {
       setLastImportedFileName(items[0]?._csvFileName || null);
 
       const tagLabel = items[0]?.csvTag || '(no tag)';
+      const invalidCount = items[0]?._invalidRowCount || 0;
+      const invalidNote = invalidCount > 0 ? ` Invalid rows skipped: ${invalidCount}.` : '';
       if (result.duplicatesSkipped > 0) {
         // Reachable when the user explicitly chose "only new leads" from the pre-import
         // duplicate-choice popup (both the CsvImporter and AI-chat upload flows always
         // ask before this point whenever there are duplicates) — this is the final
         // summary confirming what that choice actually did.
         setIsDuplicateModalOpen(true);
-        const mergedNote = result.mergedIntoExisting > 0 ? ` ${result.mergedIntoExisting} merged into existing records.` : '';
-        showStatus(`Import Complete — Total: ${result.totalRows}, Duplicate leads: ${result.duplicatesSkipped}, New leads imported: ${result.count}, Leads skipped: ${result.duplicatesSkipped}, Tag: ${tagLabel}.${mergedNote}`, 'success');
+        const mergedNote = result.mergedIntoExisting > 0 ? ` ${result.mergedIntoExisting} associated with your pod (already existed centrally).` : '';
+        showStatus(`Import Complete — Total: ${result.totalRows}, Duplicate leads: ${result.duplicatesSkipped}, New leads imported: ${result.count}, Leads skipped: ${result.duplicatesSkipped}, Tag: ${tagLabel}.${mergedNote}${invalidNote}`, 'success');
       } else if (options?.includeDuplicates) {
-        showStatus(`Import Complete — Total: ${result.totalRows}, all ${result.count} rows imported including duplicates, Tag: ${tagLabel}.`, 'success');
+        showStatus(`Import Complete — Total: ${result.totalRows}, all ${result.count} rows imported including duplicates, Tag: ${tagLabel}.${invalidNote}`, 'success');
       } else {
-        showStatus(`Import Complete — Total: ${result.totalRows}, New leads imported: ${result.count}, Tag: ${tagLabel}.`, 'success');
+        showStatus(`Import Complete — Total: ${result.totalRows}, New leads imported: ${result.count}, Tag: ${tagLabel}.${invalidNote}`, 'success');
       }
       return true;
     } catch (err) {
@@ -802,11 +883,13 @@ export default function App() {
                 <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Verified leads in system</p>
               </div>
 
-              {/* Card 2: Data Storage */}
+              {/* Card 2: Data Sync — intentionally unbranded (no backend name shown in
+                  the UI), but accurate: this app does sync to a shared central
+                  database in the background (see syncLiveDatabase). */}
               <div className="p-4 glass-card relative overflow-hidden group">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
                 <div className="flex items-center justify-between mb-2">
-                  <span className="micro-label">Data Storage</span>
+                  <span className="micro-label">Data Sync</span>
                   <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                     <Database className="w-4 h-4" />
                   </div>
@@ -814,10 +897,10 @@ export default function App() {
                 <div className="flex items-baseline justify-between">
                   <span className="text-2xl font-extrabold font-serif-kpi text-[var(--text-primary)] tracking-tight">Active</span>
                   <span className="badge badge-completed">
-                    Local
+                    Synced
                   </span>
                 </div>
-                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Saved securely in this browser.</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Your data stays synced automatically.</p>
               </div>
 
               {/* Card 3: Operon AI Copilot */}
@@ -1386,7 +1469,7 @@ export default function App() {
                         {/* Delete ALL Contacts */}
                         <button
                           onClick={() => {
-                            if (window.confirm(`⚠️ Are you sure you want to PERMANENTLY DELETE ALL ${totalLeads} contacts from the directory?`)) {
+                            if (window.confirm(`⚠️ Are you sure you want to PERMANENTLY DELETE ALL ${totalLeads} contacts from the directory and the central database? This affects every pod.`)) {
                               executeDeleteAll();
                             }
                           }}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Building2, Upload, Plus, Trash2, Tag, Search } from 'lucide-react';
 import { Company } from '../types.ts';
-import { getStoredCompanies, deleteCompany, getDistinctCompanyPodTags } from '../data/companyStorage.ts';
+import { getStoredCompanies, deleteCompany, getDistinctCompanyPodTags, getDistinctCompanyTags } from '../data/companyStorage.ts';
 import CompanyImporter from './CompanyImporter.tsx';
 import AddCompanyModal from './AddCompanyModal.tsx';
 
@@ -13,23 +13,26 @@ interface CompaniesViewProps {
 
 // Companies management page — reached via the sidebar's "Companies" icon (repurposed
 // from the old Organizations popup, see OperonNavigationDrawer.tsx). Deliberately
-// simpler than LeadsTable — Import + Add Single Company + a basic list + a Pod filter,
-// not a full replica of every Contacts feature (per the approved plan).
+// simpler than LeadsTable — Import + Add Single Company + a basic list + Pod/Tag
+// filters, not a full replica of every Contacts feature (per the approved plan).
 export default function CompaniesView({ onImport, onAdd, onShowMessage }: CompaniesViewProps) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isImporterOpen, setIsImporterOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [podFilter, setPodFilter] = useState<string>('');
+  const [tagFilter, setTagFilter] = useState<string>('');
 
   const refresh = () => setCompanies(getStoredCompanies());
 
   useEffect(() => { refresh(); }, []);
 
   const distinctPodTags = getDistinctCompanyPodTags();
+  const distinctTags = getDistinctCompanyTags();
 
   const filtered = companies.filter(c => {
     if (podFilter && !(c.podTags || []).includes(podFilter)) return false;
+    if (tagFilter && !(c.tags || []).includes(tagFilter)) return false;
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       return [c.name, c.domain, c.industry, c.city].some(v => (v || '').toLowerCase().includes(q));
@@ -97,13 +100,28 @@ export default function CompaniesView({ onImport, onAdd, onShowMessage }: Compan
             </select>
           </div>
         )}
+        {distinctTags.length > 0 && (
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[var(--text-muted)]">
+              <Tag className="w-4 h-4" />
+            </span>
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              className="glass-select pl-9 pr-8 !text-sm appearance-none cursor-pointer"
+            >
+              <option value="">All Company Tags</option>
+              {distinctTags.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Table */}
       <div className="border border-[var(--border-subtle)] rounded-xl overflow-hidden bg-[var(--surface-card)]">
         {filtered.length === 0 ? (
           <div className="p-10 text-center text-sm text-[var(--text-muted)] font-medium">
-            {companies.length === 0 ? 'No companies yet — import a CSV or add one manually.' : 'No companies match your search/filter.'}
+            {companies.length === 0 ? 'No companies yet — import a CSV or add one manually.' : 'No companies match your search/filters.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -115,6 +133,7 @@ export default function CompaniesView({ onImport, onAdd, onShowMessage }: Compan
                   <th className="text-left px-4 py-2.5">Industry</th>
                   <th className="text-left px-4 py-2.5">Employee Size</th>
                   <th className="text-left px-4 py-2.5">Location</th>
+                  <th className="text-left px-4 py-2.5">Tags</th>
                   <th className="text-left px-4 py-2.5">Pod</th>
                   <th className="text-right px-4 py-2.5"></th>
                 </tr>
@@ -127,6 +146,15 @@ export default function CompaniesView({ onImport, onAdd, onShowMessage }: Compan
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.industry || '-'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{c.companySize || '-'}</td>
                     <td className="px-4 py-2.5 text-[var(--text-secondary)]">{[c.city, c.state, c.country].filter(Boolean).join(', ') || '-'}</td>
+                    <td className="px-4 py-2.5">
+                      {c.tags && c.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {c.tags.map(t => (
+                            <span key={t} className="px-2 py-0.5 text-3xs font-extrabold bg-cyan-100 text-cyan-800 rounded-full">{t}</span>
+                          ))}
+                        </div>
+                      ) : '-'}
+                    </td>
                     <td className="px-4 py-2.5">
                       {c.podTags && c.podTags.length > 0 ? (
                         <div className="flex flex-wrap gap-1">

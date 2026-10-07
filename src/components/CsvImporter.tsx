@@ -1,16 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Upload, X, Check, AlertCircle, FileSpreadsheet, Eye, ArrowRight, Table, Tag, SlidersHorizontal, CheckCircle2 } from 'lucide-react';
-import { setActiveHeaders, previewBulkImportDuplicates, getActiveTagSet, DuplicatePreviewResult } from '../data/leadStorage.ts';
+import { setActiveHeaders, previewBulkImportDuplicates, DuplicatePreviewResult } from '../data/leadStorage.ts';
 import { SYSTEM_FIELDS, parseCsvFile, buildAutoMapping, mapRowsToLeads, isCsvParseError } from '../lib/csvMapping.ts';
 import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
+import { getActiveTagSet } from '../lib/supabase.ts';
 import FileAlreadyUploadedModal from './FileAlreadyUploadedModal.tsx';
 import ImportDuplicateChoiceModal from './ImportDuplicateChoiceModal.tsx';
 
 // Same normalization used everywhere else a tag gets compared (dedupe.ts,
-// leadStorage.ts's leadMatchesTag and getActiveTagSet) — hyphens/underscores/whitespace
-// collapsed, case-insensitive — so "Q3 Marketing" and "q3-marketing" are recognized as
-// the same tag here too.
+// leadStorage.ts's leadMatchesTag, supabase.ts's getActiveTagSet) — hyphens/underscores/
+// whitespace collapsed, case-insensitive — so "Q3 Marketing" and "q3-marketing" are
+// recognized as the same tag here too.
 const normalizeTagKey = (t: string): string => t.trim().toLowerCase().replace(/[-_\s]+/g, '-');
 
 interface CsvImporterProps {
@@ -152,6 +153,11 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     // identical field). Independent of csvTag: one is the upload batch's own identity,
     // the other is group/pod membership (see Lead.podTags's doc comment in types.ts).
     const finalPodTag = podTag.trim() ? podTag.trim().replace(/\s+/g, '-') : null;
+    // Rows Papa parsed but mapRowsToLeads dropped entirely (every cell blank across
+    // every original column — see its own hasAnyData check) — never recoverable data,
+    // just truly empty rows. Smuggled onto every item the same way _csvFileName already
+    // is, so App.tsx's import summary can report it alongside new/duplicate/merged.
+    const invalidRowCount = rawRows.length - parsedData.length;
     return parsedData.map(item => ({
       ...item,
       csvTag: finalTag,
@@ -159,6 +165,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
       // Carried the same way _csvHeaders already is, so callers (App.tsx) can label the
       // duplicate popup with the real filename instead of falling back to the tag.
       _csvFileName: file?.name || 'CSV Import',
+      _invalidRowCount: invalidRowCount,
     }));
   };
 
@@ -190,7 +197,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     // File-level duplicate check — a completely separate check from lead-level exact
     // duplicates (see lib/csvFileRegistry.ts). Runs BEFORE any header mapping/lead
     // comparison, per the required processing order. Only a still-ACTIVE prior upload
-    // (verified against the live local lead list, not just "ever recorded") can trigger
+    // (verified live against the central database, not just "ever recorded") can trigger
     // this — a deleted CSV is always treated as brand new, and its old tag is never
     // restored.
     if (fileHash) {

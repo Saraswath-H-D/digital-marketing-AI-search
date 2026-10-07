@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, UserPlus, Mail, Building, Briefcase, MapPin, Map, Globe2, Phone, MessageSquare, Tag, CheckCircle, Award, Factory, Linkedin, Users2 } from 'lucide-react';
+import { X, UserPlus, Mail, Building, Briefcase, MapPin, Map, Globe2, Phone, MessageSquare, Tag, CheckCircle, Award, Factory, Linkedin, Users2, AlertTriangle } from 'lucide-react';
 import SearchableSelect from './SearchableSelect.tsx';
 import { SENIORITY_OPTIONS, INDUSTRY_OPTIONS, EMPLOYEE_SIZE_OPTIONS } from '../lib/optionConstants.ts';
 import { getStoredCompanies } from '../data/companyStorage.ts';
+import { previewBulkImportDuplicates } from '../data/leadStorage.ts';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Lenient — accepts "linkedin.com/in/x" as well as "https://linkedin.com/in/x", same
+// tolerance the CSV importer already affords a raw CSV cell.
+const URL_RE = /^(https?:\/\/)?([\w-]+\.)+[a-z]{2,}(\/.*)?$/i;
 
 interface AddLeadModalProps {
   isOpen: boolean;
@@ -34,6 +40,8 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
   const [companySize, setCompanySize] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [duplicateWarning, setDuplicateWarning] = useState('');
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
 
   // Best-effort "associate with the appropriate company where possible": on leaving
   // the Company/Organization field, look up the central Companies database for an
@@ -52,36 +60,61 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
     if (!country && match.country) setCountry(match.country);
   };
 
+  const buildLeadData = () => ({
+    firstName,
+    lastName,
+    email,
+    organization,
+    jobTitle,
+    city,
+    state,
+    country,
+    linkedinUrl,
+    phone,
+    approvalStatus,
+    sourceName,
+    questions,
+    seniority,
+    industry,
+    companySize,
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firstName || !email) {
       setError('First name and email are required.');
       return;
     }
+    if (!EMAIL_RE.test(email.trim())) {
+      setError('Enter a valid email address (e.g. name@company.com).');
+      return;
+    }
+    if (linkedinUrl.trim() && !URL_RE.test(linkedinUrl.trim())) {
+      setError('Enter a valid LinkedIn profile URL.');
+      return;
+    }
     setError('');
-    setIsSubmitting(true);
 
-    const success = await onAdd({
-      firstName,
-      lastName,
-      email,
-      organization,
-      jobTitle,
-      city,
-      state,
-      country,
-      linkedinUrl,
-      phone,
-      approvalStatus,
-      sourceName,
-      questions,
-      seniority,
-      industry,
-      companySize,
-    });
+    // Prevent accidental duplicates — same exact-match rule the CSV importer already
+    // uses (lib/dedupe.ts), just run against this single record. Only re-checks when
+    // the warning isn't already showing for THIS data (so "Add Anyway" on the second
+    // click doesn't loop back into the same warning).
+    if (!duplicateWarning) {
+      setIsCheckingDuplicate(true);
+      const preview = await previewBulkImportDuplicates([buildLeadData()]);
+      setIsCheckingDuplicate(false);
+      if (preview.duplicatesSkipped > 0) {
+        setDuplicateWarning(`A contact matching this one already exists (${preview.duplicateLeadNames[0] || 'same details'}). Click "Add Anyway" to create it regardless, or update the details above.`);
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    const success = await onAdd(buildLeadData());
 
     setIsSubmitting(false);
     if (success) {
+      setDuplicateWarning('');
       // Reset form
       setFirstName('');
       setLastName('');
@@ -136,6 +169,13 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
               {error && (
                 <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm font-medium border border-red-100">
                   {error}
+                </div>
+              )}
+
+              {duplicateWarning && (
+                <div className="p-3 bg-amber-50 text-amber-800 rounded-lg text-sm font-medium border border-amber-200 flex items-start space-x-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                  <span>{duplicateWarning}</span>
                 </div>
               )}
 
@@ -424,20 +464,30 @@ export default function AddLeadModal({ isOpen, onClose, onAdd, filterOptions }: 
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-[var(--border-subtle)]">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={() => { setDuplicateWarning(''); setError(''); onClose(); }}
                   className="btn-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isCheckingDuplicate}
                   className="btn-primary"
                 >
                   {isSubmitting ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       <span>Saving...</span>
+                    </>
+                  ) : isCheckingDuplicate ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Checking for duplicates...</span>
+                    </>
+                  ) : duplicateWarning ? (
+                    <>
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>Add Anyway</span>
                     </>
                   ) : (
                     <>

@@ -1,5 +1,6 @@
 import { Lead, Filters, FilterOptions } from '../types.ts';
 import { initialLeads } from './initialLeads.ts';
+import { pushLeadsToSupabase, pullLeadsFromSupabase, deleteLeadFromSupabase, bulkDeleteLeadsFromSupabase, deleteLeadsByTagFromSupabase, deleteAllLeadsFromSupabase, getSupabaseConfig, getLastConfirmedDeletedEmails, getExistingLeadIndexForSignatures } from '../lib/supabase.ts';
 import { dedupeLeadRows, buildDuplicateSignature, DuplicateMatch } from '../lib/dedupe.ts';
 
 const STORAGE_KEY = 'operon_leads_v9';
@@ -96,8 +97,8 @@ const isBlankLeadRow = (l: any): boolean => {
 
 // Fixed, canonical column schema for the app. This NEVER changes based on what CSV is
 // uploaded — every incoming file's own column names are synonym-mapped onto this exact
-// list (see CsvImporter's SYSTEM_FIELDS + autoDetectColumn), so the table columns and
-// CSV export stay identical no matter which file was imported.
+// list (see CsvImporter's SYSTEM_FIELDS + autoDetectColumn), so the table columns, CSV
+// export, and Supabase header metadata stay identical no matter which file was imported.
 export const FIXED_HEADERS: string[] = [
   'First Name', 'Last Name', 'Email', 'Phone Number', 'Job Title', 'Company Name',
   'City', 'State', 'Country', 'Source', 'Email Status', 'Seniority', 'Department',
@@ -105,7 +106,7 @@ export const FIXED_HEADERS: string[] = [
 ];
 
 // Exact 1:1 mapping from a fixed header label to its Lead field value (used by CSV
-// export so columns can never drift or be mis-mapped).
+// export & Supabase header metadata so columns can never drift or be mis-mapped).
 export const getFixedHeaderValue = (lead: Lead, header: string): string => {
   const v = (val: any) => {
     if (val === undefined || val === null) return '-';
@@ -136,14 +137,14 @@ export const getFixedHeaderValue = (lead: Lead, header: string): string => {
 };
 
 // Headers are permanently fixed to FIXED_HEADERS (see above) — this always returns the
-// same schema regardless of what was uploaded, so table columns / CSV export never
-// drift between imports.
+// same schema regardless of what was uploaded, so table columns / CSV export / Supabase
+// metadata never drift between imports.
 export const getActiveHeaders = (): string[] => {
   return FIXED_HEADERS;
 };
 
-// Kept as no-ops so existing call sites (CSV import) don't need to change: the header
-// schema is fixed by design and can no longer be overwritten by an upload.
+// Kept as no-ops so existing call sites (CSV import, Supabase pull) don't need to change:
+// the header schema is fixed by design and can no longer be overwritten by an upload.
 export const replaceActiveHeaders = (_headers: string[]): void => {};
 export const setActiveHeaders = (_headers: string[], _forceReplace: boolean = false): void => {};
 
@@ -502,7 +503,7 @@ export const saveStoredLeads = (leads: Lead[]): void => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(leads.slice(0, 10000)));
     }
   } catch (err) {
-    console.warn('LocalStorage quota limit reached, maintaining 100,000+ leads in memory cache:', err);
+    console.warn('LocalStorage quota limit reached, maintaining 100,000+ leads in memory cache & Supabase:', err);
   }
 };
 
@@ -618,19 +619,17 @@ export const getFilterOptions = (): FilterOptions => {
     cities: getUniqueForAliases(['city', 'location', 'town', 'address'], true),
     states: getUniqueForAliases(['state', 'province', 'region']),
     countries: getUniqueForAliases(['country', 'nation']),
-    sources: getUniqueForAliases(['sourcename', 'source', 'leadsource']),
-    // Distinct csv_tag values (the upload-batch identity, independent of sourceName —
-    // see Lead.csvTag's doc comment), derived from live lead data so it reflects every
-    // tag actually in use regardless of which browser/session created it. Its own
-    // dedicated "CSV Tag" filter section in FiltersSidebar, separate from "Lead Source
-    // & Tag" above.
-    csvTags: (() => {
-      const set = new Set<string>();
+    // Merge in distinct csvTag values alongside sourceName-aliased values — with the
+    // dedicated CSV Tag search box removed, this is now the only surfaced list of tag
+    // options, so a lead whose only tag identity is csvTag (blank sourceName) must
+    // still show up here to stay filterable.
+    sources: (() => {
+      const base = new Set(getUniqueForAliases(['sourcename', 'source', 'leadsource']));
       leads.forEach(l => {
         const tag = (l.csvTag || '').trim();
-        if (tag && tag !== '-') set.add(tag);
+        if (tag && tag !== '-') base.add(tag);
       });
-      return Array.from(set).sort();
+      return Array.from(base).sort();
     })(),
     statuses: getUniqueForAliases(['approvalstatus', 'status', 'approved', 'state']),
     seniorities: ['C-Suite', 'VP / Vice President', 'Director', 'Manager', 'Owner / Partner', 'Entry Level'],
@@ -698,12 +697,6 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
       const matchesSource = vals.some(v => lowerSelected.includes(v.toLowerCase()));
       const matchesCsvTag = filters.sources.some(s => leadMatchesTag(l, s));
       if (!matchesSource && !matchesCsvTag) return false;
-    }
-
-    if (filters.csvTags && filters.csvTags.length > 0) {
-      const tag = (l.csvTag || '').trim().toLowerCase();
-      const lowerSelected = filters.csvTags.map(t => t.toLowerCase());
-      if (!tag || !lowerSelected.includes(tag)) return false;
     }
 
     if (filters.statuses && filters.statuses.length > 0) {
@@ -920,6 +913,14 @@ export const addLead = async (newLeadData: Partial<Lead>): Promise<Lead> => {
   const updated = [lead, ...allLeads];
   saveStoredLeads(updated);
 
+  if (getSupabaseConfig().autoSync) {
+    try {
+      await pushLeadsToSupabase([lead]);
+    } catch (err) {
+      console.error('Auto-sync add to Supabase failed:', err);
+    }
+  }
+
   return lead;
 };
 
@@ -938,43 +939,104 @@ export const updateLead = async (id: number, updateData: Partial<Lead>): Promise
 
   if (updatedLead) {
     saveStoredLeads(updated);
+    if (getSupabaseConfig().autoSync) {
+      try {
+        await pushLeadsToSupabase([updatedLead]);
+      } catch (err) {
+        console.error('Auto-sync update to Supabase failed:', err);
+      }
+    }
   }
   return updatedLead;
 };
 
-// Delete Lead (with automatic Trash backup).
+// Delete Lead (with automatic Trash backup). Supabase FIRST — only remove locally
+// once Supabase actually confirms the delete, so a failed remote delete can't leave a
+// lead "gone" from the UI but still present in Supabase (which reappears next reload).
 export const deleteLead = async (id: number): Promise<{ error?: string }> => {
   const allLeads = getStoredLeads();
   const target = allLeads.find(l => l.id === id);
   if (!target) return {};
 
-  const updated = allLeads.filter(l => l.id !== id);
-  saveStoredLeads(updated);
-  addLeadsToTrash([target]);
-  return {};
+  // Prefer _rawEmail (the row's real, un-scrubbed email — see pullLeadsFromSupabase)
+  // when present, so a blank-contact lead (displayed email always "-") can actually be
+  // deleted from Supabase for real instead of the delete having nothing to target.
+  const deleteEmail = (target as any)._rawEmail || target.email;
+  let supabaseError: string | undefined;
+  try {
+    const result = await deleteLeadFromSupabase({ email: deleteEmail, id: target.id });
+    if (!result.success) supabaseError = result.error || 'Could not confirm this contact was deleted from Supabase.';
+  } catch (err: any) {
+    console.error('Delete sync to Supabase failed:', err);
+    supabaseError = err?.message || 'Delete sync to Supabase failed';
+  }
+
+  // A blank-contact row with no real email at all (not even a raw synthetic one) has no
+  // reliable identifier to delete by — still remove it locally rather than get stuck.
+  const isBlankContact = !deleteEmail || deleteEmail === '-';
+  if (!supabaseError || isBlankContact) {
+    const updated = allLeads.filter(l => l.id !== id);
+    saveStoredLeads(updated);
+    addLeadsToTrash([target]);
+    return {};
+  }
+
+  return { error: supabaseError };
 };
 
-// Bulk Delete Leads (with automatic Trash backup).
+// Bulk Delete Leads (with automatic Trash backup). Supabase FIRST, local storage
+// SECOND, and only remove locally what Supabase actually confirmed deleting — same
+// reasoning as deleteLeadsByTag: removing locally regardless of whether the remote
+// delete actually succeeded is exactly how a lead can vanish from the UI while
+// Supabase silently keeps it, then reappear on the next reload/pull.
 export const bulkDeleteLeads = async (ids: number[]): Promise<{ count: number; error?: string }> => {
   const allLeads = getStoredLeads();
   const idSet = new Set(ids);
   const targets = allLeads.filter(l => idSet.has(l.id));
   if (targets.length === 0) return { count: 0 };
 
-  const updated = allLeads.filter(l => !idSet.has(l.id));
-  saveStoredLeads(updated);
-  addLeadsToTrash(targets);
+  let supabaseError: string | undefined;
+  let confirmedEmails = new Set<string>();
+  try {
+    const result = await bulkDeleteLeadsFromSupabase(targets);
+    confirmedEmails = getLastConfirmedDeletedEmails();
+    if (!result.success) supabaseError = result.error || 'Some records could not be confirmed deleted from Supabase.';
+  } catch (err: any) {
+    console.error('Bulk delete sync to Supabase failed:', err);
+    supabaseError = err?.message || 'Bulk delete failed';
+  }
 
-  return { count: targets.length };
+  const isConfirmedRemoved = (l: Lead) => {
+    // Check _rawEmail first — a blank-contact lead's displayed email is always "-", but
+    // bulkDeleteLeadsFromSupabase actually targets (and Supabase confirms deletion by)
+    // its real, un-scrubbed email (see pullLeadsFromSupabase).
+    const rawEmail = ((l as any)._rawEmail || '').trim().toLowerCase();
+    if (rawEmail && rawEmail !== '-' && confirmedEmails.has(rawEmail)) return true;
+    const email = (l.email || '').trim().toLowerCase();
+    return email && email !== '-' && confirmedEmails.has(email);
+  };
+  const removedLeads = targets.filter(l => isConfirmedRemoved(l) || (!supabaseError && (!l.email || l.email === '-')));
+  const removedIdSet = new Set(removedLeads.map(l => l.id));
+  const updated = allLeads.filter(l => !removedIdSet.has(l.id));
+  saveStoredLeads(updated);
+
+  if (removedLeads.length > 0) addLeadsToTrash(removedLeads);
+
+  return { count: removedLeads.length, error: supabaseError };
 };
 
-// Delete All Leads (Purge Directory)
+// Delete All Leads (Purge Directory & Supabase)
 export const deleteAllLeads = async (): Promise<void> => {
   const allLeads = getStoredLeads();
   if (allLeads.length > 0) {
     addLeadsToTrash(allLeads);
   }
   saveStoredLeads([]);
+  try {
+    await deleteAllLeadsFromSupabase();
+  } catch (err) {
+    console.error('Delete all from Supabase failed:', err);
+  }
 };
 
 // Delete all leads associated with a specific CSV Tag / Source Name
@@ -993,36 +1055,57 @@ export const leadMatchesTag = (lead: Lead, tag: string): boolean => {
   return normalizeTagValue(lead.csvTag) === cleanTag || normalizeTagValue(lead.sourceName) === cleanTag;
 };
 
-// Every distinct tag (csvTag or sourceName) currently carried by at least one local
-// lead — i.e. genuinely "in use" right now. Used by the CSV-file-conflict check
-// (csvFileRegistry.ts) to tell a still-active tag apart from one whose leads have all
-// since been deleted.
-export const getActiveTagSet = (): Set<string> => {
-  const set = new Set<string>();
-  getStoredLeads().forEach(l => {
-    const csvTag = normalizeTagValue(l.csvTag);
-    if (csvTag) set.add(csvTag);
-    const source = normalizeTagValue(l.sourceName);
-    if (source) set.add(source);
-  });
-  return set;
-};
-
 export const deleteLeadsByTag = async (tag: string): Promise<{ count: number; error?: string }> => {
   if (!tag || !tag.trim()) return { count: 0 };
 
   const allLeads = getStoredLeads();
-  const removedLeads = allLeads.filter(l => leadMatchesTag(l, tag));
-  const updatedLeads = allLeads.filter(l => !leadMatchesTag(l, tag));
+  const targetLeads = allLeads.filter(l => leadMatchesTag(l, tag));
+
+  // Supabase FIRST, local storage SECOND — and only remove locally what Supabase
+  // actually confirmed deleting. The previous order (remove locally, then best-effort
+  // sync with every error swallowed) is exactly how a lead could vanish from the UI
+  // while Supabase silently kept it, then reappear on the next reload/pull.
+  let supabaseError: string | undefined;
+  let confirmedEmails = new Set<string>();
+  try {
+    // deleteLeadsByTagFromSupabase now queries Supabase directly for every row
+    // carrying this tag — it doesn't need (or trust) targetLeads to know what to
+    // delete, so there's no longer a distinct "no local matches" branch: the
+    // authoritative sweep runs the same way either way.
+    const result = await deleteLeadsByTagFromSupabase(tag);
+    confirmedEmails = getLastConfirmedDeletedEmails();
+    if (!result.success) supabaseError = result.error || 'Some records could not be confirmed deleted from Supabase.';
+  } catch (err: any) {
+    console.error(`Delete leads by tag '${tag}' from Supabase failed:`, err);
+    supabaseError = err?.message || 'Delete leads by tag failed';
+  }
+
+  // On full success, trust the authoritative Supabase sweep completely and clear every
+  // locally-tag-matching lead — it queried the live table itself, independent of
+  // whatever this local list happens to contain, so it's the more trustworthy source.
+  // Only fall back to precise per-email reconciliation when something went wrong, so a
+  // partial failure doesn't locally remove rows that weren't actually confirmed gone.
+  const removedLeads = !supabaseError
+    ? targetLeads
+    : targetLeads.filter(l => {
+        const email = (l.email || '').trim().toLowerCase();
+        return email && email !== '-' && confirmedEmails.has(email);
+      });
+  const updatedLeads = allLeads.filter(l => !removedLeads.includes(l));
 
   saveStoredLeads(updatedLeads);
-  removeCsvTag(tag);
+
+  // Only drop the tag from the suggestions registry once nothing with that tag remains
+  // — if some rows couldn't be confirmed deleted, the tag is still real and should keep
+  // showing up so the user can retry rather than losing track of the leftover data.
+  const stillHasMatches = updatedLeads.some(l => leadMatchesTag(l, tag));
+  if (!stillHasMatches) removeCsvTag(tag);
 
   if (removedLeads.length > 0) {
     addLeadsToTrash(removedLeads);
   }
 
-  return { count: removedLeads.length };
+  return { count: removedLeads.length, error: supabaseError };
 };
 
 // Strict Zero-Repetition Restore Deleted Leads from Trash or Specific Candidates
@@ -1079,6 +1162,14 @@ export const restoreLeadsFromTrash = async (specificLeads?: Lead[]): Promise<{ u
   saveStoredLeads(updatedLeads);
   saveTrashLeads([]);
 
+  if (getSupabaseConfig().autoSync) {
+    try {
+      await pushLeadsToSupabase(restoredLeadsWithFreshIds);
+    } catch (err) {
+      console.error('Restore sync to Supabase failed:', err);
+    }
+  }
+
   return {
     updatedLeads,
     restoredCount: restoredLeadsWithFreshIds.length,
@@ -1088,6 +1179,7 @@ export const restoreLeadsFromTrash = async (specificLeads?: Lead[]): Promise<{ u
 
 export interface BulkImportResult {
   count: number;
+  supabaseResult: { success: boolean; count: number; error?: string };
   totalRows: number;
   uniqueRows: number;
   duplicatesSkipped: number;
@@ -1113,8 +1205,13 @@ export interface DuplicatePreviewResult {
 let lastImportReport: { result: BulkImportResult; tag: string | null; at: string } | null = null;
 export const getLastImportReport = () => lastImportReport;
 
-// Builds duplicate signatures for every lead already sitting in local storage — the
-// sole source of truth for "what already exists" now that there's no shared backend.
+// Builds duplicate signatures for every lead already sitting in local storage — this
+// app's own in-memory/localStorage cache, already loaded, so this costs nothing extra
+// over the network. Layered under the Supabase-backed check below so a previously
+// imported lead is still caught as a duplicate even when Supabase is unreachable,
+// unconfigured, mid-migration, or simply hasn't caught up (a partially-failed sync,
+// autoSync having been off at the time it was created, etc.) — duplicate detection must
+// never silently depend on Supabase alone.
 const buildLocalExistingIndex = (): Map<string, import('../lib/dedupe.ts').ExistingRecordRef> => {
   const index = new Map<string, import('../lib/dedupe.ts').ExistingRecordRef>();
   getStoredLeads().forEach(lead => {
@@ -1129,12 +1226,26 @@ const buildLocalExistingIndex = (): Map<string, import('../lib/dedupe.ts').Exist
   return index;
 };
 
-// Shared by the read-only preview and the real import so both see the exact same "what
-// already exists" picture.
+// Combines the local-storage index above with a targeted Supabase lookup for the
+// signatures this batch could actually match (see getExistingLeadIndexForSignatures) —
+// local first (cheap, always available), Supabase entries layered on top (authoritative
+// when reachable, and the only source that sees leads imported on a different
+// device/session). Shared by the read-only preview and the real import so both see the
+// exact same "what already exists" picture.
 const buildExistingIndexFor = async (
-  _newLeadsList: Partial<Lead>[]
+  newLeadsList: Partial<Lead>[]
 ): Promise<Map<string, import('../lib/dedupe.ts').ExistingRecordRef>> => {
-  return buildLocalExistingIndex();
+  const existingIndex = buildLocalExistingIndex();
+  try {
+    // Only ask Supabase about the signatures THIS batch could actually match — never
+    // downloads the whole table (see getExistingLeadIndexForSignatures).
+    const candidateSignatures = newLeadsList.map(row => buildDuplicateSignature(row).signature);
+    const remoteIndex = await getExistingLeadIndexForSignatures(candidateSignatures);
+    remoteIndex.forEach((ref, sig) => existingIndex.set(sig, ref));
+  } catch (err) {
+    console.warn('Existing-Supabase duplicate check failed — still backed by the local-storage check above', err);
+  }
+  return existingIndex;
 };
 
 // Read-only dry run of the same exact-duplicate check bulkImportLeads runs — used by
@@ -1160,10 +1271,13 @@ export const previewBulkImportDuplicates = async (
 // instead of silently discarding the import row: (a) fill any blank field on the
 // existing record from the new row's non-blank value — never overwrite an existing
 // non-blank value with re-uploaded data, (b) append this import's pod tag to the
-// existing record's podTags array (deduped). This is the mechanism that lets two
-// different pods independently upload the same real person without creating a
-// duplicate record, while still recording that both pods now use/own it — see
-// Lead.podTags's doc comment in types.ts.
+// existing record's podTags array (deduped), (c) push the merged record back to
+// Supabase. This is the mechanism that lets two different pods independently upload
+// the same real person without creating a duplicate record, while still recording that
+// both pods now use/own it — see Lead.podTags's doc comment in types.ts. Only merges
+// records this browser already has a local copy of (matched by email) — a duplicate
+// matched only against a remote Supabase row from another device/session is left alone
+// rather than guessing at fields this browser can't see.
 const mergeDuplicateLeadsIntoExisting = async (
   duplicates: DuplicateMatch<Partial<Lead>>[],
   importPodTag: string | null
@@ -1204,24 +1318,35 @@ const mergeDuplicateLeadsIntoExisting = async (
   mergedLeads.forEach(m => byId.set(m.id, m));
   saveStoredLeads(Array.from(byId.values()));
 
+  if (getSupabaseConfig().autoSync) {
+    try {
+      await pushLeadsToSupabase(mergedLeads);
+    } catch (err) {
+      console.error('Auto-sync merged duplicate leads failed:', err);
+    }
+  }
+
   return mergedLeads.length;
 };
 
 // Bulk Import Leads — enforces the exact-duplicate rule (see lib/dedupe.ts): a row is a
 // duplicate ONLY when EVERY relevant mapped field matches (after safe normalization)
-// another row already kept in this batch or already present locally. Tag plays NO part
-// in this comparison — a lead under a different tag than an existing match is STILL the
-// same duplicate lead, never imported as a second record. Tag-name uniqueness is a
-// completely separate, independent check (see getActiveTagSet / the tag-conflict flow
-// in CsvImporter.tsx and AICopilotDrawer.tsx) that runs before this and never
-// influences whether a LEAD counts as a duplicate. Filename is never part of this
-// comparison either (see lib/csvFileRegistry.ts for the unrelated, file-content-hash-
-// based "already uploaded this exact file" check).
+// another row already kept in this batch or already present in Supabase. Tag plays NO
+// part in this comparison — a lead under a different tag than an existing match is
+// STILL the same duplicate lead, never imported as a second record. Tag-name
+// uniqueness is a completely separate, independent check (see getActiveTagSet /
+// the tag-conflict flow in CsvImporter.tsx and AICopilotDrawer.tsx) that runs before
+// this and never influences whether a LEAD counts as a duplicate. Filename is never
+// part of this comparison either (see lib/csvFileRegistry.ts for the unrelated,
+// file-content-hash-based "already uploaded this exact file" check).
 //
 // `options.includeDuplicates` — set only after the caller showed the user the
 // duplicate-preview choice (see previewBulkImportDuplicates) and they explicitly picked
 // "import the full file": every row is imported as its own record, exact duplicates
-// included, instead of the default skip-duplicates behavior.
+// included, instead of the default skip-duplicates behavior. Note this still goes
+// through pushLeadsToSupabase's normal upsert-by-email — a duplicate row sharing a real
+// email with an existing lead updates that lead rather than creating a second Supabase
+// row; only rows with a genuinely different (or no) email actually land as new rows.
 export const bulkImportLeads = async (
   newLeadsList: Partial<Lead>[],
   options?: { includeDuplicates?: boolean }
@@ -1298,8 +1423,31 @@ export const bulkImportLeads = async (
 
   saveStoredLeads([...createdLeads, ...allLeads]);
 
+  let supabaseResult: { success: boolean; count: number; error?: string } = { success: false, count: 0, error: 'Auto-sync disabled' };
+  if (createdLeads.length > 0 && getSupabaseConfig().autoSync) {
+    try {
+      supabaseResult = await pushLeadsToSupabase(createdLeads);
+      if (supabaseResult.success) {
+        // Re-sync local storage from Supabase's own confirmed state rather than trusting
+        // the optimistic local append above — this is what keeps the app's displayed
+        // record count matching Supabase exactly. pushLeadsToSupabase's `success` only
+        // means "at least one row made it" (a batch can partially fail column/schema
+        // issues and still report success); re-pulling reflects exactly what actually
+        // landed, dropping anything that silently didn't. Best-effort: if the re-pull
+        // itself fails, the optimistic local state from saveStoredLeads above stands —
+        // still better than nothing, just not re-verified against Supabase this round.
+        const pull = await pullLeadsFromSupabase();
+        if (pull.success) saveStoredLeads(pull.leads);
+      }
+    } catch (err: any) {
+      console.error('Auto-sync import to Supabase failed:', err);
+      supabaseResult = { success: false, count: 0, error: err?.message || 'Sync failed' };
+    }
+  }
+
   const importResult: BulkImportResult = {
     count: createdLeads.length,
+    supabaseResult,
     totalRows: newLeadsList.length,
     uniqueRows: uniqueItems.length,
     // Nothing was actually skipped when the caller chose to include duplicates — the

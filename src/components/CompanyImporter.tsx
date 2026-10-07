@@ -86,8 +86,13 @@ export default function CompanyImporter({ isOpen, onClose, onImport }: CompanyIm
     setPodTag('');
   };
 
-  const buildFinalData = (finalPodTag: string | null) =>
-    parsedData.map(item => ({ ...item, podTag: finalPodTag }));
+  const buildFinalData = (finalPodTag: string | null) => {
+    // Rows parsed from the CSV but dropped entirely by mapRowsToCompanies (no Company
+    // Name at all) — never recoverable data, just truly empty/unusable rows. Smuggled
+    // onto every item so App.tsx's import summary can report it.
+    const invalidRowCount = rawRows.length - parsedData.length;
+    return parsedData.map(item => ({ ...item, podTag: finalPodTag, _invalidRowCount: invalidRowCount }));
+  };
 
   const doActualImport = async (finalPodTag: string | null, includeDuplicates: boolean) => {
     setIsUploading(true);
