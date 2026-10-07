@@ -84,7 +84,7 @@ export default function DuplicateLeadsModal({ isOpen, onClose, result, csvName }
 
               <div className="p-3 bg-emerald-50/70 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-400/20 rounded-xl space-y-1">
                 <p className="text-2xs font-bold text-emerald-800 dark:text-emerald-400">
-                  ✓ {result.duplicatesSkipped} duplicate cop{result.duplicatesSkipped === 1 ? 'y was' : 'ies were'} skipped and not added to Supabase.
+                  ✓ {result.duplicatesSkipped} duplicate cop{result.duplicatesSkipped === 1 ? 'y was' : 'ies were'} skipped and not added.
                 </p>
                 <p className="text-2xs font-bold text-emerald-800 dark:text-emerald-400">
                   ✓ {result.count} new lead{result.count === 1 ? ' was' : 's were'} imported.

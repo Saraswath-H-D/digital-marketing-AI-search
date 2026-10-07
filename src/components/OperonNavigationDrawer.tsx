@@ -16,7 +16,6 @@ interface OperonNavigationDrawerProps {
   setActiveView: (view: string) => void;
   onShowMessage: (text: string, type: 'success' | 'error') => void;
   onAddTeammateClick?: () => void;
-  onOpenSupabase?: () => void;
   onOpenSectionModal?: (section: string) => void;
   onOpenAIAssistant?: () => void;
   onOpenDataEnhancement?: () => void;
@@ -39,7 +38,6 @@ export default function OperonNavigationDrawer({
   setActiveView,
   onShowMessage,
   onAddTeammateClick,
-  onOpenSupabase,
   onOpenSectionModal,
   onOpenAIAssistant,
   onOpenDataEnhancement,
@@ -48,10 +46,6 @@ export default function OperonNavigationDrawer({
   const handleItemClick = (name: string) => {
     setActiveView(name);
 
-    if (name === 'Supabase Sync' && onOpenSupabase) {
-      onOpenSupabase();
-      return;
-    }
     if (name === 'AI Assistant') {
       onOpenAIAssistant?.();
       return;

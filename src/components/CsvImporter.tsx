@@ -1,17 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Upload, X, Check, AlertCircle, FileSpreadsheet, Eye, ArrowRight, Table, Tag, SlidersHorizontal, CheckCircle2 } from 'lucide-react';
-import { setActiveHeaders, previewBulkImportDuplicates, DuplicatePreviewResult } from '../data/leadStorage.ts';
+import { setActiveHeaders, previewBulkImportDuplicates, getActiveTagSet, DuplicatePreviewResult } from '../data/leadStorage.ts';
 import { SYSTEM_FIELDS, parseCsvFile, buildAutoMapping, mapRowsToLeads, isCsvParseError } from '../lib/csvMapping.ts';
 import { hashFile, resolveFileConflict, recordCsvFileUpload } from '../lib/csvFileRegistry.ts';
-import { getActiveTagSet } from '../lib/supabase.ts';
 import FileAlreadyUploadedModal from './FileAlreadyUploadedModal.tsx';
 import ImportDuplicateChoiceModal from './ImportDuplicateChoiceModal.tsx';
 
 // Same normalization used everywhere else a tag gets compared (dedupe.ts,
-// leadStorage.ts's leadMatchesTag, supabase.ts's getActiveTagSet) — hyphens/underscores/
-// whitespace collapsed, case-insensitive — so "Q3 Marketing" and "q3-marketing" are
-// recognized as the same tag here too.
+// leadStorage.ts's leadMatchesTag and getActiveTagSet) — hyphens/underscores/whitespace
+// collapsed, case-insensitive — so "Q3 Marketing" and "q3-marketing" are recognized as
+// the same tag here too.
 const normalizeTagKey = (t: string): string => t.trim().toLowerCase().replace(/[-_\s]+/g, '-');
 
 interface CsvImporterProps {
@@ -191,8 +190,9 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
     // File-level duplicate check — a completely separate check from lead-level exact
     // duplicates (see lib/csvFileRegistry.ts). Runs BEFORE any header mapping/lead
     // comparison, per the required processing order. Only a still-ACTIVE prior upload
-    // (verified live against Supabase, not just "ever recorded") can trigger this — a
-    // deleted CSV is always treated as brand new, and its old tag is never restored.
+    // (verified against the live local lead list, not just "ever recorded") can trigger
+    // this — a deleted CSV is always treated as brand new, and its old tag is never
+    // restored.
     if (fileHash) {
       const conflict = await resolveFileConflict(fileHash, finalTag);
       if (conflict.status === 'same-active-tag') {
@@ -297,7 +297,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-[var(--text-primary)] tracking-tight">Bulk Import Contacts & Mapping</h3>
-                  <p className="text-2xs text-[var(--text-muted)] font-medium">Upload CSV, map header columns, and import into Opaeron directory & Supabase</p>
+                  <p className="text-2xs text-[var(--text-muted)] font-medium">Upload CSV, map header columns, and import into the Opaeron directory</p>
                 </div>
               </div>
               <button
@@ -606,7 +606,7 @@ export default function CsvImporter({ isOpen, onClose, onImport }: CsvImporterPr
                     {isUploading ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Importing to Opaeron & Supabase...</span>
+                        <span>Importing to Opaeron...</span>
                       </>
                     ) : isCheckingDuplicates ? (
                       <>

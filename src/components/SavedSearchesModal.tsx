@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Bookmark, Trash2, ArrowRight, Plus, Briefcase, Layers } from 'lucide-react';
 import { CustomICP, FilterOptions } from '../types.ts';
-import { getStoredCustomICPs, syncCustomICPsFromSupabase, addCustomICP, deleteCustomICP } from '../data/customIcpStorage.ts';
+import { getStoredCustomICPs, addCustomICP, deleteCustomICP } from '../data/customIcpStorage.ts';
 import SearchableSelect from './SearchableSelect.tsx';
 
 interface SavedSearchesModalProps {
@@ -14,8 +14,8 @@ interface SavedSearchesModalProps {
 
 // Repurposed from the old fully-mocked "Saved Searches" feature into the real Custom
 // ICP feature (spec item 9): an ICP is deliberately scoped to Job Titles + Industries
-// only (not an arbitrary full-filter snapshot), named, saved to Supabase, and reusable
-// for future searches/campaign targeting.
+// only (not an arbitrary full-filter snapshot), named, saved locally, and reusable for
+// future searches/campaign targeting.
 export default function SavedSearchesModal({
   isOpen,
   onClose,
@@ -24,7 +24,6 @@ export default function SavedSearchesModal({
   onShowMessage
 }: SavedSearchesModalProps) {
   const [icps, setIcps] = useState<CustomICP[]>(getStoredCustomICPs());
-  const [isSyncing, setIsSyncing] = useState(false);
   const [name, setName] = useState('');
   const [jobTitles, setJobTitles] = useState<string[]>([]);
   const [industries, setIndustries] = useState<string[]>([]);
@@ -32,18 +31,15 @@ export default function SavedSearchesModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    setIsSyncing(true);
-    syncCustomICPsFromSupabase()
-      .then(setIcps)
-      .finally(() => setIsSyncing(false));
+    setIcps(getStoredCustomICPs());
   }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleDelete = async (id: number) => {
-    const { error } = await deleteCustomICP(id);
+    await deleteCustomICP(id);
     setIcps(getStoredCustomICPs());
-    onShowMessage(error ? `ICP removed locally, but Supabase delete failed: ${error}` : 'Custom ICP deleted.', error ? 'error' : 'success');
+    onShowMessage('Custom ICP deleted.', 'success');
   };
 
   const handleSave = async () => {
@@ -139,9 +135,7 @@ export default function SavedSearchesModal({
 
           {/* Saved ICP List */}
           <div className="space-y-3">
-            {isSyncing ? (
-              <p className="text-xs text-[var(--text-muted)] py-4 text-center italic">Loading saved ICPs...</p>
-            ) : icps.length === 0 ? (
+            {icps.length === 0 ? (
               <p className="text-xs text-[var(--text-muted)] py-6 text-center italic">No saved ICPs yet.</p>
             ) : (
               icps.map((icp) => (

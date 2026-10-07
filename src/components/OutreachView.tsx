@@ -3,8 +3,6 @@ import {
   Send,
   Mail,
   Plus,
-  Play,
-  Pause,
   Star,
   Search,
   SlidersHorizontal,
@@ -18,7 +16,7 @@ import {
   ChevronDown,
   Trash2
 } from 'lucide-react';
-import { OutreachCampaign, Lead } from '../types.ts';
+import { Lead } from '../types.ts';
 
 interface OutreachViewProps {
   leads: Lead[];
@@ -108,82 +106,11 @@ const emptyTemplate = (): EmailTemplate => ({
   createdAt: new Date().toISOString().split('T')[0],
 });
 
-export default function OutreachView({ leads, onShowMessage }: OutreachViewProps) {
-  const [activeTab, setActiveTab] = useState<'campaigns' | 'templates'>('campaigns');
-
-  const [campaigns, setCampaigns] = useState<OutreachCampaign[]>([
-    {
-      id: 'camp-1',
-      name: 'Q3 Enterprise CFO Outreach',
-      status: 'Active',
-      contactsCount: 420,
-      emailsSent: 1280,
-      openRate: 64.2,
-      replyRate: 18.5,
-      bounceRate: 0.8,
-      createdAt: '2026-08-01'
-    },
-    {
-      id: 'camp-2',
-      name: 'SaaS Founders & CTOs - India',
-      status: 'Active',
-      contactsCount: 850,
-      emailsSent: 2450,
-      openRate: 71.8,
-      replyRate: 22.1,
-      bounceRate: 0.4,
-      createdAt: '2026-08-10'
-    },
-    {
-      id: 'camp-3',
-      name: 'Local Tech Businesses Follow-up',
-      status: 'Paused',
-      contactsCount: 210,
-      emailsSent: 420,
-      openRate: 48.0,
-      replyRate: 9.4,
-      bounceRate: 1.2,
-      createdAt: '2026-07-15'
-    }
-  ]);
-
-  const [newCampName, setNewCampName] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
-
-  const handleCreateCampaign = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCampName.trim()) return;
-
-    const newCamp: OutreachCampaign = {
-      id: `camp-${Date.now()}`,
-      name: newCampName.trim(),
-      status: 'Active',
-      contactsCount: 0,
-      emailsSent: 0,
-      openRate: 0,
-      replyRate: 0,
-      bounceRate: 0,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    setCampaigns([newCamp, ...campaigns]);
-    setNewCampName('');
-    setIsCreating(false);
-    onShowMessage(`Campaign "${newCamp.name}" created!`, 'success');
-  };
-
-  const toggleStatus = (id: string) => {
-    setCampaigns(prev => prev.map(c => {
-      if (c.id === id) {
-        const nextStatus = c.status === 'Active' ? 'Paused' : 'Active';
-        onShowMessage(`Campaign status updated to ${nextStatus}`, 'success');
-        return { ...c, status: nextStatus };
-      }
-      return c;
-    }));
-  };
-
-  // --- Templates (Apollo "Engage -> Templates" pattern) ---
+// Email Templates — the only email-campaign surface this view exposes. The earlier
+// "Sequences" tab (automated multi-step campaigns with open/reply/bounce tracking) was
+// removed per spec: this app is only used to author/manage reusable email templates,
+// not to run outreach sequences.
+export default function OutreachView({ onShowMessage }: OutreachViewProps) {
   const [templates, setTemplates] = useState<EmailTemplate[]>(SEED_TEMPLATES);
   const [templateSearch, setTemplateSearch] = useState('');
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
@@ -233,256 +160,121 @@ export default function OutreachView({ leads, onShowMessage }: OutreachViewProps
 
   return (
     <div className="p-6 space-y-5 animate-fadeIn page-enter">
-      {/* Underline tabs (Design.md §12) */}
-      <div className="flex items-center border-b-[1.5px] border-[var(--border-subtle)]">
-        {(['campaigns', 'templates'] as const).map(tab => (
+      <div className="space-y-4">
+        {/* Templates toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+            <div className="relative flex-1 max-w-xs">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-[var(--text-muted)]">
+                <Search className="w-3.5 h-3.5" />
+              </span>
+              <input
+                type="text"
+                value={templateSearch}
+                onChange={(e) => setTemplateSearch(e.target.value)}
+                placeholder="Search templates..."
+                className="search-pill h-10 text-xs"
+              />
+            </div>
+            <button className="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-hover)] cursor-pointer">
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Show Filters</span>
+            </button>
+            <button className="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-hover)] cursor-pointer">
+              <ArrowDownUp className="w-3.5 h-3.5" />
+              <span>Sort</span>
+            </button>
+            <button className="inline-flex items-center justify-center p-2 text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-hover)] cursor-pointer" title="View options">
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-5 py-2.5 text-sm capitalize transition-colors cursor-pointer -mb-[1.5px] ${
-              activeTab === tab
-                ? 'border-b-[2.5px] border-violet-600 text-violet-600 font-bold'
-                : 'border-b-[2.5px] border-transparent text-[var(--text-muted)] font-medium hover:text-[var(--text-secondary)]'
-            }`}
+            onClick={() => setEditingTemplate(emptyTemplate())}
+            className="btn-primary !text-xs"
           >
-            {tab}
+            <Plus className="w-4 h-4" />
+            <span>Create template</span>
           </button>
-        ))}
-      </div>
-
-      {activeTab === 'campaigns' ? (
-        <div className="space-y-5">
-          {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-4 bg-[var(--surface-card)] p-5 rounded-2xl border border-[var(--border-subtle)] shadow-2xs">
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="px-2.5 py-0.5 text-3xs font-extrabold bg-violet-100 text-violet-700 rounded-full border border-violet-200">
-                  OUTREACH AUTOMATION
-                </span>
-                <span className="text-xs text-[var(--text-muted)] font-mono">Live Sequence Engine</span>
-              </div>
-              <h2 className="text-xl font-extrabold text-[var(--text-primary)] tracking-tight mt-1">Multi-Channel Outreach Sequences</h2>
-              <p className="text-xs text-[var(--text-muted)] font-medium">Activate email sequences, track open rates & reply analytics in real time.</p>
-            </div>
-
-            <button
-              onClick={() => setIsCreating(true)}
-              className="btn-primary !text-xs"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Create Sequence</span>
-            </button>
-          </div>
-
-          {/* New Campaign Form */}
-          {isCreating && (
-            <form onSubmit={handleCreateCampaign} className="p-5 bg-violet-50/70 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-400/20 rounded-2xl space-y-3 animate-fadeIn">
-              <h3 className="text-xs font-extrabold text-[var(--text-primary)] uppercase tracking-wider">New Outreach Sequence</h3>
-              <div className="flex space-x-3">
-                <input
-                  type="text"
-                  value={newCampName}
-                  onChange={(e) => setNewCampName(e.target.value)}
-                  placeholder="e.g. Q4 Executive Leadership Campaign..."
-                  className="glass-input flex-1 !text-xs font-semibold focus:!border-violet-500"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="btn-primary !text-xs !py-2"
-                >
-                  Launch Sequence
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCreating(false)}
-                  className="px-3 py-2 text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Campaign Cards Grid */}
-          <div className="space-y-4">
-            {campaigns.map((camp) => (
-              <div key={camp.id} className="bg-[var(--surface-card)] p-5 rounded-2xl border border-[var(--border-subtle)] shadow-2xs hover:shadow-md transition-shadow space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-xs ${
-                      camp.status === 'Active' ? 'bg-gradient-to-tr from-violet-600 to-indigo-600' : 'bg-slate-400'
-                    }`}>
-                      <Send className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h3 className="text-base font-extrabold text-[var(--text-primary)]">{camp.name}</h3>
-                        <span className={`px-2.5 py-0.5 text-3xs font-extrabold rounded-full ${
-                          camp.status === 'Active' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-[var(--surface-card-header)] text-[var(--text-muted)]'
-                        }`}>
-                          {camp.status}
-                        </span>
-                      </div>
-                      <span className="text-3xs text-[var(--text-muted)] font-medium block mt-0.5">Created on {camp.createdAt} • Automated Sequence</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => toggleStatus(camp.id)}
-                      className="px-3 py-1.5 text-xs font-bold text-[var(--text-secondary)] bg-[var(--surface-card-header)] hover:bg-[var(--surface-hover)] rounded-xl transition-colors cursor-pointer flex items-center space-x-1"
-                    >
-                      {camp.status === 'Active' ? <Pause className="w-3.5 h-3.5 text-amber-600" /> : <Play className="w-3.5 h-3.5 text-emerald-600" />}
-                      <span>{camp.status === 'Active' ? 'Pause' : 'Resume'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Campaign Metrics Row */}
-                <div className="grid grid-cols-5 gap-3 pt-2 border-t border-[var(--border-subtle)]">
-                  <div className="p-3 bg-[var(--surface-card-header)] rounded-xl border border-[var(--border-subtle)]">
-                    <span className="text-3xs font-bold text-[var(--text-muted)] uppercase block mb-0.5">Enrolled Leads</span>
-                    <span className="text-sm font-extrabold text-[var(--text-secondary)] tabular-nums">{camp.contactsCount}</span>
-                  </div>
-                  <div className="p-3 bg-[var(--surface-card-header)] rounded-xl border border-[var(--border-subtle)]">
-                    <span className="text-3xs font-bold text-[var(--text-muted)] uppercase block mb-0.5">Emails Sent</span>
-                    <span className="text-sm font-extrabold text-indigo-600 tabular-nums">{camp.emailsSent}</span>
-                  </div>
-                  <div className="p-3 bg-violet-50/60 dark:bg-violet-500/10 rounded-xl border border-violet-200/60 dark:border-violet-400/20">
-                    <span className="text-3xs font-bold text-violet-600 uppercase block mb-0.5">Open Rate</span>
-                    <span className="text-sm font-extrabold text-violet-600 tabular-nums">{camp.openRate}%</span>
-                  </div>
-                  <div className="p-3 bg-emerald-50/60 dark:bg-emerald-500/10 rounded-xl border border-emerald-200/60 dark:border-emerald-400/20">
-                    <span className="text-3xs font-bold text-emerald-700 dark:text-emerald-400 uppercase block mb-0.5">Reply Rate</span>
-                    <span className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400 tabular-nums">{camp.replyRate}%</span>
-                  </div>
-                  <div className="p-3 bg-rose-50/60 dark:bg-rose-500/10 rounded-xl border border-rose-200/60 dark:border-rose-400/20">
-                    <span className="text-3xs font-bold text-rose-700 dark:text-rose-400 uppercase block mb-0.5">Bounce Rate</span>
-                    <span className="text-sm font-extrabold text-rose-700 dark:text-rose-400 tabular-nums">{camp.bounceRate}%</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {/* Templates toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-              <div className="relative flex-1 max-w-xs">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-[var(--text-muted)]">
-                  <Search className="w-3.5 h-3.5" />
-                </span>
-                <input
-                  type="text"
-                  value={templateSearch}
-                  onChange={(e) => setTemplateSearch(e.target.value)}
-                  placeholder="Search templates..."
-                  className="search-pill h-10 text-xs"
-                />
-              </div>
-              <button className="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-hover)] cursor-pointer">
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                <span>Show Filters</span>
-              </button>
-              <button className="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-hover)] cursor-pointer">
-                <ArrowDownUp className="w-3.5 h-3.5" />
-                <span>Sort</span>
-              </button>
-              <button className="inline-flex items-center justify-center p-2 text-[var(--text-secondary)] bg-[var(--surface-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--surface-hover)] cursor-pointer" title="View options">
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
-            </div>
 
-            <button
-              onClick={() => setEditingTemplate(emptyTemplate())}
-              className="btn-primary !text-xs"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Create template</span>
-            </button>
-          </div>
-
-          {/* Templates table */}
-          <div className="glass-card-static overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-[var(--surface-card-elevated)] border-b border-[var(--border-subtle)]">
-                <tr className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)]">
-                  <th className="py-3 px-4 w-10"></th>
-                  <th className="py-3 px-4">Name</th>
-                  <th className="py-3 px-4">Content</th>
-                  <th className="py-3 px-4 w-28">Open Rate</th>
-                  <th className="py-3 px-4 w-28">Reply Rate</th>
-                  <th className="py-3 px-4 w-16 text-right">Actions</th>
+        {/* Templates table */}
+        <div className="glass-card-static overflow-hidden">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-[var(--surface-card-elevated)] border-b border-[var(--border-subtle)]">
+              <tr className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)]">
+                <th className="py-3 px-4 w-10"></th>
+                <th className="py-3 px-4">Name</th>
+                <th className="py-3 px-4">Content</th>
+                <th className="py-3 px-4 w-28">Open Rate</th>
+                <th className="py-3 px-4 w-28">Reply Rate</th>
+                <th className="py-3 px-4 w-16 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-subtle)]">
+              {filteredTemplates.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-xs text-[var(--text-muted)]">
+                    No templates match your search.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--border-subtle)]">
-                {filteredTemplates.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-xs text-[var(--text-muted)]">
-                      No templates match your search.
+              ) : (
+                filteredTemplates.map((tpl) => (
+                  <tr key={tpl.id} className="hover:bg-[var(--surface-hover)] transition-colors">
+                    <td className="py-3 px-4">
+                      <button onClick={() => toggleStar(tpl.id)} className="cursor-pointer" title={tpl.starred ? 'Unstar' : 'Star'}>
+                        <Star className={`w-4 h-4 ${tpl.starred ? 'fill-amber-400 text-amber-400' : 'text-[var(--text-muted)]'}`} />
+                      </button>
+                    </td>
+                    <td className="py-3 px-4">
+                      <button
+                        onClick={() => setEditingTemplate(tpl)}
+                        className="text-xs font-bold text-[var(--text-primary)] hover:text-violet-600 cursor-pointer text-left"
+                      >
+                        {tpl.name}
+                      </button>
+                    </td>
+                    <td className="py-3 px-4 max-w-md">
+                      <p className="text-xs font-bold text-[var(--text-primary)] truncate">{tpl.subject}</p>
+                      <p className="text-3xs text-[var(--text-muted)] truncate">{tpl.body}</p>
+                    </td>
+                    <td className="py-3 px-4 text-xs text-[var(--text-muted)]">{tpl.openRate !== null ? `${tpl.openRate}%` : '-'}</td>
+                    <td className="py-3 px-4 text-xs text-[var(--text-muted)]">{tpl.replyRate !== null ? `${tpl.replyRate}%` : '-'}</td>
+                    <td className="py-3 px-4 text-right relative">
+                      <button
+                        onClick={() => setOpenMenuId(openMenuId === tpl.id ? null : tpl.id)}
+                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] cursor-pointer"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+                      {openMenuId === tpl.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
+                          <div className="absolute right-4 mt-1 w-36 bg-[var(--surface-card-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-1 z-45 text-left">
+                            <button
+                              onClick={() => { setEditingTemplate(tpl); setOpenMenuId(null); }}
+                              className="w-full text-left px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => deleteTemplate(tpl.id)}
+                              className="w-full text-left px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 cursor-pointer flex items-center gap-1.5"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </td>
                   </tr>
-                ) : (
-                  filteredTemplates.map((tpl) => (
-                    <tr key={tpl.id} className="hover:bg-[var(--surface-hover)] transition-colors">
-                      <td className="py-3 px-4">
-                        <button onClick={() => toggleStar(tpl.id)} className="cursor-pointer" title={tpl.starred ? 'Unstar' : 'Star'}>
-                          <Star className={`w-4 h-4 ${tpl.starred ? 'fill-amber-400 text-amber-400' : 'text-[var(--text-muted)]'}`} />
-                        </button>
-                      </td>
-                      <td className="py-3 px-4">
-                        <button
-                          onClick={() => setEditingTemplate(tpl)}
-                          className="text-xs font-bold text-[var(--text-primary)] hover:text-violet-600 cursor-pointer text-left"
-                        >
-                          {tpl.name}
-                        </button>
-                      </td>
-                      <td className="py-3 px-4 max-w-md">
-                        <p className="text-xs font-bold text-[var(--text-primary)] truncate">{tpl.subject}</p>
-                        <p className="text-3xs text-[var(--text-muted)] truncate">{tpl.body}</p>
-                      </td>
-                      <td className="py-3 px-4 text-xs text-[var(--text-muted)]">{tpl.openRate !== null ? `${tpl.openRate}%` : '-'}</td>
-                      <td className="py-3 px-4 text-xs text-[var(--text-muted)]">{tpl.replyRate !== null ? `${tpl.replyRate}%` : '-'}</td>
-                      <td className="py-3 px-4 text-right relative">
-                        <button
-                          onClick={() => setOpenMenuId(openMenuId === tpl.id ? null : tpl.id)}
-                          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] cursor-pointer"
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
-                        {openMenuId === tpl.id && (
-                          <>
-                            <div className="fixed inset-0 z-40" onClick={() => setOpenMenuId(null)} />
-                            <div className="absolute right-4 mt-1 w-36 bg-[var(--surface-card-elevated)] border border-[var(--border-subtle)] rounded-xl shadow-xl py-1 z-45 text-left">
-                              <button
-                                onClick={() => { setEditingTemplate(tpl); setOpenMenuId(null); }}
-                                className="w-full text-left px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] cursor-pointer"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => deleteTemplate(tpl.id)}
-                                className="w-full text-left px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 cursor-pointer flex items-center gap-1.5"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                Delete
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
 }

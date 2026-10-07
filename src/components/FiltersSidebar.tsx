@@ -77,7 +77,6 @@ export default function FiltersSidebar({
     technologies: false,
     sources: false,
     statuses: false,
-    csvColumns: false,
   });
 
   // Option Search strings for each category
@@ -109,9 +108,6 @@ export default function FiltersSidebar({
     if (filters.tags?.length) count += filters.tags.length;
     if (filters.savedOnly) count += 1;
     if (filters.netNewOnly) count += 1;
-    if (filters.customFilters) {
-      count += Object.values(filters.customFilters).reduce((acc, vals) => acc + (vals ? vals.length : 0), 0);
-    }
     return count;
   }, [filters]);
 
@@ -148,7 +144,6 @@ export default function FiltersSidebar({
       intents: [],
       technologies: [],
       tags: [],
-      customFilters: {},
     }));
     onClear();
   };

@@ -38,9 +38,9 @@ export default function CompaniesView({ onImport, onAdd, onShowMessage }: Compan
   });
 
   const handleDelete = async (id: number) => {
-    const { error } = await deleteCompany(id);
+    await deleteCompany(id);
     refresh();
-    onShowMessage(error ? `Deleted locally, but Supabase sync had an issue: ${error}` : 'Company deleted.', error ? 'error' : 'success');
+    onShowMessage('Company deleted.', 'success');
   };
 
   return (

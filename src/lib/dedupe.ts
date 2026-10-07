@@ -5,7 +5,7 @@
 // A lead imported under a different tag than an existing match is STILL the same
 // duplicate lead (e.g. same email under "OldCustomers" vs "NewCustomers" is still a
 // duplicate); tag-name uniqueness is a completely separate, independent check (see
-// getActiveTagSet in lib/supabase.ts and the tag-conflict flow in CsvImporter.tsx /
+// getActiveTagSet in data/leadStorage.ts and the tag-conflict flow in CsvImporter.tsx /
 // AICopilotDrawer.tsx) that never influences whether a LEAD counts as a duplicate.
 // Filename is NEVER part of this comparison either (see lib/csvFileRegistry.ts for the
 // unrelated, file-content-hash-based "have I seen this exact file before" check). No

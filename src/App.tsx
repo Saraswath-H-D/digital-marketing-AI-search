@@ -21,10 +21,8 @@ import {
   bulkImportLeads,
   getActiveHeaders,
   getFixedHeaderValue,
-  getTrashLeads,
   deleteAllLeads
 } from './data/leadStorage.ts';
-import { pullLeadsFromSupabase, pushLeadsToSupabase } from './lib/supabase.ts';
 import { BulkImportResult } from './data/leadStorage.ts';
 import DuplicateLeadsModal from './components/DuplicateLeadsModal.tsx';
 import FiltersSidebar from './components/FiltersSidebar.tsx';
@@ -32,7 +30,6 @@ import LeadsTable from './components/LeadsTable.tsx';
 import AddLeadModal from './components/AddLeadModal.tsx';
 import EditLeadModal from './components/EditLeadModal.tsx';
 import CsvImporter from './components/CsvImporter.tsx';
-import SupabaseModal from './components/SupabaseModal.tsx';
 import OperonNavigationDrawer from './components/OperonNavigationDrawer.tsx';
 import ConfirmDeleteModal from './components/ConfirmDeleteModal.tsx';
 import { AICopilotDrawer } from './components/AICopilotDrawer.tsx';
@@ -109,7 +106,6 @@ export default function App() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [allFilteredIds, setAllFilteredIds] = useState<number[]>([]);
   const [totalLeads, setTotalLeads] = useState(0);
-  const [isSyncingData, setIsSyncingData] = useState(false);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [creditBalance, setCreditBalance] = useState(100); // Simulate Operon Credit System
@@ -162,7 +158,6 @@ export default function App() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
-  const [isSupabaseOpen, setIsSupabaseOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [deleteConfirmData, setDeleteConfirmData] = useState<{ type: 'single'; lead: Lead } | { type: 'bulk' } | null>(null);
@@ -277,68 +272,6 @@ export default function App() {
     fetchLeads();
   }, [filters, page, limit]);
 
-  // Single Master Source of Truth Live Database Sync — pulls the authoritative lead list
-  // from Supabase and reconciles local storage against it (never trusting local storage's
-  // own count on its own). Extracted to component scope, not just this mount effect, so
-  // the "Data Sync" toolbar button below can trigger the exact same real re-pull on
-  // demand — that button used to only re-read the already-cached local list, which could
-  // never actually fix a local/Supabase count mismatch since it never touched Supabase.
-  const syncLiveDatabase = async () => {
-    try {
-      const res = await pullLeadsFromSupabase();
-      const localLeads = getStoredLeads();
-      const trashLeads = getTrashLeads();
-      // A blank-contact lead (no email at all) has no reliable email to delete by in
-      // Supabase — deleteLeadFromSupabase skips it, so its remote row lives on and this
-      // sync would otherwise pull it straight back every time. Match it against trash
-      // the same way addLeadsToTrash/restoreLeadsFromTrash already do for these — by
-      // firstName+lastName+organization — so a deleted no-email contact stops
-      // reappearing on the next sync.
-      //
-      // Deliberately NOT doing the equivalent by email for leads that DO have one: this
-      // used to permanently blacklist any row Supabase returns under that email, forever
-      // — a real bug, not a feature. A real-email lead's delete is already confirmed
-      // against Supabase before it's ever removed locally (see deleteLead/
-      // bulkDeleteLeads/deleteLeadsByTag), so if Supabase still returns a row under that
-      // email, that's either a delete that didn't propagate (rare — and the row
-      // genuinely still exists, so it should show) or, just as likely, a deliberate
-      // later re-upload of that same email — which this used to hide silently and
-      // permanently, exactly the record-count-mismatch bug this sync exists to prevent.
-      // Supabase's own current answer always wins for anything with a real email.
-      const deletedNameKeySet = new Set(
-        trashLeads
-          .filter(l => !l.email || l.email.trim() === '' || l.email.trim() === '-')
-          .map(l => `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`)
-      );
-      const isTrashed = (l: Lead) => {
-        const cleanEmail = (l.email || '').toLowerCase().trim();
-        if (cleanEmail && cleanEmail !== '-') return false;
-        const nameKey = `${(l.firstName || '').toLowerCase().trim()}_${(l.lastName || '').toLowerCase().trim()}_${(l.organization || '').toLowerCase().trim()}`;
-        return deletedNameKeySet.has(nameKey);
-      };
-
-      if (res.success && res.leads.length > 0) {
-        // Filter out deleted trash leads
-        const activeRemoteLeads = res.leads.filter(l => !isTrashed(l));
-
-        saveStoredLeads(activeRemoteLeads);
-      } else if (localLeads.length > 0) {
-        const activeLocalLeads = localLeads.filter(l => !isTrashed(l));
-        saveStoredLeads(activeLocalLeads);
-        await pushLeadsToSupabase(activeLocalLeads);
-      }
-      fetchLeads();
-      fetchFilterOptions();
-      return true;
-    } catch (err) {
-      console.error('Supabase sync failed:', err);
-      return false;
-    }
-  };
-
-  useEffect(() => {
-    syncLiveDatabase();
-  }, []);
 
 
 
@@ -406,8 +339,7 @@ export default function App() {
   };
 
   // Data Enhancement: apply honest, derived-from-existing-data field fills (never
-  // fabricated contact details) as one batch — update locally, then a single
-  // Supabase push for the whole batch rather than one round-trip per contact.
+  // fabricated contact details) as one batch.
   const handleApplyEnrichment = async (
     updates: Array<{ id: number; field: 'seniority' | 'department' | 'industry'; value: string }>
   ) => {
@@ -415,20 +347,14 @@ export default function App() {
     try {
       const allLeads = getStoredLeads();
       const updateMap = new Map(updates.map(u => [u.id, u]));
-      const changedLeads: Lead[] = [];
 
       const updatedLeads = allLeads.map(l => {
         const u = updateMap.get(l.id);
         if (!u) return l;
-        const changed = { ...l, [u.field]: u.value };
-        changedLeads.push(changed);
-        return changed;
+        return { ...l, [u.field]: u.value };
       });
 
       saveStoredLeads(updatedLeads);
-      if (changedLeads.length > 0) {
-        await pushLeadsToSupabase(changedLeads);
-      }
       setCreditBalance(prev => Math.max(0, prev - updates.length));
       fetchLeads();
       fetchFilterOptions();
@@ -477,7 +403,7 @@ export default function App() {
       await addLead(leadData);
       fetchLeads();
       fetchFilterOptions();
-      showStatus('Lead created & synced to Supabase!', 'success');
+      showStatus('Lead created successfully!', 'success');
       return true;
     } catch (err) {
       console.error('Create lead failed:', err);
@@ -489,7 +415,7 @@ export default function App() {
   const handleAddCompany = async (companyData: any) => {
     try {
       await addCompany(companyData);
-      showStatus('Company created & synced to Supabase!', 'success');
+      showStatus('Company created successfully!', 'success');
       return true;
     } catch (err) {
       console.error('Create company failed:', err);
@@ -505,7 +431,7 @@ export default function App() {
         const mergedNote = result.mergedIntoExisting > 0 ? `, ${result.mergedIntoExisting} merged into existing records` : '';
         showStatus(`Import Complete — Total: ${result.totalRows}, Duplicate companies: ${result.duplicatesSkipped}${mergedNote}, New imported: ${result.count}.`, 'success');
       } else {
-        showStatus(`Imported ${result.count} new companies & synced live to Supabase!`, 'success');
+        showStatus(`Imported ${result.count} new companies!`, 'success');
       }
       return true;
     } catch (err) {
@@ -521,7 +447,7 @@ export default function App() {
       await updateLead(id, leadData);
       fetchLeads();
       fetchFilterOptions();
-      showStatus('Lead updated & synced to Supabase!', 'success');
+      showStatus('Lead updated successfully!', 'success');
       return true;
     } catch (err) {
       console.error('Update lead failed:', err);
@@ -537,15 +463,11 @@ export default function App() {
 
   const executeDeleteLead = async (lead: Lead) => {
     try {
-      const { error } = await deleteLead(lead.id);
+      await deleteLead(lead.id);
       fetchLeads();
       fetchFilterOptions();
       setSelectedIds(prev => prev.filter(id => id !== lead.id));
-      if (error) {
-        showStatus(`Could not confirm this contact was deleted from Supabase (${error}) — left in place, try again shortly.`, 'error');
-      } else {
-        showStatus('Lead deleted & synced to Supabase.', 'success');
-      }
+      showStatus('Lead deleted.', 'success');
     } catch (err) {
       console.error('Delete lead failed:', err);
       showStatus('An error occurred while deleting the lead.', 'error');
@@ -561,16 +483,12 @@ export default function App() {
 
   const executeBulkDelete = async () => {
     try {
-      const { count, error } = await bulkDeleteLeads(selectedIds);
+      const { count } = await bulkDeleteLeads(selectedIds);
       fetchLeads();
       fetchFilterOptions();
       setSelectedIds([]);
       setBulkMenuOpen(false);
-      if (error) {
-        showStatus(`Deleted ${count} contact(s) confirmed in Supabase; the rest couldn't be verified as removed (${error}) and were left in place — try again shortly.`, 'error');
-      } else {
-        showStatus('Bulk deletion complete & synced to Supabase!', 'success');
-      }
+      showStatus(`Deleted ${count} contact(s).`, 'success');
     } catch (err) {
       console.error('Bulk delete failed:', err);
       showStatus('An error occurred during bulk deletion.', 'error');
@@ -579,13 +497,13 @@ export default function App() {
 
   const executeDeleteAll = async () => {
     try {
-      showStatus('Purging all contact data from system & Supabase...', 'success');
+      showStatus('Purging all contact data...', 'success');
       await deleteAllLeads();
       fetchLeads();
       fetchFilterOptions();
       setSelectedIds([]);
       setBulkMenuOpen(false);
-      showStatus('All contacts successfully deleted from system & Supabase!', 'success');
+      showStatus('All contacts successfully deleted!', 'success');
     } catch (err) {
       console.error('Delete all failed:', err);
       showStatus('An error occurred while purging all contacts.', 'error');
@@ -651,7 +569,7 @@ export default function App() {
       } else if (options?.includeDuplicates) {
         showStatus(`Import Complete — Total: ${result.totalRows}, all ${result.count} rows imported including duplicates, Tag: ${tagLabel}.`, 'success');
       } else {
-        showStatus(`Import Complete — Total: ${result.totalRows}, New leads imported: ${result.count}, Tag: ${tagLabel}. Synced live to Supabase!`, 'success');
+        showStatus(`Import Complete — Total: ${result.totalRows}, New leads imported: ${result.count}, Tag: ${tagLabel}.`, 'success');
       }
       return true;
     } catch (err) {
@@ -795,7 +713,6 @@ export default function App() {
           setActiveView={setActiveView}
           onShowMessage={showStatus}
           onAddTeammateClick={() => setShowTeammatesModal(true)}
-          onOpenSupabase={() => setIsSupabaseOpen(true)}
           onOpenSectionModal={(section) => setSectionModal(section as SectionModalKind)}
           onOpenAIAssistant={() => setShowAICopilot(true)}
           onOpenDataEnhancement={() => setIsDataEnhancementOpen(true)}
@@ -832,7 +749,7 @@ export default function App() {
                     Super Admin
                   </span>
                 </div>
-                <p className="text-xs text-[var(--text-muted)] font-medium">Real-time Lead Intelligence & Supabase Database Sync</p>
+                <p className="text-xs text-[var(--text-muted)] font-medium">Real-time Lead Intelligence Platform</p>
               </div>
             </div>
 
@@ -885,11 +802,11 @@ export default function App() {
                 <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Verified leads in system</p>
               </div>
 
-              {/* Card 2: Data Sync */}
+              {/* Card 2: Data Storage */}
               <div className="p-4 glass-card relative overflow-hidden group">
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-emerald-500" />
                 <div className="flex items-center justify-between mb-2">
-                  <span className="micro-label">Data Sync</span>
+                  <span className="micro-label">Data Storage</span>
                   <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                     <Database className="w-4 h-4" />
                   </div>
@@ -897,10 +814,10 @@ export default function App() {
                 <div className="flex items-baseline justify-between">
                   <span className="text-2xl font-extrabold font-serif-kpi text-[var(--text-primary)] tracking-tight">Active</span>
                   <span className="badge badge-completed">
-                    Auto-Sync
+                    Local
                   </span>
                 </div>
-                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Your data stays synced automatically.</p>
+                <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Saved securely in this browser.</p>
               </div>
 
               {/* Card 3: Operon AI Copilot */}
@@ -1161,28 +1078,6 @@ export default function App() {
                     {activeFiltersCount}
                   </span>
                 )}
-              </button>
-
-              {/* Enrichment action button (Screenshot 1) — actually re-pulls from
-                  Supabase now (see syncLiveDatabase). It used to only re-read the
-                  already-cached local list under a "Syncing database records..." label,
-                  so it could never actually fix a local-vs-Supabase count mismatch. */}
-              <button
-                disabled={isSyncingData}
-                onClick={async () => {
-                  setIsSyncingData(true);
-                  showStatus('Syncing with Supabase...', 'success');
-                  const ok = await syncLiveDatabase();
-                  setIsSyncingData(false);
-                  showStatus(ok ? 'Contact data synchronized with Supabase!' : 'Sync failed — check your Supabase connection.', ok ? 'success' : 'error');
-                }}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--surface-hover)] bg-[var(--surface-card)] shadow-3xs cursor-pointer text-[var(--text-secondary)] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${isSyncingData ? 'animate-spin' : ''}`} />
-                <span>{isSyncingData ? 'Syncing...' : 'Data Sync'}</span>
-                <span className="px-1.5 py-0.2 text-3xs font-extrabold bg-amber-50 text-amber-700 rounded-full border border-amber-200 scale-90">
-                  Ready
-                </span>
               </button>
 
               {/* AI Copilot Toggle Button */}
@@ -1491,7 +1386,7 @@ export default function App() {
                         {/* Delete ALL Contacts */}
                         <button
                           onClick={() => {
-                            if (window.confirm(`⚠️ Are you sure you want to PERMANENTLY DELETE ALL ${totalLeads} contacts from the directory and Supabase?`)) {
+                            if (window.confirm(`⚠️ Are you sure you want to PERMANENTLY DELETE ALL ${totalLeads} contacts from the directory?`)) {
                               executeDeleteAll();
                             }
                           }}
@@ -1748,18 +1643,6 @@ export default function App() {
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         onImport={handleImportLeads}
-      />
-
-      <SupabaseModal
-        isOpen={isSupabaseOpen}
-        onClose={() => setIsSupabaseOpen(false)}
-        leads={getStoredLeads()}
-        onLeadsUpdated={(updatedLeads) => {
-          saveStoredLeads(updatedLeads);
-          setPage(1);
-          fetchLeads();
-          fetchFilterOptions();
-        }}
       />
 
       <ConfirmDeleteModal
