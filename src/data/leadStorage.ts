@@ -53,6 +53,31 @@ export const removeCsvTag = (tag: string): void => {
   }
 };
 
+// Bookkeeping/system fields that never count as "real content" when deciding whether a
+// stored row is genuinely blank junk. Checking only the 4 named identity fields
+// (firstName/lastName/email/organization) used to silently and PERMANENTLY delete real
+// imported rows on the very next reload whenever a CSV's column headers didn't happen
+// to auto-map to those specific fields — even though the import itself reported success
+// and the row's actual data is still sitting right there under its own raw CSV header
+// name (mapRowsToLeads in csvMapping.ts copies every original column onto the lead
+// object, mapped or not). A row now only counts as truly blank when EVERY field on it —
+// named or raw/custom — is empty, matching the same "hasAnyData" standard the importer
+// itself already uses to decide whether a row was worth importing in the first place.
+const BLANK_CHECK_IGNORED_KEYS = new Set([
+  'id', 'createdAt', 'isSaved', 'emailUnlocked', 'phoneUnlocked', 'podTags', 'tags',
+  'csvTag', '_csvHeaders', 'approvalStatus', 'emailStatus', 'registrationTime',
+]);
+
+const isBlankLeadRow = (l: any): boolean => {
+  return Object.keys(l).every(k => {
+    if (BLANK_CHECK_IGNORED_KEYS.has(k)) return true;
+    const v = l[k];
+    if (Array.isArray(v)) return v.length === 0;
+    const str = v === undefined || v === null ? '' : String(v).trim();
+    return str === '' || str === '-';
+  });
+};
+
 // Immediate cleanup of any legacy blank lead rows from localStorage
 (() => {
   try {
@@ -60,14 +85,7 @@ export const removeCsvTag = (tag: string): void => {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        const cleaned = parsed.filter((l: any) => {
-          const fn = String(l.firstName || '').trim();
-          const ln = String(l.lastName || '').trim();
-          const em = String(l.email || '').trim();
-          const org = String(l.organization || '').trim();
-          const isBlank = (fn === '' || fn === '-') && (ln === '' || ln === '-') && (em === '' || em === '-') && (org === '' || org === '-');
-          return !isBlank;
-        });
+        const cleaned = parsed.filter((l: any) => !isBlankLeadRow(l));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
       }
     }
@@ -441,14 +459,7 @@ export const getStoredLeads = (): Lead[] => {
     if (data !== null) {
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        const validOnly = parsed.filter(l => {
-          const fn = (l.firstName || '').trim();
-          const ln = (l.lastName || '').trim();
-          const em = (l.email || '').trim();
-          const org = (l.organization || '').trim();
-          const isBlank = (fn === '' || fn === '-') && (ln === '' || ln === '-') && (em === '' || em === '-') && (org === '' || org === '-');
-          return !isBlank;
-        });
+        const validOnly = parsed.filter(l => !isBlankLeadRow(l));
 
         const result = validOnly.map((l, idx) => ({
           ...sanitizeLead(l),
