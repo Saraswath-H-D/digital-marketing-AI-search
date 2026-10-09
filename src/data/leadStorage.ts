@@ -619,10 +619,10 @@ export const getFilterOptions = (): FilterOptions => {
     cities: getUniqueForAliases(['city', 'location', 'town', 'address'], true),
     states: getUniqueForAliases(['state', 'province', 'region']),
     countries: getUniqueForAliases(['country', 'nation']),
-    // Merge in distinct csvTag values alongside sourceName-aliased values — with the
-    // dedicated CSV Tag search box removed, this is now the only surfaced list of tag
-    // options, so a lead whose only tag identity is csvTag (blank sourceName) must
-    // still show up here to stay filterable.
+    // Merge in distinct csvTag values alongside sourceName-aliased values, so a lead
+    // whose only tag identity is csvTag (blank sourceName) still shows up here and
+    // stays filterable via the generic Source filter too, not just the dedicated CSV
+    // Tag / List box below.
     sources: (() => {
       const base = new Set(getUniqueForAliases(['sourcename', 'source', 'leadsource']));
       leads.forEach(l => {
@@ -641,7 +641,12 @@ export const getFilterOptions = (): FilterOptions => {
     emailStatuses: ['Valid / Safe', 'Risky / Catch-all', 'Invalid / Bounce'],
     intents: ['High Intent', 'Medium Intent', 'Low Intent'],
     technologies: ['React', 'Salesforce', 'HubSpot', 'AWS', 'Google Cloud', 'Stripe', 'Node.js', 'WordPress'],
-    tags: getStoredCsvTags(),
+    // Backs the dedicated "CSV Tag / List" dropdown in FiltersSidebar.tsx — that
+    // component reads filterOptions.csvTags specifically (Filters/FilterOptions in
+    // types.ts both declare csvTags separately from the unused legacy `tags` field),
+    // so this must be named csvTags or the dropdown always renders empty regardless
+    // of how many tags actually exist.
+    csvTags: getStoredCsvTags(),
   };
 };
 
@@ -697,6 +702,15 @@ export const filterLeads = (leads: Lead[], filters: Filters): Lead[] => {
       const matchesSource = vals.some(v => lowerSelected.includes(v.toLowerCase()));
       const matchesCsvTag = filters.sources.some(s => leadMatchesTag(l, s));
       if (!matchesSource && !matchesCsvTag) return false;
+    }
+
+    // The dedicated "CSV Tag / List" filter box (FiltersSidebar.tsx) — a separate
+    // selection from filters.sources above, so it needs its own check here or picking
+    // a tag from that box would visibly select it (the pill renders) while silently
+    // filtering nothing. Same leadMatchesTag identity (csvTag primary, sourceName
+    // fallback) used everywhere else a tag gets compared.
+    if (filters.csvTags && filters.csvTags.length > 0) {
+      if (!filters.csvTags.some(t => leadMatchesTag(l, t))) return false;
     }
 
     if (filters.statuses && filters.statuses.length > 0) {
@@ -1423,6 +1437,12 @@ export const bulkImportLeads = async (
 
   saveStoredLeads([...createdLeads, ...allLeads]);
 
+  // Reported row count for this import — defaults to the optimistic local-write count
+  // above; only overridden below once (and if) Supabase's own confirmed state has
+  // actually been re-synced into local storage, so this number never claims more rows
+  // landed than what the leads table — now possibly re-synced from Supabase — shows.
+  let reportedCount = createdLeads.length;
+
   let supabaseResult: { success: boolean; count: number; error?: string } = { success: false, count: 0, error: 'Auto-sync disabled' };
   if (createdLeads.length > 0 && getSupabaseConfig().autoSync) {
     try {
@@ -1432,12 +1452,23 @@ export const bulkImportLeads = async (
         // the optimistic local append above — this is what keeps the app's displayed
         // record count matching Supabase exactly. pushLeadsToSupabase's `success` only
         // means "at least one row made it" (a batch can partially fail column/schema
-        // issues and still report success); re-pulling reflects exactly what actually
-        // landed, dropping anything that silently didn't. Best-effort: if the re-pull
-        // itself fails, the optimistic local state from saveStoredLeads above stands —
-        // still better than nothing, just not re-verified against Supabase this round.
+        // issues and still report success, see its own doc comment — confirmed: a
+        // 209-row import where 79 rows failed a column constraint still reported
+        // success, silently landing only 130). Re-pulling reflects exactly what
+        // actually landed, dropping anything that silently didn't. Best-effort: if the
+        // re-pull itself fails, the optimistic local state from saveStoredLeads above
+        // stands — still better than nothing, just not re-verified against Supabase
+        // this round, so reportedCount is left at its optimistic default.
         const pull = await pullLeadsFromSupabase();
-        if (pull.success) saveStoredLeads(pull.leads);
+        if (pull.success) {
+          saveStoredLeads(pull.leads);
+          // supabaseResult.count is the only number guaranteed to match what the
+          // re-pull above just made authoritative — report THAT instead of the
+          // optimistic createdLeads.length, so the import summary (and its toast)
+          // never claims e.g. "209 new leads imported" when the re-synced table only
+          // actually shows 130 of them landing.
+          reportedCount = supabaseResult.count;
+        }
       }
     } catch (err: any) {
       console.error('Auto-sync import to Supabase failed:', err);
@@ -1446,7 +1477,7 @@ export const bulkImportLeads = async (
   }
 
   const importResult: BulkImportResult = {
-    count: createdLeads.length,
+    count: reportedCount,
     supabaseResult,
     totalRows: newLeadsList.length,
     uniqueRows: uniqueItems.length,

@@ -639,7 +639,21 @@ export default function App() {
       const tagLabel = items[0]?.csvTag || '(no tag)';
       const invalidCount = items[0]?._invalidRowCount || 0;
       const invalidNote = invalidCount > 0 ? ` Invalid rows skipped: ${invalidCount}.` : '';
-      if (result.duplicatesSkipped > 0) {
+
+      // supabaseResult.error is now populated on a PARTIAL sync failure too, not just a
+      // total one (see pushLeadsToSupabase's doc comment) — 'Auto-sync disabled' is the
+      // one case that's an intentional setting, not a failure, so it's excluded here.
+      // Without this check the toast below always claimed unconditional success even
+      // when some rows silently failed to reach Supabase and got dropped by the
+      // post-push re-sync — confirmed: a 209-row import where 79 rows failed a column
+      // constraint still showed "Import Complete" with no indication anything was wrong.
+      const syncError = result.supabaseResult.error && result.supabaseResult.error !== 'Auto-sync disabled'
+        ? result.supabaseResult.error
+        : null;
+
+      if (syncError) {
+        showStatus(`Import partially synced — ${result.count} of ${result.uniqueRows} new lead(s) saved to the cloud, the rest failed: ${syncError}`, 'error');
+      } else if (result.duplicatesSkipped > 0) {
         // Reachable when the user explicitly chose "only new leads" from the pre-import
         // duplicate-choice popup (both the CsvImporter and AI-chat upload flows always
         // ask before this point whenever there are duplicates) — this is the final

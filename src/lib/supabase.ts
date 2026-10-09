@@ -370,6 +370,7 @@ export const pushLeadsToSupabase = async (
   let totalPushed = 0;
   let lastError = '';
 
+  const totalRows = batchStart.length;
   for (let i = 0; i < batchStart.length; i += BATCH_SIZE) {
     let batch = batchStart.slice(i, i + BATCH_SIZE);
     const droppedColumns = new Set<string>();
@@ -419,7 +420,21 @@ export const pushLeadsToSupabase = async (
     }
   }
 
-  return { success: totalPushed > 0, count: totalPushed, error: totalPushed === 0 ? lastError : undefined };
+  // `success` only ever meant "at least one row made it" — a batch can partially fail
+  // (e.g. one row's value doesn't satisfy a column's type/constraint) while still
+  // reporting success=true, which let bulkImportLeads's post-push re-sync silently
+  // drop the rows that didn't actually land, with no error visible anywhere (confirmed:
+  // a 209-row import where 79 rows failed this way still reported "success", and the
+  // UI's import toast claimed all 209 were imported while the leads table only ever had
+  // the 130 that truly landed). Report `error` whenever ANYTHING failed to push —
+  // partial or total — so callers can tell "all good" apart from "some rows silently
+  // didn't make it".
+  const allSucceeded = totalPushed === totalRows;
+  return {
+    success: totalPushed > 0,
+    count: totalPushed,
+    error: allSucceeded ? undefined : (lastError || `${totalRows - totalPushed} of ${totalRows} row(s) failed to sync to Supabase.`)
+  };
 };
 
 export const pullLeadsFromSupabase = async (
