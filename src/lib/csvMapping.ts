@@ -132,70 +132,107 @@ export function isCsvParseError(r: ParseCsvResult): r is { ok: false; error: str
   return r.ok === false;
 }
 
+// Real-world CSV exports regularly contain a field whose value starts with (or
+// contains) an unescaped `"` — e.g. a company name like `"ABC" Corp Pvt Ltd` that
+// RFC4180 would require escaping as `"""ABC"" Corp Pvt Ltd"`. Papa.parse treats that
+// leading quote as opening a quoted field, and when it never finds a validly-closed
+// match (a closing quote immediately followed by a delimiter/newline/EOF), it keeps
+// consuming text through every subsequent line looking for one — silently gluing the
+// rest of the file into one giant field. Confirmed: a single such cell early in an
+// 80-row file collapsed Papa's own row count down to ~2, which is why the importer's
+// "Rows Detected" badge itself showed a tiny number instead of the real 80 — this
+// was never a mapping/dedupe issue, the rows were lost before mapping ever ran.
+//
+// Fix: validate each physical line independently (Papa.parse on just that one line)
+// before parsing the whole file. A line whose quoting is genuinely malformed either
+// reports a Quotes-type error or parses as if it spans more than one row on its own —
+// either way, strip its quote characters so it falls back to plain unquoted parsing
+// instead of poisoning every line after it. A legitimately well-formed quoted field
+// (e.g. a name containing a comma, `"Mehta, Rohan"`) parses cleanly by itself and is
+// left completely untouched.
+function sanitizeMalformedQuotedLines(text: string): string {
+  const lines = text.split(/\r\n|\r|\n/);
+  return lines.map(line => {
+    if (!line.includes('"')) return line;
+    const probe = Papa.parse(line, { header: false });
+    const hasQuoteError = probe.errors.some(e => e.type === 'Quotes');
+    const spansMultipleRows = probe.data.length > 1;
+    if (hasQuoteError || spansMultipleRows) {
+      return line.replace(/"/g, '');
+    }
+    return line;
+  }).join('\n');
+}
+
 // Parse a CSV File into { headers, rows }, auto-locating the real header row (skipping
 // any report/summary preamble rows). Resolves with a discriminated result instead of
 // throwing so callers (manual importer UI, AI chat flow) can render/speak the exact
 // same natural-language error message.
 export function parseCsvFile(file: File): Promise<ParseCsvResult> {
   return new Promise<ParseCsvResult>((resolve) => {
-    Papa.parse(file, {
-      header: false,
-      skipEmptyLines: true,
-      complete: (results) => {
-        if (results.errors.length > 0) {
-          console.warn('CSV parse warnings:', results.errors);
-        }
-
-        const rows = results.data as string[][];
-        if (rows.length === 0) {
-          resolve({ ok: false, error: 'The uploaded CSV file is empty.' });
-          return;
-        }
-
-        const SCAN_LIMIT = Math.min(20, rows.length);
-        let bestIdx = 0;
-        let bestScore = -1;
-        for (let i = 0; i < SCAN_LIMIT; i++) {
-          const row = rows[i];
-          const nonEmptyCount = row.filter(c => (c || '').trim()).length;
-          if (nonEmptyCount < 2) continue;
-          const score = scoreHeaderRow(row);
-          if (score > bestScore) {
-            bestScore = score;
-            bestIdx = i;
+    file.text().then((rawText) => {
+      const sanitizedText = sanitizeMalformedQuotedLines(rawText);
+      Papa.parse(sanitizedText, {
+        header: false,
+        skipEmptyLines: true,
+        complete: (results) => {
+          if (results.errors.length > 0) {
+            console.warn('CSV parse warnings:', results.errors);
           }
-        }
-        const headerRowIdx = bestScore >= 2 ? bestIdx : 0;
 
-        const headerRow = rows[headerRowIdx].map(h => (h || '').trim());
-        const headers = headerRow.filter(Boolean);
+          const rows = results.data as string[][];
+          if (rows.length === 0) {
+            resolve({ ok: false, error: 'The uploaded CSV file is empty.' });
+            return;
+          }
 
-        if (headers.length === 0) {
-          resolve({ ok: false, error: 'Could not find a valid header row in this CSV file.' });
-          return;
-        }
+          const SCAN_LIMIT = Math.min(20, rows.length);
+          let bestIdx = 0;
+          let bestScore = -1;
+          for (let i = 0; i < SCAN_LIMIT; i++) {
+            const row = rows[i];
+            const nonEmptyCount = row.filter(c => (c || '').trim()).length;
+            if (nonEmptyCount < 2) continue;
+            const score = scoreHeaderRow(row);
+            if (score > bestScore) {
+              bestScore = score;
+              bestIdx = i;
+            }
+          }
+          const headerRowIdx = bestScore >= 2 ? bestIdx : 0;
 
-        const data = rows
-          .slice(headerRowIdx + 1)
-          .filter(r => r.some(c => (c || '').trim()))
-          .map(r => {
-            const obj: Record<string, string> = {};
-            headerRow.forEach((h, idx) => {
-              if (h) obj[h] = r[idx] !== undefined ? r[idx] : '';
+          const headerRow = rows[headerRowIdx].map(h => (h || '').trim());
+          const headers = headerRow.filter(Boolean);
+
+          if (headers.length === 0) {
+            resolve({ ok: false, error: 'Could not find a valid header row in this CSV file.' });
+            return;
+          }
+
+          const data = rows
+            .slice(headerRowIdx + 1)
+            .filter(r => r.some(c => (c || '').trim()))
+            .map(r => {
+              const obj: Record<string, string> = {};
+              headerRow.forEach((h, idx) => {
+                if (h) obj[h] = r[idx] !== undefined ? r[idx] : '';
+              });
+              return obj;
             });
-            return obj;
-          });
 
-        if (data.length === 0) {
-          resolve({ ok: false, error: 'No contact rows found below the header row in this CSV file.' });
-          return;
+          if (data.length === 0) {
+            resolve({ ok: false, error: 'No contact rows found below the header row in this CSV file.' });
+            return;
+          }
+
+          resolve({ ok: true, headers, rows: data, skippedPreambleRows: headerRowIdx });
+        },
+        error: (err: any) => {
+          resolve({ ok: false, error: `Failed to parse CSV file: ${err?.message || 'Unknown parse error'}` });
         }
-
-        resolve({ ok: true, headers, rows: data, skippedPreambleRows: headerRowIdx });
-      },
-      error: (err: any) => {
-        resolve({ ok: false, error: `Failed to parse CSV file: ${err?.message || 'Unknown parse error'}` });
-      }
+      });
+    }).catch((err: any) => {
+      resolve({ ok: false, error: `Failed to read CSV file: ${err?.message || 'Unknown read error'}` });
     });
   });
 }
